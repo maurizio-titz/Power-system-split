@@ -1,0 +1,18 @@
+stages:
+  - test
+
+testing:
+  stage: test
+  image: python:3.6
+  before_script:
+    - pip install . pytest pytest-cov
+  script:
+    - python -m pytest --cov=power_system_split tests/
+
+doctest:
+  stage: test
+  image: python:3.6
+  before_script:
+    - pip install .
+  script:
+    - python -m doctest README.md
