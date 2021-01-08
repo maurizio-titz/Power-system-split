@@ -108,7 +108,7 @@ def test_cascade_no_overloads_multiedges():
                                                                     line_limits = line_limits,
                                                                     initial_flows = initial_loading)
     failing_edges = [list(G.edges(keys = True))[i] for i in failing_links]
-    assert(np.isclose(new_loading_dict[(1,2,0)],0.8))
+    assert(np.isclose(new_loading_dict[(1,2,1)],0.8))
     return
 
 def test_cascade_w_overloads_multiedges():
