@@ -1,4 +1,5 @@
-
+#!usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import numpy as np
 import networkx as nx
@@ -75,8 +76,12 @@ def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
 
         P0 = np.dot(I0,flows0)
 
-        H.remove_edges_from([list(G.edges())[i] for i in failure_cascade])
-        
+        if not multi_graph:
+            H.remove_edges_from([list(G.edges())[i] for i in failure_cascade])
+        else:
+            H.remove_edges_from([list(G.edges(keys = True))[i] for i in failure_cascade])
+
+
         if not nx.is_connected(H):
             system_split = True
             break
