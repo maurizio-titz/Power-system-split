@@ -43,28 +43,28 @@ def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
     The approach used to simulate the cascade is based on the Power Transfer Distribution Factors assuming fixed power
     injections and subsequently calculating the flows using the PTDFs after the removal of all failing links from
     the network"""
-    
+
     # store indices of failing links
     failure_cascade = []
-    
+
     multi_graph = False
     if type(G) == type(nx.MultiGraph()):
         multi_graph = True
-        
+
     if not multi_graph:
         flows_G = np.array([initial_flows[(u,v)] for u,v in G.edges()])
-        smax_G = np.array([line_limits[(u,v)] for u,v in G.edges()])        
+        smax_G = np.array([line_limits[(u,v)] for u,v in G.edges()])
     else:
         flows_G = np.array([initial_flows[(u,v,key)] for u,v,key in G.edges(keys = True)])
-        smax_G = np.array([line_limits[(u,v,key)] for u,v,key in G.edges(keys = True)])  
-        
+        smax_G = np.array([line_limits[(u,v,key)] for u,v,key in G.edges(keys = True)])
+
     failure_cascade = [redefined_index(G,trigger_link) for trigger_link in trigger_links]
 
     I = construct_incidencematrix_from_orientation(G)
 
     if len(np.where(np.abs(flows_G)>smax_G)[0]):
         print("Setup has initial overloads!")
-    stop = 0    
+    stop = 0
     system_split = False
     while not stop:
         H = G.copy()
@@ -85,7 +85,7 @@ def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
         if not nx.is_connected(H):
             system_split = True
             break
-            
+
         I = construct_incidencematrix_from_orientation(H)
         L = nx.laplacian_matrix(H)
         try:
@@ -94,24 +94,24 @@ def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
             # pseudoinverse
             L_inv = np.linalg.pinv(L.A)
             theta = np.dot(L_inv,P0)
-            
+
         line_weights = nx.get_edge_attributes(H,'weight')
         if not multi_graph:
             line_susceptances = np.array([line_weights[(u,v)] for u,v in H.edges()])
         else:
             line_susceptances = np.array([line_weights[(u,v,key)] for u,v,key in H.edges(keys = True)])
-            
+
         B_d = np.diag(line_susceptances)
-        
+
         flows_H = np.linalg.multi_dot([B_d,I.T,theta])
-        
+
         if not multi_graph:
             smax = np.array([line_limits[(u,v)] for u,v in H.edges()])
         else:
             smax = np.array([line_limits[(u,v,key)] for u,v,key in H.edges(keys = True)])
-        
+
         next_indices = np.where(np.abs(flows_H)>smax)[0]
-        
+
         ### map next failing indices to original graph
         for n in next_indices:
             if not multi_graph:
@@ -120,11 +120,11 @@ def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
                 index = redefined_index(G,element = list(H.edges(keys = True))[n])
 
             if not index in failure_cascade:
-                failure_cascade.append(index) 
-                
+                failure_cascade.append(index)
+
         if len(next_indices)==0:
             stop = 1
-            
+
         loading_dict = {}
         if not multi_graph:
             for i in range(len(H.edges())):
@@ -133,7 +133,7 @@ def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
         else:
             for i in range(len(H.edges())):
                 loading_dict[list(H.edges(keys = True))[i]] = flows_H[i]
-            
+
     return failure_cascade,loading_dict,system_split
 
 
@@ -142,9 +142,9 @@ def build_networkx_graph(snet_branches,multi_graph = False):
         F = nx.Graph()
     else:
         F = nx.MultiGraph()
-        
+
     for line_index,line in snet_branches.iterrows():
-        
+
         if not F.has_edge(line['bus0'],line['bus1']):
             F.add_edge(line['bus0'],line['bus1'],
                        weight = 1/line['x_pu_eff'],
@@ -159,11 +159,55 @@ def build_networkx_graph(snet_branches,multi_graph = False):
                 F[line['bus0']][line['bus1']]['s_nom'] += line['s_nom']
                 F[line['bus0']][line['bus1']]['line_index'].append(line_index[1])
             else:
-                
+
                 F.add_edge(line['bus0'],line['bus1'],
-                           weight = 1/line['x_pu_eff'], 
+                           weight = 1/line['x_pu_eff'],
                            orientation = (line['bus0'],line['bus1']),
                            line_index = [line_index[1]],
                            s_nom = line['s_nom'])
     return F
-    
+
+
+def get_split_components(split,G):
+    """Return the split resulting from the edge list in split if the resulting subgraphs are larger than 10 nodes"""
+    F = G.copy()
+    cascade_edges = [list(F.edges())[index] for index in split]
+    F.remove_edges_from(cascade_edges)
+    subgraphs =  list((F.subgraph(c).copy() for c in nx.connected_components(F)))
+    relevant_subgraphs = [i for i in range(len(subgraphs)) if len(subgraphs[i].nodes())>10]
+    if len(relevant_subgraphs)<2:
+        return_val = []
+    else:
+        return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
+    return return_val
+
+def evaluate_system_split_inertia(split,G,generators,current_generation):
+    """For a given list of edge indices split, a networkx graph G,
+
+    generators: pandas dataframe
+        a pypsa solved network generators (passed as network.generators)
+    current_generation: pandas Series
+        time dependent generation of pypsa network for a given timestamp
+        (passed via network.generators_t.p.loc[timestamp])
+
+    in total, for a given solved network you can call this function as
+
+    evaluate_system_split_inertia(cascade,G,network.generators,network.generators_t.p.loc[timestamp])
+
+    here, cascade is an output of simulate_cascade_PTDF_based corresponding to a given timestamp
+    and system split
+    """
+    inertiaplants = ['CCGT','OCGT','coal','nuclear','oil','ror']
+
+    subgraphs = get_split_components(split,G)
+    if len(subgraphs) < 2 :
+        return 0
+    else:
+        inertia_generations = []
+        for subgraph in subgraphs:
+            gens = generators[generators["bus"].isin(list(subgraph.nodes()))]
+            current_generators = current_generation.loc[list(gens.index)]
+            existing_inertia_sources = list(set(inertiaplants)-(set(inertiaplants)-set(list(gens.carrier))))
+            inertia_generation = current_generators.groupby(gens.carrier).sum().loc[existing_inertia_sources].sum()
+            inertia_generations.append(inertia_generation)
+        return inertia_generations
