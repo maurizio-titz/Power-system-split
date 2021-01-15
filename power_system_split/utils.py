@@ -211,3 +211,45 @@ def evaluate_system_split_inertia(split,G,generators,current_generation):
             inertia_generation = current_generators.groupby(gens.carrier).sum().loc[existing_inertia_sources].sum()
             inertia_generations.append(inertia_generation)
         return inertia_generations
+
+
+def likelihood_systemsplit_edge_based(split_dict,G,only_large_splits = True):
+    """ Calculate the empirical likelihood that a given edge is involved
+    in a system split based on the split_dict
+
+    If only_large_splits is True, only splits which yield components
+    with more than ten nodes each are evaluated"""
+
+    likelihood_dict = {(u,v):0.0 for u,v in G.edges()}
+
+    if only_large_splits:
+        # counts the number of relevant splits
+        split_counter = 0
+        for timestamp in splitting_cascades.keys():
+            for cascade in splitting_cascades[timestamp]:
+                F = G.copy()
+                cascade_edges = [list(F.edges())[index] for index in cascade]
+                F.remove_edges_from(cascade_edges)
+                subgraphs =  list((F.subgraph(c).copy() for c in nx.connected_components(F)))
+                relevant_subgraphs = [i for i in range(len(subgraphs)) if len(subgraphs[i].nodes())>10]
+
+                if len(relevant_subgraphs) < 2:
+                    continue
+                for edge in cascade_edges:
+                    likelihood_dict[edge] += 1
+                split_counter += 1
+        for edge in likelihood_dict.keys():
+            likelihood_dict[edge] /= split_counter
+
+    else:
+        likelihoods = np.zeros(len(G.edges()))
+        split_counter = 0
+        for timestamp in splitting_cascades.keys():
+            for cascade in splitting_cascades[timestamp]:
+                likelihoods[cascade] += 1
+                split_counter += 1
+        likelihoods /= split_counter
+        for count, edge  in enumerate(list(G.edges())):
+            likelihood_dict[edge] += likelihoods[count]
+
+    return likelihood_dict
