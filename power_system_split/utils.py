@@ -181,7 +181,7 @@ def get_split_components(split,G):
         return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
     return return_val
 
-def evaluate_system_split_inertia(split,G,generators,current_generation):
+def evaluate_system_split_inertia(split,G,generators,current_generation, use_pnom = True):
     """For a given list of edge indices split, a networkx graph G,
 
     generators: pandas dataframe
@@ -198,17 +198,23 @@ def evaluate_system_split_inertia(split,G,generators,current_generation):
     and system split
     """
     inertiaplants = ['CCGT','OCGT','coal','nuclear','oil','ror']
-
+    # threshold below which a generator is not counted as being participating
+    participation_threshold = 1e-6
     subgraphs = get_split_components(split,G)
     if len(subgraphs) < 2 :
         return 0
     else:
         inertia_generations = []
         for subgraph in subgraphs:
-            gens = generators[generators["bus"].isin(list(subgraph.nodes()))]
-            current_generators = current_generation.loc[list(gens.index)]
+            gens = network.generators[network.generators["bus"].isin(list(subgraph.nodes()))]
             existing_inertia_sources = list(set(inertiaplants)-(set(inertiaplants)-set(list(gens.carrier))))
-            inertia_generation = current_generators.groupby(gens.carrier).sum().loc[existing_inertia_sources].sum()
+            current_generators = current_generation.loc[list(gens.index)]
+            if use_pnom:
+                participating = current_generation.loc[list(gens.index)]>participation_threshold
+                reduced_gens = gens[participating]
+                inertia_generation = (reduced_gens["p_nom"]*reduced_gens["p_max_pu"]).groupby(reduced_gens.carrier).sum().loc[existing_inertia_sources].sum()
+            else:
+                inertia_generation = current_generators.groupby(gens.carrier).sum().loc[existing_inertia_sources].sum()
             inertia_generations.append(inertia_generation)
         return inertia_generations
 
