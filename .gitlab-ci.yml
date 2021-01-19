@@ -2,6 +2,7 @@ image: python:3.7
 
 before_script:
   - python --version
+  - pip install -r requirements.txt
   - pip install . pytest pytest-cov pylint
 
 
@@ -18,7 +19,7 @@ pylint:
   stage: Static Analysis
   allow_failure: true
   script:
-  - pylint -d C0301 utils/*.py
+  - pylint -d C0301 power_system_split/*.py
 
 doctest:
   stage: Test
