@@ -1,18 +1,28 @@
+image: python:3.7
+
+before_script:
+  - python --version
+  - pip install . pytest pytest-cov pylint
+
+
 stages:
-  - test
+  - Static Analysis
+  - Test
 
 testing:
-  stage: test
-  image: python:3.6
-  before_script:
-    - pip install . pytest pytest-cov
+  stage: Static Analysis
   script:
     - python -m pytest --cov=power_system_split tests/
 
+pylint:
+  stage: Static Analysis
+  allow_failure: true
+  script:
+  - pylint -d C0301 utils/*.py
+
 doctest:
-  stage: test
-  image: python:3.6
-  before_script:
-    - pip install .
+  stage: Test
   script:
     - python -m doctest README.md
+
+
