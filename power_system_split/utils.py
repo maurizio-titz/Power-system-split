@@ -231,8 +231,8 @@ def likelihood_systemsplit_edge_based(split_dict,G,only_large_splits = True):
     if only_large_splits:
         # counts the number of relevant splits
         split_counter = 0
-        for timestamp in splitting_cascades.keys():
-            for cascade in splitting_cascades[timestamp]:
+        for timestamp in split_dict.keys():
+            for cascade in split_dict[timestamp]:
                 F = G.copy()
                 cascade_edges = [list(F.edges())[index] for index in cascade]
                 F.remove_edges_from(cascade_edges)
@@ -250,8 +250,8 @@ def likelihood_systemsplit_edge_based(split_dict,G,only_large_splits = True):
     else:
         likelihoods = np.zeros(len(G.edges()))
         split_counter = 0
-        for timestamp in splitting_cascades.keys():
-            for cascade in splitting_cascades[timestamp]:
+        for timestamp in split_dict.keys():
+            for cascade in split_dict[timestamp]:
                 likelihoods[cascade] += 1
                 split_counter += 1
         likelihoods /= split_counter
