@@ -10,10 +10,12 @@ stages:
   - Static Analysis
   - Test
 
-testing:
+
+doctest:
   stage: Static Analysis
   script:
-    - python -m pytest --cov=power_system_split tests/
+    - python -m doctest README.md
+
 
 pylint:
   stage: Static Analysis
@@ -21,9 +23,8 @@ pylint:
   script:
   - pylint -d C0301 power_system_split/*.py
 
-doctest:
+testing:
   stage: Test
   script:
-    - python -m doctest README.md
-
+    - python -m pytest --cov=power_system_split tests/
 
