@@ -11,12 +11,13 @@ def construct_incidencematrix_from_orientation(Graph):
     B = np.zeros((len(Graph.nodes()),len(Graph.edges())))
     orientations = nx.get_edge_attributes(Graph,'orientation')
     for i in range(len(Graph.edges())):
-        if isinstance(Graph, nx.Graph):
+        if isinstance(Graph, nx.MultiGraph):
+            edge = list(Graph.edges(keys = True))[i]
+            orientation = orientations[edge]
+        elif isinstance(Graph, nx.Graph):
             edge = list(Graph.edges())[i]
             orientation = orientations[edge]#Graph[edge[0]][edge[1]]['orientation']
-        elif isinstance(Graph, nx.MultiGraph):
-            edge = list(Graph.edges(keys = True))[i]
-            orientation = orientations[edge]#G[edge[0]][edge[1]]['orientation']
+#G[edge[0]][edge[1]]['orientation']
         n1 = list(Graph.nodes()).index(orientation[0])
         B[n1,i] = 1.
         n2 = list(Graph.nodes()).index(orientation[1])
@@ -25,18 +26,19 @@ def construct_incidencematrix_from_orientation(Graph):
 
 def redefined_index(Graph,element):
     """Get index of element in edge list for graph Graph"""
-    if isinstance(Graph, nx.Graph):
-        edge_list = list(Graph.edges())
-        try:
-            index = edge_list.index(element)
-        except ValueError:
-            index = edge_list.index(element[::-1])
-    elif isinstance(Graph,nx.MultiGraph):
+    if isinstance(Graph,nx.MultiGraph):
         edge_list = list(Graph.edges(keys = True))
         try:
             index = edge_list.index(element)
         except ValueError:
             index = edge_list.index(element[1::-1] + (element[2],))
+    elif isinstance(Graph, nx.Graph):
+        edge_list = list(Graph.edges())
+        try:
+            index = edge_list.index(element)
+        except ValueError:
+            index = edge_list.index(element[::-1])
+
     return index
 
 def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
