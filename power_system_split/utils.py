@@ -1,43 +1,45 @@
 #!usr/bin/env python
 # -*- coding: utf-8 -*-
+""" This module contains useful methods to calculate and evaluate system
+splits in solved PyPSA networks"""
 
 import numpy as np
 import networkx as nx
 
-def construct_incidencematrix_from_orientation(G):
+def construct_incidencematrix_from_orientation(Graph):
     """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order"""
-    B = np.zeros((len(G.nodes()),len(G.edges())))
-    orientations = nx.get_edge_attributes(G,'orientation')
-    for i in range(len(G.edges())):
-        if type(G) == type(nx.Graph()):
-            edge = list(G.edges())[i]
+    B = np.zeros((len(Graph.nodes()),len(Graph.edges())))
+    orientations = nx.get_edge_attributes(Graph,'orientation')
+    for i in range(len(Graph.edges())):
+        if isinstance(Graph, nx.Graph):
+            edge = list(Graph.edges())[i]
+            orientation = orientations[edge]#Graph[edge[0]][edge[1]]['orientation']
+        elif isinstance(Graph, nx.MultiGraph):
+            edge = list(Graph.edges(keys = True))[i]
             orientation = orientations[edge]#G[edge[0]][edge[1]]['orientation']
-        elif type(G) == type(nx.MultiGraph()):
-            edge = list(G.edges(keys = True))[i]
-            orientation = orientations[edge]#G[edge[0]][edge[1]]['orientation']
-        n1 = list(G.nodes()).index(orientation[0])
+        n1 = list(Graph.nodes()).index(orientation[0])
         B[n1,i] = 1.
-        n2 = list(G.nodes()).index(orientation[1])
+        n2 = list(Graph.nodes()).index(orientation[1])
         B[n2,i] = -1.
     return B
 
-def redefined_index(G,element):
-    """Get index of element in edge list for graph G"""
-    if type(G) == type(nx.Graph()):
-        edge_list = list(G.edges())
+def redefined_index(Graph,element):
+    """Get index of element in edge list for graph Graph"""
+    if isinstance(Graph, nx.Graph):
+        edge_list = list(Graph.edges())
         try:
             index = edge_list.index(element)
         except ValueError:
             index = edge_list.index(element[::-1])
-    elif type(G) == type(nx.MultiGraph()):
-        edge_list = list(G.edges(keys = True))
+    elif isinstance(Graph,nx.MultiGraph):
+        edge_list = list(Graph.edges(keys = True))
         try:
             index = edge_list.index(element)
         except ValueError:
             index = edge_list.index(element[1::-1] + (element[2],))
     return index
 
-def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
+def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
     """Simulate a cascade of failures using the network topology G, which is assumed to have a property 'orientation'
     for each edge, the initially failing links, the initial flows (as dictionary) and the line limits (as dictionary).
     The approach used to simulate the cascade is based on the Power Transfer Distribution Factors assuming fixed power
@@ -48,26 +50,26 @@ def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
     failure_cascade = []
 
     multi_graph = False
-    if type(G) == type(nx.MultiGraph()):
+    if isinstance(Graph,nx.MultiGraph):
         multi_graph = True
 
     if not multi_graph:
-        flows_G = np.array([initial_flows[(u,v)] for u,v in G.edges()])
-        smax_G = np.array([line_limits[(u,v)] for u,v in G.edges()])
+        flows_G = np.array([initial_flows[(u,v)] for u,v in Graph.edges()])
+        smax_G = np.array([line_limits[(u,v)] for u,v in Graph.edges()])
     else:
-        flows_G = np.array([initial_flows[(u,v,key)] for u,v,key in G.edges(keys = True)])
-        smax_G = np.array([line_limits[(u,v,key)] for u,v,key in G.edges(keys = True)])
+        flows_G = np.array([initial_flows[(u,v,key)] for u,v,key in Graph.edges(keys = True)])
+        smax_G = np.array([line_limits[(u,v,key)] for u,v,key in Graph.edges(keys = True)])
 
-    failure_cascade = [redefined_index(G,trigger_link) for trigger_link in trigger_links]
+    failure_cascade = [redefined_index(Graph,trigger_link) for trigger_link in trigger_links]
 
-    I = construct_incidencematrix_from_orientation(G)
+    I = construct_incidencematrix_from_orientation(Graph)
 
     if len(np.where(np.abs(flows_G)>smax_G)[0]):
         print("Setup has initial overloads!")
     stop = 0
     system_split = False
     while not stop:
-        H = G.copy()
+        H = Graph.copy()
         I0 = construct_incidencematrix_from_orientation(H)
         if not multi_graph:
             flows0 = np.array([initial_flows[(u,v)] for u,v in H.edges()])
@@ -77,9 +79,9 @@ def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
         P0 = np.dot(I0,flows0)
 
         if not multi_graph:
-            H.remove_edges_from([list(G.edges())[i] for i in failure_cascade])
+            H.remove_edges_from([list(Graph.edges())[i] for i in failure_cascade])
         else:
-            H.remove_edges_from([list(G.edges(keys = True))[i] for i in failure_cascade])
+            H.remove_edges_from([list(Graph.edges(keys = True))[i] for i in failure_cascade])
 
 
         if not nx.is_connected(H):
@@ -115,9 +117,9 @@ def simulate_cascade_PTDF_based(G,trigger_links,initial_flows,line_limits):
         ### map next failing indices to original graph
         for n in next_indices:
             if not multi_graph:
-                index = redefined_index(G,element = list(H.edges())[n])
+                index = redefined_index(Graph,element = list(H.edges())[n])
             else:
-                index = redefined_index(G,element = list(H.edges(keys = True))[n])
+                index = redefined_index(Graph,element = list(H.edges(keys = True))[n])
 
             if not index in failure_cascade:
                 failure_cascade.append(index)
@@ -168,9 +170,9 @@ def build_networkx_graph(snet_branches,multi_graph = False):
     return F
 
 
-def get_split_components(split,G):
+def get_split_components(split,Graph):
     """Return the split resulting from the edge list in split if the resulting subgraphs are larger than 10 nodes"""
-    F = G.copy()
+    F = Graph.copy()
     cascade_edges = [list(F.edges())[index] for index in split]
     F.remove_edges_from(cascade_edges)
     subgraphs =  list((F.subgraph(c).copy() for c in nx.connected_components(F)))
@@ -181,8 +183,8 @@ def get_split_components(split,G):
         return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
     return return_val
 
-def evaluate_system_split_inertia(split,G,generators,current_generation, use_pnom = True):
-    """For a given list of edge indices split, a networkx graph G,
+def evaluate_system_split_inertia(split,Graph,generators,current_generation, use_pnom = True):
+    """For a given list of edge indices split, a networkx graph Graph,
 
     generators: pandas dataframe
         a pypsa solved network generators (passed as network.generators)
@@ -199,8 +201,8 @@ def evaluate_system_split_inertia(split,G,generators,current_generation, use_pno
     """
     inertiaplants = ['CCGT','OCGT','coal','nuclear','oil','ror']
     # threshold below which a generator is not counted as being participating
-    participation_threshold = 1e-6
-    subgraphs = get_split_components(split,G)
+    participation_threshold = 1e0
+    subgraphs = get_split_components(split,Graph)
     if len(subgraphs) < 2 :
         return 0
     else:
@@ -219,21 +221,21 @@ def evaluate_system_split_inertia(split,G,generators,current_generation, use_pno
         return inertia_generations
 
 
-def likelihood_systemsplit_edge_based(split_dict,G,only_large_splits = True):
+def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True):
     """ Calculate the empirical likelihood that a given edge is involved
     in a system split based on the split_dict
 
     If only_large_splits is True, only splits which yield components
     with more than ten nodes each are evaluated"""
 
-    likelihood_dict = {(u,v):0.0 for u,v in G.edges()}
+    likelihood_dict = {(u,v):0.0 for u,v in Graph.edges()}
 
     if only_large_splits:
         # counts the number of relevant splits
         split_counter = 0
         for timestamp in split_dict.keys():
             for cascade in split_dict[timestamp]:
-                F = G.copy()
+                F = Graph.copy()
                 cascade_edges = [list(F.edges())[index] for index in cascade]
                 F.remove_edges_from(cascade_edges)
                 subgraphs =  list((F.subgraph(c).copy() for c in nx.connected_components(F)))
@@ -248,14 +250,14 @@ def likelihood_systemsplit_edge_based(split_dict,G,only_large_splits = True):
             likelihood_dict[edge] /= split_counter
 
     else:
-        likelihoods = np.zeros(len(G.edges()))
+        likelihoods = np.zeros(len(Graph.edges()))
         split_counter = 0
         for timestamp in split_dict.keys():
             for cascade in split_dict[timestamp]:
                 likelihoods[cascade] += 1
                 split_counter += 1
         likelihoods /= split_counter
-        for count, edge  in enumerate(list(G.edges())):
+        for count, edge  in enumerate(list(Graph.edges())):
             likelihood_dict[edge] += likelihoods[count]
 
     return likelihood_dict
