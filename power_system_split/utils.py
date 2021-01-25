@@ -270,3 +270,42 @@ def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True)
             likelihood_dict[edge] += likelihoods[count]
 
     return likelihood_dict
+
+
+def solution_key_to_pandas_timestamp(key):
+    """Convert from dictionary key used in solution dictionaries
+    to pandas datetime index used in pypsa networks"""
+    day,month,year,hour = key.split('_')
+    snapshot = pd.Timestamp(year = int(year),month = int(month),hour = int(hour),day = int(day))
+    return snapshot
+
+def pandas_timestamp_to_solution_key(timestamp):
+    """Convert from pandas datetime index to
+    to dictionary key used in solution dictionaries used in pypsa networks"""
+    return timestamp.strftime('%d_%m_%Y_%H')
+
+def verify_cascade_results(G,test_cascades,initial_loading):
+    """Verify if the cascades contained in the list test_cascades
+    (list of indices of the edges in list(G.edges())[index])
+    are triggered by the first link in each list given
+    the initial loading and the Graph G"""
+
+    indices = nx.get_edge_attributes(G,'line_index')
+    line_limits = nx.get_edge_attributes(G,'s_nom')
+
+    ### iterate only over non-bridge edges for now
+
+    splitting_cascades = []
+
+    l_copy = initial_loading.copy()
+    for key in l_copy.keys():
+        initial_loading[key[::-1]] = initial_loading[key]
+
+    for i in range(len(test_cascades)):
+        trigger_link = list(G.edges())[test_cascades[i][0]]
+        failing_links,new_loading_dict,system_split = utils.simulate_cascade_PTDF_based(G,
+                                                                 trigger_links = [trigger_link],
+                                                                 line_limits = line_limits,
+                                                                 initial_flows = initial_loading)
+        assert(failing_links == test_cascades[i])
+    print("All results correct!")
