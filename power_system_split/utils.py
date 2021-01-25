@@ -5,6 +5,7 @@ splits in solved PyPSA networks"""
 
 import numpy as np
 import networkx as nx
+import pandas as pd
 
 def construct_incidencematrix_from_orientation(Graph):
     """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order"""
@@ -303,7 +304,7 @@ def verify_cascade_results(G,test_cascades,initial_loading):
 
     for i in range(len(test_cascades)):
         trigger_link = list(G.edges())[test_cascades[i][0]]
-        failing_links,new_loading_dict,system_split = utils.simulate_cascade_PTDF_based(G,
+        failing_links,new_loading_dict,system_split = simulate_cascade_PTDF_based(G,
                                                                  trigger_links = [trigger_link],
                                                                  line_limits = line_limits,
                                                                  initial_flows = initial_loading)
