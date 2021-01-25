@@ -248,9 +248,12 @@ def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True)
                 for edge in cascade_edges:
                     likelihood_dict[edge] += 1
                 split_counter += 1
-        for edge in likelihood_dict.keys():
-            likelihood_dict[edge] /= split_counter
-
+        try:
+            # normalisation only possible if splits occured at all
+            for edge in likelihood_dict.keys():
+                likelihood_dict[edge] /= split_counter
+        except ZeroDivisionError:
+            pass
     else:
         likelihoods = np.zeros(len(Graph.edges()))
         split_counter = 0
@@ -258,7 +261,11 @@ def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True)
             for cascade in split_dict[timestamp]:
                 likelihoods[cascade] += 1
                 split_counter += 1
-        likelihoods /= split_counter
+        try:
+            # normalisation only possible if splits occured at all
+            likelihoods /= split_counter
+        except ZeroDivisionError:
+            pass
         for count, edge  in enumerate(list(Graph.edges())):
             likelihood_dict[edge] += likelihoods[count]
 
