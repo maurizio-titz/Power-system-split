@@ -211,7 +211,7 @@ def evaluate_system_split_inertia(split,Graph,generators,current_generation, use
     else:
         inertia_generations = []
         for subgraph in subgraphs:
-            gens = network.generators[network.generators["bus"].isin(list(subgraph.nodes()))]
+            gens = generators[generators["bus"].isin(list(subgraph.nodes()))]
             existing_inertia_sources = list(set(inertiaplants)-(set(inertiaplants)-set(list(gens.carrier))))
             current_generators = current_generation.loc[list(gens.index)]
             if use_pnom:
@@ -310,3 +310,144 @@ def verify_cascade_results(G,test_cascades,initial_loading):
                                                                  initial_flows = initial_loading)
         assert(failing_links == test_cascades[i])
     print("All results correct!")
+
+
+
+def get_inertia_gen_subgraph(subgraph,generators,current_generation,storages,current_storage,use_pnom,inertiaplants = None, inertia_storages = None):
+    """get inertia generation for a subgraph"""
+    if not inertiaplants:
+        inertiaplants = ['CCGT','OCGT','coal','nuclear','oil','ror']
+    if not inertia_storages:
+        inertia_storages = ['PHS']
+
+    # threshold below which a generator or  is not counted as being participating
+    participation_threshold = 0.05
+
+    gens                     = generators[generators["bus"].isin(list(subgraph.nodes()))]
+    existing_inertia_sources = list(set(inertiaplants)-(set(inertiaplants)-set(list(gens.carrier))))
+    current_generators       = current_generation.loc[list(gens.index)]
+
+    stores                    = storages[storages["bus"].isin(list(subgraph.nodes()))]
+    existing_inertia_storages = list(set(inertia_storages)-(set(inertia_storages)-set(list(stores.carrier))))
+    current_storages          = current_storage.loc[list(stores.index)]
+
+    if use_pnom:
+        participating_gens = current_generation.loc[list(gens.index)]>participation_threshold*gens["p_nom"]
+        reduced_gens       = gens[participating_gens]
+        existing_inertia_sources = list(set(existing_inertia_sources)-(set(existing_inertia_sources)-set(reduced_gens.carrier)))
+        ps = reduced_gens["p_nom"]*reduced_gens["p_max_pu"]
+        inertia_generation = (ps).groupby(reduced_gens.carrier).sum().loc[existing_inertia_sources].sum()
+
+        participating_storages = current_storages.loc[list(stores.index)]>participation_threshold*stores["p_nom"]
+        reduced_stores        = stores[participating_storages]
+        existing_inertia_storages = list(set(existing_inertia_storages)-(set(existing_inertia_storages)-set(reduced_stores.carrier)))
+        inertia_generation += (reduced_stores["p_nom"]).groupby(reduced_stores.carrier).sum().loc[existing_inertia_storages].sum()
+
+    else:
+        inertia_generation = current_generators.groupby(gens.carrier).sum().loc[existing_inertia_sources].sum()
+        inertia_generation += current_storages.groupby(stores.carrier).sum().loc[existing_inertia_storages].sum()
+    return inertia_generation
+
+
+def get_load_imbalance_subgraph(subgraph,generators,current_generation,storages,current_storage,loads,current_load):
+    """Calculate load imbalance due to subgraph"""
+    gens   = generators[generators["bus"].isin(list(subgraph.nodes()))]
+    loads  = loads[loads["bus"].isin(list(subgraph.nodes()))]
+    stores = storages[storages["bus"].isin(list(subgraph.nodes()))]
+
+    load_imbalance = current_generation.loc[list(gens.index)].sum() + current_storage.loc[list(stores.index)].sum()-\
+                        current_load.loc[list(loads.index)].sum()
+    return load_imbalance
+
+
+def get_available_flexible_generation(subgraph,
+                                      generators,
+                                      current_generation,
+                                      storages,
+                                      current_storage,
+                                      flexible_plants = None,
+                                      flexible_storages = None):
+    """Calculate avaible generation in flexible technologies"""
+    if not flexible_plants:
+        flexible_plants = ['OCGT','ror']
+    if not flexible_storages:
+        flexible_storages = ['PHS']
+
+    gens                     = generators[generators["bus"].isin(list(subgraph.nodes()))]
+    existing_flexible_sources = list(set(flexible_plants)-(set(flexible_plants)-set(list(gens.carrier))))
+    current_generators       = current_generation.loc[list(gens.index)]
+
+    stores                    = storages[storages["bus"].isin(list(subgraph.nodes()))]
+    existing_flexible_storages = list(set(flexible_storages)-(set(flexible_storages)-set(list(stores.carrier))))
+    current_storages          = current_storage.loc[list(stores.index)]
+
+    maximal_generation = (gens["p_nom"]*gens["p_max_pu"]).groupby(gens.carrier).sum().loc[existing_flexible_sources].sum()
+    flexible_generation = maximal_generation - current_generators.groupby(gens.carrier).sum().loc[existing_flexible_sources].sum()
+
+    #maximal_storage = (stores["p_nom"]).groupby(stores.carrier).sum().loc[existing_flexible_storages].sum()
+    #flexible_generation += maximal_storage - current_storages.groupby(stores.carrier).sum().loc[existing_flexible_storages].sum()
+    return flexible_generation
+
+
+def evaluate_split_observables(split,
+                               pypsa_network,
+                               timestamp,
+                               use_pnom = True,
+                               inertiaplants = None,
+                               inertia_storages = None,
+                               flexible_plants = None,
+                               flexible_storage = None):
+    """
+    split: list of edge indices split to be used with networkx graph created from pypsa network
+
+    pypsa_network: pypsa network object containing solution for timestamps
+    """
+
+    assert(isinstance(timestamp,pd.Timestamp))
+
+    branches           = pypsa_network.branches()[["bus0","bus1","x_pu_eff","s_nom"]]
+    Graph              = build_networkx_graph(branches)
+
+    current_generation = pypsa_network.generators_t.p.loc[timestamp]
+    current_storage    = pypsa_network.storage_units_t.p.loc[timestamp]
+    current_load       = pypsa_network.loads_t.p.loc[timestamp]
+
+    subgraphs = get_split_components(split,Graph)
+
+    results_dict = {'inertia_proxy': [],'load_imbalance': [], 'available_flexible_generation': [] }
+
+    #if len(subgraphs) < 2 :
+    #       pass
+    #    #print("No large splits found for timestamp and split")
+    if len(subgraphs) >= 2 :
+        for subgraph in subgraphs:
+            inertia_generation = get_inertia_gen_subgraph(subgraph,
+                                                          pypsa_network.generators,
+                                                          current_generation,
+                                                          pypsa_network.storage_units,
+                                                          current_storage,
+                                                          use_pnom,
+                                                          inertiaplants = inertiaplants,
+                                                          inertia_storages = inertia_storages)
+
+            load_imbalance = get_load_imbalance_subgraph(subgraph,
+                                                          pypsa_network.generators,
+                                                          current_generation,
+                                                          pypsa_network.storage_units,
+                                                          current_storage,
+                                                          pypsa_network.loads,
+                                                          current_load)
+
+            available_flexible_generation = get_available_flexible_generation(subgraph,
+                                                          pypsa_network.generators,
+                                                          current_generation,
+                                                          pypsa_network.storage_units,
+                                                          current_storage,
+                                                          flexible_plants = flexible_plants,
+                                                          flexible_storages = flexible_storage)
+
+            results_dict['inertia_proxy'].append(inertia_generation)
+            results_dict['load_imbalance'].append(load_imbalance)
+            results_dict['available_flexible_generation'].append(available_flexible_generation)
+
+    return results_dict
