@@ -11,18 +11,21 @@ def construct_incidencematrix_from_orientation(Graph):
     """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order"""
     B = np.zeros((len(Graph.nodes()),len(Graph.edges())))
     orientations = nx.get_edge_attributes(Graph,'orientation')
-    for i in range(len(Graph.edges())):
-        if isinstance(Graph, nx.MultiGraph):
-            edge = list(Graph.edges(keys = True))[i]
+    node_list = list(Graph.nodes())
+    if isinstance(Graph, nx.MultiGraph):
+        for i,edge in enumerate(Graph.edges(keys = True)):
             orientation = orientations[edge]
-        elif isinstance(Graph, nx.Graph):
-            edge = list(Graph.edges())[i]
-            orientation = orientations[edge]#Graph[edge[0]][edge[1]]['orientation']
-#G[edge[0]][edge[1]]['orientation']
-        n1 = list(Graph.nodes()).index(orientation[0])
-        B[n1,i] = 1.
-        n2 = list(Graph.nodes()).index(orientation[1])
-        B[n2,i] = -1.
+            n1 = node_list.index(orientation[0])
+            B[n1,i] = 1.
+            n2 = node_list.index(orientation[1])
+            B[n2,i] = -1.
+    elif isinstance(Graph, nx.Graph):
+        for i,edge in enumerate(Graph.edges()):
+            orientation = orientations[edge]
+            n1 = node_list.index(orientation[0])
+            B[n1,i] = 1.
+            n2 = node_list.index(orientation[1])
+            B[n2,i] = -1.
     return B
 
 def redefined_index(Graph,element):
@@ -69,11 +72,18 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
 
     if len(np.where(np.abs(flows_G)>smax_G)[0]):
         print("Setup has initial overloads!")
+
+    if not multi_graph:
+        Graph_edges = list(Graph.edges())
+    else:
+        Graph_edges = list(Graph.edges(keys = True))
+
     stop = 0
     system_split = False
     while not stop:
         H = Graph.copy()
         I0 = construct_incidencematrix_from_orientation(H)
+
         if not multi_graph:
             flows0 = np.array([initial_flows[(u,v)] for u,v in H.edges()])
         else:
@@ -81,11 +91,7 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
 
         P0 = np.dot(I0,flows0)
 
-        if not multi_graph:
-            H.remove_edges_from([list(Graph.edges())[i] for i in failure_cascade])
-        else:
-            H.remove_edges_from([list(Graph.edges(keys = True))[i] for i in failure_cascade])
-
+        H.remove_edges_from([Graph_edges[i] for i in failure_cascade])
 
         if not nx.is_connected(H):
             system_split = True
@@ -118,12 +124,12 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
         next_indices = np.where(np.abs(flows_H)>smax)[0]
 
         ### map next failing indices to original graph
+        if not multi_graph:
+            H_edges = list(H.edges())
+        else:
+            H_edges = list(H.edges(keys = True))
         for n in next_indices:
-            if not multi_graph:
-                index = redefined_index(Graph,element = list(H.edges())[n])
-            else:
-                index = redefined_index(Graph,element = list(H.edges(keys = True))[n])
-
+            index = redefined_index(Graph,element = H_edges[n])
             if not index in failure_cascade:
                 failure_cascade.append(index)
 
@@ -132,12 +138,13 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
 
         loading_dict = {}
         if not multi_graph:
-            for i in range(len(H.edges())):
-                loading_dict[list(H.edges())[i]] = flows_H[i]
-                loading_dict[list(H.edges())[i][::-1]] = flows_H[i]
+
+            for i,edge in enumerate(H.edges()):
+                loading_dict[edge] = flows_H[i]
+                loading_dict[edge[::-1]] = flows_H[i]
         else:
-            for i in range(len(H.edges())):
-                loading_dict[list(H.edges(keys = True))[i]] = flows_H[i]
+            for i,edge in enumerate(H.edges(keys = True)):
+                loading_dict[edge] = flows_H[i]
 
     return failure_cascade,loading_dict,system_split
 
