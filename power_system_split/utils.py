@@ -316,7 +316,7 @@ def verify_cascade_results(G,test_cascades,initial_loading):
 def get_inertia_gen_subgraph(subgraph,generators,current_generation,storages,current_storage,use_pnom,inertiaplants = None, inertia_storages = None):
     """get inertia generation for a subgraph"""
     if not inertiaplants:
-        inertiaplants = ['CCGT','OCGT','coal','nuclear','oil','ror']
+        inertiaplants = ['CCGT','OCGT','coal','nuclear','oil','ror','lignite','biomass']
     if not inertia_storages:
         inertia_storages = ['PHS']
 
