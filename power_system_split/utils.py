@@ -6,6 +6,7 @@ splits in solved PyPSA networks"""
 import numpy as np
 import networkx as nx
 import pandas as pd
+import pickle
 
 def construct_incidencematrix_from_orientation(Graph):
     """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order"""
@@ -149,6 +150,116 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
     return failure_cascade,loading_dict,system_split
 
 
+def simulate_cascade_PTDF_based_edge_based(Graph,trigger_links,initial_flows,line_limits,return_loading_dict = False):
+    """Simulate a cascade of failures using the network topology G, which is assumed to have a property 'orientation'
+    for each edge, the initially failing links, the initial flows (as dictionary) and the line limits (as dictionary).
+    The approach used to simulate the cascade is based on the Power Transfer Distribution Factors assuming fixed power
+    injections and subsequently calculating the flows using the PTDFs after the removal of all failing links from
+    the network"""
+
+    multi_graph = False
+    if isinstance(Graph,nx.MultiGraph):
+        multi_graph = True
+
+    if not multi_graph:
+        flows_G = np.array([initial_flows[(u,v)] for u,v in Graph.edges()])
+        smax_G = np.array([line_limits[(u,v)] for u,v in Graph.edges()])
+    else:
+        flows_G = np.array([initial_flows[(u,v,key)] for u,v,key in Graph.edges(keys = True)])
+        smax_G = np.array([line_limits[(u,v,key)] for u,v,key in Graph.edges(keys = True)])
+
+    failure_cascade = trigger_links
+
+    I = construct_incidencematrix_from_orientation(Graph)
+
+    if len(np.where(np.abs(flows_G)>smax_G)[0]):
+        print("Setup has initial overloads!")
+
+    if not multi_graph:
+        Graph_edges = list(Graph.edges())
+    else:
+        Graph_edges = list(Graph.edges(keys = True))
+
+    stop = 0
+    system_split = False
+    while not stop:
+        H = Graph.copy()
+        I0 = construct_incidencematrix_from_orientation(H)
+
+        if not multi_graph:
+            flows0 = np.array([initial_flows[(u,v)] for u,v in H.edges()])
+        else:
+            flows0 = np.array([initial_flows[(u,v,key)] for u,v,key in H.edges(keys = True)])
+
+        P0 = np.dot(I0,flows0)
+
+        H.remove_edges_from(failure_cascade)
+
+        if not nx.is_connected(H):
+            system_split = True
+            break
+
+        I = construct_incidencematrix_from_orientation(H)
+        L = nx.laplacian_matrix(H)
+        try:
+            theta = np.linalg.solve(L.A,P0)
+        except np.linalg.LinAlgError:
+            # pseudoinverse
+            L_inv = np.linalg.pinv(L.A)
+            theta = np.dot(L_inv,P0)
+
+        line_weights = nx.get_edge_attributes(H,'weight')
+        if not multi_graph:
+            line_susceptances = np.array([line_weights[(u,v)] for u,v in H.edges()])
+        else:
+            line_susceptances = np.array([line_weights[(u,v,key)] for u,v,key in H.edges(keys = True)])
+
+        B_d = np.diag(line_susceptances)
+
+        flows_H = np.linalg.multi_dot([B_d,I.T,theta])
+
+        if not multi_graph:
+            smax = np.array([line_limits[(u,v)] for u,v in H.edges()])
+        else:
+            smax = np.array([line_limits[(u,v,key)] for u,v,key in H.edges(keys = True)])
+
+        next_indices = np.where(np.abs(flows_H)>smax)[0]
+
+        ### map next failing indices to original graph
+        if not multi_graph:
+            H_edges = list(H.edges())
+            for n in next_indices:
+                e = H_edges[n]
+                if not ((e in failure_cascade) or (e[::-1] in failure_cascade)):
+                    failure_cascade.append(e)
+        else:
+            H_edges = list(H.edges(keys = True))
+            for n in next_indices:
+                e = H_edges[n]
+                if not ((e in failure_cascade) or ((*e[:2][::-1],e[2]) in failure_cascade)):
+                    failure_cascade.append(e)
+
+        if len(next_indices)==0:
+            stop = 1
+
+        if return_loading_dict:
+            loading_dict = {}
+            if not multi_graph:
+
+                for i,edge in enumerate(H.edges()):
+                    loading_dict[edge] = flows_H[i]
+                    loading_dict[edge[::-1]] = flows_H[i]
+            else:
+                for i,edge in enumerate(H.edges(keys = True)):
+                    loading_dict[edge] = flows_H[i]
+
+    if not return_loading_dict:
+        return_vals = [failure_cascade,system_split]
+    else:
+        return_vals = [failure_cascade,loading_dict,system_split]
+    return return_vals
+
+
 def build_networkx_graph(snet_branches,multi_graph = False):
     if not multi_graph:
         F = nx.Graph()
@@ -182,9 +293,15 @@ def build_networkx_graph(snet_branches,multi_graph = False):
 
 def get_split_components(split,Graph):
     """Return the split resulting from the edge list in split if the resulting subgraphs are larger than 10 nodes"""
+    try:
+        assert(isinstance(split[0],tuple))
+    except AssertionError:
+        print("Format of split data has been changed. " +
+              "Please use transform_cascade_results to adjust to new format")
+        return
     F = Graph.copy()
-    cascade_edges = [list(F.edges())[index] for index in split]
-    F.remove_edges_from(cascade_edges)
+    #cascade_edges = [list(F.edges())[index] for index in split]
+    F.remove_edges_from(split)
     subgraphs =  list((F.subgraph(c).copy() for c in nx.connected_components(F)))
     relevant_subgraphs = [i for i in range(len(subgraphs)) if len(subgraphs[i].nodes())>10]
     if len(relevant_subgraphs)<2:
@@ -245,12 +362,7 @@ def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True)
         split_counter = 0
         for timestamp in split_dict.keys():
             for cascade in split_dict[timestamp]:
-                F = Graph.copy()
-                cascade_edges = [list(F.edges())[index] for index in cascade]
-                F.remove_edges_from(cascade_edges)
-                subgraphs =  list((F.subgraph(c).copy() for c in nx.connected_components(F)))
-                relevant_subgraphs = [i for i in range(len(subgraphs)) if len(subgraphs[i].nodes())>10]
-
+                relevant_subgraphs = get_split_components(cascade,Graph)
                 if len(relevant_subgraphs) < 2:
                     continue
                 for edge in cascade_edges:
@@ -263,19 +375,26 @@ def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True)
         except ZeroDivisionError:
             pass
     else:
-        likelihoods = np.zeros(len(Graph.edges()))
         split_counter = 0
         for timestamp in split_dict.keys():
             for cascade in split_dict[timestamp]:
-                likelihoods[cascade] += 1
-                split_counter += 1
+                try:
+                    assert(isinstance(cascade[0],tuple))
+                except AssertionError:
+                    print("Format of split data has been changed. " +
+                    "Please use transform_cascade_results to adjust to new format")
+                    return
+
+                for edge in cascade:
+                    likelihood_dict[edge] += 1
+                    split_counter += 1
         try:
-            # normalisation only possible if splits occured at all
-            likelihoods /= split_counter
+            for edge in likelihood_dict.keys():
+                likelihood_dict[edge] /= split_counter
         except ZeroDivisionError:
             pass
-        for count, edge  in enumerate(list(Graph.edges())):
-            likelihood_dict[edge] += likelihoods[count]
+        #for count, edge  in enumerate(list(Graph.edges())):
+        #    likelihood_dict[edge] += likelihoods[count]
 
     return likelihood_dict
 
@@ -405,7 +524,7 @@ def evaluate_split_observables(split,
                                flexible_plants = None,
                                flexible_storage = None):
     """
-    split: list of edge indices split to be used with networkx graph created from pypsa network
+    split: list of edges split to be used with networkx graph created from pypsa network
 
     pypsa_network: pypsa network object containing solution for timestamps
     """
@@ -458,3 +577,13 @@ def evaluate_split_observables(split,
             results_dict['available_flexible_generation'].append(available_flexible_generation)
 
     return results_dict
+
+
+def transform_cascade_results(Graph,cascade):
+    """Cascade model used to save indices of edges
+    but the new format should be the edges itself"""
+    if isinstance(Graph, nx.MultiGraph):
+        Graph_edges = list(Graph.edges(keys = True))
+    elif isinstance(Graph, nx.Graph):
+        Graph_edges = list(Graph.edges())
+    return [Graph_edges[index] for index in cascade]
