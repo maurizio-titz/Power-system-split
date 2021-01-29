@@ -52,7 +52,9 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
     The approach used to simulate the cascade is based on the Power Transfer Distribution Factors assuming fixed power
     injections and subsequently calculating the flows using the PTDFs after the removal of all failing links from
     the network"""
-
+    print("""NOTE: Using simulate_cascade_PTDF_based_edge_based for cascade
+             simulations is preferred due to better data storing, since the
+             return values there are edges not edge indices.""")
     # store indices of failing links
     failure_cascade = []
 
@@ -99,13 +101,6 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
             break
 
         I = construct_incidencematrix_from_orientation(H)
-        L = nx.laplacian_matrix(H)
-        try:
-            theta = np.linalg.solve(L.A,P0)
-        except np.linalg.LinAlgError:
-            # pseudoinverse
-            L_inv = np.linalg.pinv(L.A)
-            theta = np.dot(L_inv,P0)
 
         line_weights = nx.get_edge_attributes(H,'weight')
         if not multi_graph:
@@ -114,6 +109,15 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
             line_susceptances = np.array([line_weights[(u,v,key)] for u,v,key in H.edges(keys = True)])
 
         B_d = np.diag(line_susceptances)
+        L = np.linalg.multi_dot([I,B_d,I.T])
+
+        #L = nx.laplacian_matrix(H)
+        try:
+            theta = np.linalg.solve(L,P0)
+        except np.linalg.LinAlgError:
+            # pseudoinverse
+            L_inv = np.linalg.pinv(L)
+            theta = np.dot(L_inv,P0)
 
         flows_H = np.linalg.multi_dot([B_d,I.T,theta])
 
@@ -200,13 +204,6 @@ def simulate_cascade_PTDF_based_edge_based(Graph,trigger_links,initial_flows,lin
             break
 
         I = construct_incidencematrix_from_orientation(H)
-        L = nx.laplacian_matrix(H)
-        try:
-            theta = np.linalg.solve(L.A,P0)
-        except np.linalg.LinAlgError:
-            # pseudoinverse
-            L_inv = np.linalg.pinv(L.A)
-            theta = np.dot(L_inv,P0)
 
         line_weights = nx.get_edge_attributes(H,'weight')
         if not multi_graph:
@@ -215,6 +212,15 @@ def simulate_cascade_PTDF_based_edge_based(Graph,trigger_links,initial_flows,lin
             line_susceptances = np.array([line_weights[(u,v,key)] for u,v,key in H.edges(keys = True)])
 
         B_d = np.diag(line_susceptances)
+
+        L = np.linalg.multi_dot([I,B_d,I.T])
+        #L = nx.laplacian_matrix(H)
+        try:
+            theta = np.linalg.solve(L,P0)
+        except np.linalg.LinAlgError:
+            # pseudoinverse
+            L_inv = np.linalg.pinv(L)
+            theta = np.dot(L_inv,P0)
 
         flows_H = np.linalg.multi_dot([B_d,I.T,theta])
 
@@ -365,7 +371,7 @@ def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True)
                 relevant_subgraphs = get_split_components(cascade,Graph)
                 if len(relevant_subgraphs) < 2:
                     continue
-                for edge in cascade_edges:
+                for edge in cascade:
                     likelihood_dict[edge] += 1
                 split_counter += 1
         try:
@@ -421,8 +427,6 @@ def verify_cascade_results(G,test_cascades,initial_loading):
     line_limits = nx.get_edge_attributes(G,'s_nom')
 
     ### iterate only over non-bridge edges for now
-
-    splitting_cascades = []
 
     l_copy = initial_loading.copy()
     for key in l_copy.keys():
@@ -481,6 +485,7 @@ def get_load_imbalance_subgraph(subgraph,generators,current_generation,storages,
     loads  = loads[loads["bus"].isin(list(subgraph.nodes()))]
     stores = storages[storages["bus"].isin(list(subgraph.nodes()))]
 
+
     load_imbalance = current_generation.loc[list(gens.index)].sum() + current_storage.loc[list(stores.index)].sum()-\
                         current_load.loc[list(loads.index)].sum()
     return load_imbalance
@@ -534,9 +539,16 @@ def evaluate_split_observables(split,
     branches           = pypsa_network.branches()[["bus0","bus1","x_pu_eff","s_nom"]]
     Graph              = build_networkx_graph(branches)
 
+    # Rescale load shedding since units for load shedding are different
+    # than for generation, storage and load
+    load_shedding_indices = pypsa_network.generators[pypsa_network.generators.carrier.isin(['load'])].index
+
     current_generation = pypsa_network.generators_t.p.loc[timestamp]
+    current_generation[load_shedding_indices] /= 1e3
     current_storage    = pypsa_network.storage_units_t.p.loc[timestamp]
     current_load       = pypsa_network.loads_t.p.loc[timestamp]
+
+    assert(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<1e-3)
 
     subgraphs = get_split_components(split,Graph)
 
