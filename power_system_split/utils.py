@@ -69,6 +69,11 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
         flows_G = np.array([initial_flows[(u,v,key)] for u,v,key in Graph.edges(keys = True)])
         smax_G = np.array([line_limits[(u,v,key)] for u,v,key in Graph.edges(keys = True)])
 
+    if not multi_graph:
+        Graph_edges = list(Graph.edges())
+    else:
+        Graph_edges = list(Graph.edges(keys = True))
+
     failure_cascade = [redefined_index(Graph,trigger_link) for trigger_link in trigger_links]
 
     if len(np.where(np.abs(flows_G)>smax_G)[0]):
@@ -179,11 +184,6 @@ def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
 
     failure_cascade = trigger_links
 
-    if not multi_graph:
-        Graph_edges = list(Graph.edges())
-    else:
-        Graph_edges = list(Graph.edges(keys = True))
-
     stop = 0
     system_split = False
 
@@ -282,15 +282,8 @@ def simulate_cascade_PTDF_based_edge_based(Graph,trigger_links,initial_flows,lin
 
     failure_cascade = trigger_links
 
-    I = construct_incidencematrix_from_orientation(Graph)
-
     if len(np.where(np.abs(flows_G)>smax_G)[0]):
         print("Setup has initial overloads!")
-
-    if not multi_graph:
-        Graph_edges = list(Graph.edges())
-    else:
-        Graph_edges = list(Graph.edges(keys = True))
 
     stop = 0
     system_split = False
