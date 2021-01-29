@@ -267,6 +267,7 @@ def simulate_cascade_PTDF_based_edge_based(Graph,trigger_links,initial_flows,lin
 
 
 def build_networkx_graph(snet_branches,multi_graph = False):
+    """Build a networkx graph from the pypsa networks"""
     if not multi_graph:
         F = nx.Graph()
     else:
@@ -543,12 +544,15 @@ def evaluate_split_observables(split,
     # than for generation, storage and load
     load_shedding_indices = pypsa_network.generators[pypsa_network.generators.carrier.isin(['load'])].index
 
-    current_generation = pypsa_network.generators_t.p.loc[timestamp]
+    current_generation = pypsa_network.generators_t.p.loc[timestamp].copy()
     current_generation[load_shedding_indices] /= 1e3
     current_storage    = pypsa_network.storage_units_t.p.loc[timestamp]
     current_load       = pypsa_network.loads_t.p.loc[timestamp]
 
+    #try:
     assert(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<1e-3)
+    #except AssertionError:
+    #    print(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum()))
 
     subgraphs = get_split_components(split,Graph)
 
