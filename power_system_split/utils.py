@@ -6,7 +6,6 @@ splits in solved PyPSA networks"""
 import numpy as np
 import networkx as nx
 import pandas as pd
-import pickle
 
 def construct_incidencematrix_from_orientation(Graph):
     """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order"""
@@ -131,8 +130,8 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
             H_edges = list(H.edges())
         else:
             H_edges = list(H.edges(keys = True))
-        for n in next_indices:
-            index = redefined_index(Graph,element = H_edges[n])
+        for ind in next_indices:
+            index = redefined_index(Graph,element = H_edges[ind])
             if not index in failure_cascade:
                 failure_cascade.append(index)
 
@@ -228,16 +227,16 @@ def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
         ### map next failing indices to original graph
         if not multi_graph:
             H_edges = list(H.edges())
-            for n in next_indices:
-                e = H_edges[n]
-                if not ((e in failure_cascade) or (e[::-1] in failure_cascade)):
-                    failure_cascade.append(e)
+            for ind in next_indices:
+                edge = H_edges[ind]
+                if not ((edge in failure_cascade) or (edge[::-1] in failure_cascade)):
+                    failure_cascade.append(edge)
         else:
             H_edges = list(H.edges(keys = True))
-            for n in next_indices:
-                e = H_edges[n]
-                if not ((e in failure_cascade) or ((*e[:2][::-1],e[2]) in failure_cascade)):
-                    failure_cascade.append(e)
+            for ind in next_indices:
+                edge = H_edges[ind]
+                if not ((edge in failure_cascade) or ((*edge[:2][::-1],edge[2]) in failure_cascade)):
+                    failure_cascade.append(edge)
 
         if len(next_indices)==0:
             stop = 1
@@ -335,16 +334,16 @@ def simulate_cascade_PTDF_based_edge_based(Graph,trigger_links,initial_flows,lin
         ### map next failing indices to original graph
         if not multi_graph:
             H_edges = list(H.edges())
-            for n in next_indices:
-                e = H_edges[n]
-                if not ((e in failure_cascade) or (e[::-1] in failure_cascade)):
-                    failure_cascade.append(e)
+            for ind in next_indices:
+                edge = H_edges[ind]
+                if not ((edge in failure_cascade) or (edge[::-1] in failure_cascade)):
+                    failure_cascade.append(edge)
         else:
             H_edges = list(H.edges(keys = True))
-            for n in next_indices:
-                e = H_edges[n]
-                if not ((e in failure_cascade) or ((*e[:2][::-1],e[2]) in failure_cascade)):
-                    failure_cascade.append(e)
+            for ind in next_indices:
+                edge = H_edges[ind]
+                if not ((edge in failure_cascade) or ((*edge[:2][::-1],edge[2]) in failure_cascade)):
+                    failure_cascade.append(edge)
 
         if len(next_indices)==0:
             stop = 1
@@ -401,12 +400,10 @@ def build_networkx_graph(snet_branches,multi_graph = False):
 
 def get_split_components(split,Graph):
     """Return the split resulting from the edge list in split if the resulting subgraphs are larger than 10 nodes"""
-    try:
-        assert(isinstance(split[0],tuple))
-    except AssertionError:
-        print("Format of split data has been changed. " +
-              "Please use transform_cascade_results to adjust to new format")
-        return
+    assert isinstance(split[0],tuple),"""Format of split data has been changed.
+                   Please use transform_cascade_results to adjust to new format"""
+
+
     F = Graph.copy()
     #cascade_edges = [list(F.edges())[index] for index in split]
     F.remove_edges_from(split)
@@ -440,20 +437,20 @@ def evaluate_system_split_inertia(split,Graph,generators,current_generation, use
     subgraphs = get_split_components(split,Graph)
     if len(subgraphs) < 2 :
         return 0
-    else:
-        inertia_generations = []
-        for subgraph in subgraphs:
-            gens = generators[generators["bus"].isin(list(subgraph.nodes()))]
-            existing_inertia_sources = list(set(inertiaplants)-(set(inertiaplants)-set(list(gens.carrier))))
-            current_generators = current_generation.loc[list(gens.index)]
-            if use_pnom:
-                participating = current_generation.loc[list(gens.index)]>participation_threshold
-                reduced_gens = gens[participating]
-                inertia_generation = (reduced_gens["p_nom"]*reduced_gens["p_max_pu"]).groupby(reduced_gens.carrier).sum().loc[existing_inertia_sources].sum()
-            else:
-                inertia_generation = current_generators.groupby(gens.carrier).sum().loc[existing_inertia_sources].sum()
-            inertia_generations.append(inertia_generation)
-        return inertia_generations
+
+    inertia_generations = []
+    for subgraph in subgraphs:
+        gens = generators[generators["bus"].isin(list(subgraph.nodes()))]
+        existing_inertia_sources = list(set(inertiaplants)-(set(inertiaplants)-set(list(gens.carrier))))
+        current_generators = current_generation.loc[list(gens.index)]
+        if use_pnom:
+            participating = current_generation.loc[list(gens.index)]>participation_threshold
+            reduced_gens = gens[participating]
+            inertia_generation = (reduced_gens["p_nom"]*reduced_gens["p_max_pu"]).groupby(reduced_gens.carrier).sum().loc[existing_inertia_sources].sum()
+        else:
+            inertia_generation = current_generators.groupby(gens.carrier).sum().loc[existing_inertia_sources].sum()
+        inertia_generations.append(inertia_generation)
+    return inertia_generations
 
 
 def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True):
@@ -486,12 +483,8 @@ def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True)
         split_counter = 0
         for timestamp in split_dict.keys():
             for cascade in split_dict[timestamp]:
-                try:
-                    assert(isinstance(cascade[0],tuple))
-                except AssertionError:
-                    print("Format of split data has been changed. " +
-                    "Please use transform_cascade_results to adjust to new format")
-                    return
+                assert isinstance(cascade[0],tuple),"""Format of split data has been changed.
+                                   Please use transform_cascade_results to adjust to new format"""
 
                 for edge in cascade:
                     likelihood_dict[edge] += 1
@@ -525,7 +518,6 @@ def verify_cascade_results(G,test_cascades,initial_loading):
     are triggered by the first link in each list given
     the initial loading and the Graph G"""
 
-    indices = nx.get_edge_attributes(G,'line_index')
     line_limits = nx.get_edge_attributes(G,'s_nom')
 
     ### iterate only over non-bridge edges for now
@@ -540,8 +532,9 @@ def verify_cascade_results(G,test_cascades,initial_loading):
                                                                  trigger_links = [trigger_link],
                                                                  line_limits = line_limits,
                                                                  initial_flows = initial_loading)
-        assert(failing_links == test_cascades[i])
+        assert failing_links == test_cascades[i]
     print("All results correct!")
+    return
 
 
 
@@ -567,8 +560,8 @@ def get_inertia_gen_subgraph(subgraph,generators,current_generation,storages,cur
         participating_gens = current_generation.loc[list(gens.index)]>participation_threshold*gens["p_nom"]
         reduced_gens       = gens[participating_gens]
         existing_inertia_sources = list(set(existing_inertia_sources)-(set(existing_inertia_sources)-set(reduced_gens.carrier)))
-        ps = reduced_gens["p_nom"]*reduced_gens["p_max_pu"]
-        inertia_generation = (ps).groupby(reduced_gens.carrier).sum().loc[existing_inertia_sources].sum()
+        nominal_power = reduced_gens["p_nom"]*reduced_gens["p_max_pu"]
+        inertia_generation = (nominal_power).groupby(reduced_gens.carrier).sum().loc[existing_inertia_sources].sum()
 
         participating_storages = current_storages.loc[list(stores.index)]>participation_threshold*stores["p_nom"]
         reduced_stores        = stores[participating_storages]
@@ -636,7 +629,7 @@ def evaluate_split_observables(split,
     pypsa_network: pypsa network object containing solution for timestamps
     """
 
-    assert(isinstance(timestamp,pd.Timestamp))
+    assert isinstance(timestamp,pd.Timestamp)
 
     branches           = pypsa_network.branches()[["bus0","bus1","x_pu_eff","s_nom"]]
     Graph              = build_networkx_graph(branches)
@@ -651,7 +644,7 @@ def evaluate_split_observables(split,
     current_load       = pypsa_network.loads_t.p.loc[timestamp]
 
     #try:
-    assert(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<1e-3)
+    assert np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<1e-3
     #except AssertionError:
     #    print(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum()))
 
