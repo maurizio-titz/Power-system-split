@@ -71,15 +71,8 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
 
     failure_cascade = [redefined_index(Graph,trigger_link) for trigger_link in trigger_links]
 
-    I = construct_incidencematrix_from_orientation(Graph)
-
     if len(np.where(np.abs(flows_G)>smax_G)[0]):
         print("Setup has initial overloads!")
-
-    if not multi_graph:
-        Graph_edges = list(Graph.edges())
-    else:
-        Graph_edges = list(Graph.edges(keys = True))
 
     stop = 0
     system_split = False
@@ -152,6 +145,121 @@ def simulate_cascade_PTDF_based(Graph,trigger_links,initial_flows,line_limits):
                 loading_dict[edge] = flows_H[i]
 
     return failure_cascade,loading_dict,system_split
+
+
+def get_effective_injections(Graph,initial_flows):
+    """get effective injections from the initial flows"""
+    multi_graph = False
+    if isinstance(Graph,nx.MultiGraph):
+        multi_graph = True
+
+    if not multi_graph:
+        flows_G = np.array([initial_flows[(u,v)] for u,v in Graph.edges()])
+    else:
+        flows_G = np.array([initial_flows[(u,v,key)] for u,v,key in Graph.edges(keys = True)])
+
+    I = construct_incidencematrix_from_orientation(Graph)
+    P0 = np.dot(I,flows_G)
+    return P0
+
+def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
+                                                   P0,
+                                                   trigger_links,
+                                                   line_limits,
+                                                   return_loading_dict = False):
+    """Simulate a cascade of failures using the network topology G, which is assumed to have a property 'orientation'
+    for each edge, the initially failing links, the initial flows (as dictionary) and the line limits (as dictionary).
+    The approach used to simulate the cascade is based on the Power Transfer Distribution Factors assuming fixed power
+    injections and subsequently calculating the flows using the PTDFs after the removal of all failing links from
+    the network"""
+
+    multi_graph = False
+    if isinstance(Graph,nx.MultiGraph):
+        multi_graph = True
+
+    failure_cascade = trigger_links
+
+    if not multi_graph:
+        Graph_edges = list(Graph.edges())
+    else:
+        Graph_edges = list(Graph.edges(keys = True))
+
+    stop = 0
+    system_split = False
+
+    while not stop:
+        H = Graph.copy()
+
+        H.remove_edges_from(failure_cascade)
+
+        if not nx.is_connected(H):
+            system_split = True
+            break
+
+        I = construct_incidencematrix_from_orientation(H)
+
+        line_weights = nx.get_edge_attributes(H,'weight')
+
+        if not multi_graph:
+            line_susceptances = np.array([line_weights[(u,v)] for u,v in H.edges()])
+        else:
+            line_susceptances = np.array([line_weights[(u,v,key)] for u,v,key in H.edges(keys = True)])
+
+        B_d = np.diag(line_susceptances)
+
+        L = np.linalg.multi_dot([I,B_d,I.T])
+        #L = nx.laplacian_matrix(H)
+        try:
+            theta = np.linalg.solve(L,P0)
+        except np.linalg.LinAlgError:
+            # pseudoinverse
+            L_inv = np.linalg.pinv(L)
+            theta = np.dot(L_inv,P0)
+
+        flows_H = np.linalg.multi_dot([B_d,I.T,theta])
+
+        if not multi_graph:
+            smax = np.array([line_limits[(u,v)] for u,v in H.edges()])
+        else:
+            smax = np.array([line_limits[(u,v,key)] for u,v,key in H.edges(keys = True)])
+
+        next_indices = np.where(np.abs(flows_H)>smax)[0]
+
+        ### map next failing indices to original graph
+        if not multi_graph:
+            H_edges = list(H.edges())
+            for n in next_indices:
+                e = H_edges[n]
+                if not ((e in failure_cascade) or (e[::-1] in failure_cascade)):
+                    failure_cascade.append(e)
+        else:
+            H_edges = list(H.edges(keys = True))
+            for n in next_indices:
+                e = H_edges[n]
+                if not ((e in failure_cascade) or ((*e[:2][::-1],e[2]) in failure_cascade)):
+                    failure_cascade.append(e)
+
+        if len(next_indices)==0:
+            stop = 1
+
+        if return_loading_dict:
+            loading_dict = {}
+            if not multi_graph:
+
+                for i,edge in enumerate(H.edges()):
+                    loading_dict[edge] = flows_H[i]
+                    loading_dict[edge[::-1]] = flows_H[i]
+            else:
+                for i,edge in enumerate(H.edges(keys = True)):
+                    loading_dict[edge] = flows_H[i]
+
+    if not return_loading_dict:
+        return_vals = [failure_cascade,system_split]
+    else:
+        return_vals = [failure_cascade,loading_dict,system_split]
+    return return_vals
+
+
 
 
 def simulate_cascade_PTDF_based_edge_based(Graph,trigger_links,initial_flows,line_limits,return_loading_dict = False):
