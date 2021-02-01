@@ -6,6 +6,7 @@ splits in solved PyPSA networks"""
 import numpy as np
 import networkx as nx
 import pandas as pd
+import itertools
 
 def construct_incidencematrix_from_orientation(Graph):
     """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order"""
@@ -514,15 +515,13 @@ def likelihood_systemsplit_node_based(split_dict,Graph,only_large_splits = True)
         split_counter = 0
         for timestamp in split_dict.keys():
             for cascade in split_dict[timestamp]:
-                relevant_subgraphs = utils.get_split_components(cascade,Graph)
+                relevant_subgraphs = get_split_components(cascade,Graph)
                 if len(relevant_subgraphs) < 2:
                     continue
                 for subgraph in relevant_subgraphs:
-                    print(len(subgraph.nodes()))
                     for u,v in list(itertools.permutations(list(subgraph.nodes()),2)):
                         likelihood_dict[(u,v)] += 1
                 split_counter += 1
-            print(timestamp)
         try:
             # normalisation only possible if splits occured at all
             for edge in likelihood_dict.keys():
