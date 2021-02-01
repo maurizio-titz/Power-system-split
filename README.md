@@ -7,4 +7,4 @@
 All the requirements can be found in `requirements.txt` and the package can be installed using `pip install .`.
 
 ## Usage
-![alt text](img/Likely_splits_node_based_2013_threshold_0.99_edges.pdf "Title Text")
+![alt text](img/Likely_splits_node_based_2013_threshold_0.99_edges.png "Title Text")
