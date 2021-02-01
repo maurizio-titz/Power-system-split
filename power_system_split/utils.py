@@ -500,6 +500,54 @@ def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True)
     return likelihood_dict
 
 
+def likelihood_systemsplit_node_based(split_dict,Graph,only_large_splits = True):
+    """ Calculate the empirical likelihood that a given edge is involved
+    in a system split based on the split_dict
+
+    If only_large_splits is True, only splits which yield components
+    with more than ten nodes each are evaluated"""
+    complete_graph_edges = list(itertools.permutations(list(Graph.nodes()),2))
+    likelihood_dict = {(u,v) : 0.0 for u,v in complete_graph_edges}
+
+    if only_large_splits:
+        # counts the number of relevant splits
+        split_counter = 0
+        for timestamp in split_dict.keys():
+            for cascade in split_dict[timestamp]:
+                relevant_subgraphs = utils.get_split_components(cascade,Graph)
+                if len(relevant_subgraphs) < 2:
+                    continue
+                for subgraph in relevant_subgraphs:
+                    print(len(subgraph.nodes()))
+                    for u,v in list(itertools.permutations(list(subgraph.nodes()),2)):
+                        likelihood_dict[(u,v)] += 1
+                split_counter += 1
+            print(timestamp)
+        try:
+            # normalisation only possible if splits occured at all
+            for edge in likelihood_dict.keys():
+                likelihood_dict[edge] /= split_counter
+        except ZeroDivisionError:
+            pass
+    else:
+        # counts the number of relevant splits
+        split_counter = 0
+        for timestamp in split_dict.keys():
+            for cascade in split_dict[timestamp]:
+                relevant_subgraphs = get_split_components(cascade,Graph)
+                for subgraph in relevant_subgraphs:
+                    for u,v in list(itertools.permutations(list(subgraph.nodes()),2)):
+                        likelihood_dict[(u,v)] += 1
+                split_counter += 1
+            print(timestamp)
+        try:
+            # normalisation only possible if splits occured at all
+            for edge in likelihood_dict.keys():
+                likelihood_dict[edge] /= split_counter
+        except ZeroDivisionError:
+            pass
+    return likelihood_dict
+
 def solution_key_to_pandas_timestamp(key):
     """Convert from dictionary key used in solution dictionaries
     to pandas datetime index used in pypsa networks"""
