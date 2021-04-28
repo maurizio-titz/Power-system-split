@@ -400,7 +400,7 @@ def build_networkx_graph(snet_branches,multi_graph = False):
     return F
 
 
-def get_split_components(split,Graph):
+def get_split_components(split,Graph,criterion):
     """Return the split resulting from the edge list in split if the resulting subgraphs are larger than 10 nodes"""
     assert isinstance(split[0],tuple),"""Format of split data has been changed.
                    Please use transform_cascade_results to adjust to new format"""
@@ -410,11 +410,20 @@ def get_split_components(split,Graph):
     #cascade_edges = [list(F.edges())[index] for index in split]
     F.remove_edges_from(split)
     subgraphs =  list((F.subgraph(c).copy() for c in nx.connected_components(F)))
-    relevant_subgraphs = [i for i in range(len(subgraphs)) if len(subgraphs[i].nodes())>10]
-    if len(relevant_subgraphs)<2:
-        return_val = []
-    else:
+    if criterion = 'nodes':
+        ## old criterion of considering only cases where at least two subgraphs
+        ## with at least two nodes each exist
+        relevant_subgraphs = [i for i in range(len(subgraphs)) if len(subgraphs[i].nodes())>10]
+        if len(relevant_subgraphs)<2:
+            return_val = []
+        else:
+            return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
+    elif criterion = 'load':
+        ## new criterion based on load where all subgraphs are considered
+        ## independent of their number of nodes
+        relevant_subgraphs = [i for i in range(len(subgraphs))]
         return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
+
     return return_val
 
 def evaluate_system_split_inertia(split,Graph,generators,current_generation, use_pnom = True):
@@ -500,6 +509,7 @@ def likelihood_systemsplit_edge_based(split_dict,Graph,only_large_splits = True)
         #    likelihood_dict[edge] += likelihoods[count]
 
     return likelihood_dict
+
 
 
 def likelihood_systemsplit_node_based(split_dict,Graph,only_large_splits = True):
@@ -660,6 +670,33 @@ def get_available_flexible_generation(subgraph,
     #flexible_generation += maximal_storage - current_storages.groupby(stores.carrier).sum().loc[existing_flexible_storages].sum()
     return flexible_generation
 
+def check_load_criterion(subgraphs,generators,current_generation,storages,current_storage,loads,current_load)):
+    """ Check load/generation criterion which means
+    that none of the subgraph accounts for 90 % of the load
+    or generation at the current timestamp"""
+
+    load_criterion = True
+
+    threshold = 0.9
+
+    overall_generation = current_generation.sum() + current_storage.sum()
+    overall_load       = current_load.sum()
+
+    subgraph_contributions = np.zeros((len(subgraphs),2))
+
+    for count,subgraph in enumerate(subgraphs):
+        gens                = generators[generators["bus"].isin(list(subgraph.nodes()))]
+        loads               = loads[loads["bus"].isin(list(subgraph.nodes()))]
+        stores              = storages[storages["bus"].isin(list(subgraph.nodes()))]
+        subgraph_generation = current_generation.loc[list(gens.index)].sum() + current_storage.loc[list(stores.index)].sum()
+        subgraph_load       = current_load.loc[list(loads.index)].sum()
+
+        subgraph_contributions[count] = np.array([subgraph_generation/overall_generation,subgraph_load/overall_load])
+
+    if np.any(subgraph_contributions>threshold):
+        load_criterion = False
+    return load_criterion
+
 
 def evaluate_split_observables(split,
                                pypsa_network,
@@ -669,7 +706,8 @@ def evaluate_split_observables(split,
                                inertia_storages = None,
                                flexible_plants = None,
                                flexible_storage = None,
-                               snet_index = None):
+                               snet_index = None,
+                               criterion = 'nodes'):
     """
     split: list of edges split to be used with networkx graph created from pypsa network
 
@@ -699,15 +737,25 @@ def evaluate_split_observables(split,
     assert np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<1e-3
     #except AssertionError:
     #    print(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum()))
-
-    subgraphs = get_split_components(split,Graph)
-
     results_dict = {'inertia_proxy': [],'load_imbalance': [], 'available_flexible_generation': [] }
 
-    #if len(subgraphs) < 2 :
-    #       pass
-    #    #print("No large splits found for timestamp and split")
-    if len(subgraphs) >= 2 :
+    evaluate_results = False
+
+    subgraphs = get_split_components(split,Graph, criterion = criterion)
+
+    if criterion == 'nodes':
+        if len(subgraphs) >= 2:
+            evaluate_results = True
+    elif criterion == 'load':
+        evaluate_results = check_load_criterion(subgraphs,
+                                                pypsa_network.generators,
+                                                current_generation,
+                                                pypsa_network.storage_units,
+                                                current_storage,
+                                                pypsa_network.loads,
+                                                current_load)
+
+    if evaluate_results:
         for subgraph in subgraphs:
             inertia_generation = get_inertia_gen_subgraph(subgraph,
                                                           pypsa_network.generators,
