@@ -392,6 +392,7 @@ def build_networkx_graph(snet_branches,multi_graph = False):
             else:
 
                 F.add_edge(line['bus0'],line['bus1'],
+
                            weight = 1/line['x_pu_eff'],
                            orientation = (line['bus0'],line['bus1']),
                            line_index = [line_index[1]],
@@ -583,8 +584,6 @@ def verify_cascade_results(G,test_cascades,initial_loading):
     print("All results correct!")
     return
 
-
-
 def get_inertia_gen_subgraph(subgraph,generators,current_generation,storages,current_storage,use_pnom,inertiaplants = None, inertia_storages = None):
     """get inertia generation for a subgraph"""
     if not inertiaplants:
@@ -607,11 +606,11 @@ def get_inertia_gen_subgraph(subgraph,generators,current_generation,storages,cur
         participating_gens = current_generation.loc[list(gens.index)]>participation_threshold*gens["p_nom"]
         reduced_gens       = gens[participating_gens]
         existing_inertia_sources = list(set(existing_inertia_sources)-(set(existing_inertia_sources)-set(reduced_gens.carrier)))
-        nominal_power = reduced_gens["p_nom"]*reduced_gens["p_max_pu"]
-        inertia_generation = (nominal_power).groupby(reduced_gens.carrier).sum().loc[existing_inertia_sources].sum()
+        nominal_power            = reduced_gens["p_nom"]*reduced_gens["p_max_pu"]
+        inertia_generation       = (nominal_power).groupby(reduced_gens.carrier).sum().loc[existing_inertia_sources].sum()
 
-        participating_storages = current_storages.loc[list(stores.index)]>participation_threshold*stores["p_nom"]
-        reduced_stores        = stores[participating_storages]
+        participating_storages    = current_storages.loc[list(stores.index)]>participation_threshold*stores["p_nom"]
+        reduced_stores            = stores[participating_storages]
         existing_inertia_storages = list(set(existing_inertia_storages)-(set(existing_inertia_storages)-set(reduced_stores.carrier)))
         inertia_generation += (reduced_stores["p_nom"]).groupby(reduced_stores.carrier).sum().loc[existing_inertia_storages].sum()
 
@@ -669,7 +668,8 @@ def evaluate_split_observables(split,
                                inertiaplants = None,
                                inertia_storages = None,
                                flexible_plants = None,
-                               flexible_storage = None):
+                               flexible_storage = None,
+                               snet_index = None):
     """
     split: list of edges split to be used with networkx graph created from pypsa network
 
@@ -678,7 +678,12 @@ def evaluate_split_observables(split,
 
     assert isinstance(timestamp,pd.Timestamp)
 
-    branches           = pypsa_network.branches()[["bus0","bus1","x_pu_eff","s_nom"]]
+    try:
+        snet = pypsa_network.sub_networks['obj'][snet_index]
+    except KeyError:
+        snet = pypsa_network
+
+    branches           = snet.branches()[["bus0","bus1","x_pu_eff","s_nom"]]
     Graph              = build_networkx_graph(branches)
 
     # Rescale load shedding since units for load shedding are different
