@@ -668,7 +668,7 @@ def get_available_flexible_generation(subgraph,
     #flexible_generation += maximal_storage - current_storages.groupby(stores.carrier).sum().loc[existing_flexible_storages].sum()
     return flexible_generation
 
-def check_load_criterion(subgraphs,generators,current_generation,storages,current_storage,loads,current_load)):
+def check_load_criterion(subgraphs,generators,current_generation,storages,current_storage,loads,current_load):
     """ Check load/generation criterion which means
     that none of the subgraph accounts for 90 % of the load
     or generation at the current timestamp"""
