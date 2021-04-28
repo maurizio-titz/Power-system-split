@@ -404,13 +404,11 @@ def get_split_components(split,Graph,criterion):
     """Return the split resulting from the edge list in split if the resulting subgraphs are larger than 10 nodes"""
     assert isinstance(split[0],tuple),"""Format of split data has been changed.
                    Please use transform_cascade_results to adjust to new format"""
-
-
     F = Graph.copy()
     #cascade_edges = [list(F.edges())[index] for index in split]
     F.remove_edges_from(split)
     subgraphs =  list((F.subgraph(c).copy() for c in nx.connected_components(F)))
-    if criterion = 'nodes':
+    if criterion == 'nodes':
         ## old criterion of considering only cases where at least two subgraphs
         ## with at least two nodes each exist
         relevant_subgraphs = [i for i in range(len(subgraphs)) if len(subgraphs[i].nodes())>10]
@@ -418,7 +416,7 @@ def get_split_components(split,Graph,criterion):
             return_val = []
         else:
             return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
-    elif criterion = 'load':
+    elif criterion == 'load':
         ## new criterion based on load where all subgraphs are considered
         ## independent of their number of nodes
         relevant_subgraphs = [i for i in range(len(subgraphs))]
