@@ -1,4 +1,16 @@
-### NOTE: call script with args year month number_of_nodes
+#!usr/bin/env python
+# -*- coding: utf-8 -*-
+
+""" This module contains an example on how to run cascade simulations for
+an existing solved pypsa network
+
+it should be called with arguments
+
+year month number_of_nodes
+
+and is for now tailored specifically for analyses of German networks that
+were obtained in 10.1109/EEM49802.2020.9221886
+"""
 
 import pypsa
 import networkx as nx
