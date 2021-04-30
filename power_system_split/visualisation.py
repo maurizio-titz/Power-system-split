@@ -9,7 +9,8 @@ import numpy as np
 import networkx as nx
 
 
-def get_split_adjacencies_from_rocof_solutions(solution_dict,nx_graph):
+def get_split_adjacencies_from_rocof_solutions(solution_dict,
+                                               nx_graph):
     """obtain the adjacency matrices for each split in the
     rocof solution dictionary (see evaluate_split_observables).
 
@@ -33,7 +34,7 @@ def get_split_adjacencies_from_rocof_solutions(solution_dict,nx_graph):
 def calc_likelihood_failure(nx_graph,
                             splitting_cascades,
                             number_of_snapshots,
-                            solution_dict = {})
+                            solution_dict = {}):
     """Calculate the likelihood that a) a given edge causes a split
     if it fails (primary likelihood) and b) the likelihood that a
     given edge fails at some point during a cascade. The number of snapshots
