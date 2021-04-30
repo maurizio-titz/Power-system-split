@@ -3,10 +3,11 @@
 """ This module contains useful methods to calculate and evaluate system
 splits in solved PyPSA networks"""
 
+import itertools
+
 import numpy as np
 import networkx as nx
 import pandas as pd
-import itertools
 
 def construct_incidencematrix_from_orientation(Graph):
     """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order"""
@@ -582,13 +583,13 @@ def verify_cascade_results(G,test_cascades,initial_loading):
     for key in l_copy.keys():
         initial_loading[key[::-1]] = initial_loading[key]
 
-    for i in range(len(test_cascades)):
-        trigger_link = list(G.edges())[test_cascades[i][0]]
+    for cascade in test_cascades:
+        trigger_link = list(G.edges())[cascade[0]]
         failing_links,new_loading_dict,system_split = simulate_cascade_PTDF_based(G,
                                                                  trigger_links = [trigger_link],
                                                                  line_limits = line_limits,
                                                                  initial_flows = initial_loading)
-        assert failing_links == test_cascades[i]
+        assert failing_links == cascade
     print("All results correct!")
     return
 
