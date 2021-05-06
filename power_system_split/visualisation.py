@@ -10,6 +10,7 @@ import networkx as nx
 
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
+                                               splitting_cascades_in,
                                                nx_graph):
     """obtain the adjacency matrices for each split in the
     rocof solution dictionary (see evaluate_split_observables).
@@ -23,7 +24,7 @@ def get_split_adjacencies_from_rocof_solutions(solution_dict,
     for key in solution_dict.keys():
         for number in solution_dict[key][::2]:
 
-            split = splitting_cascades[key][number]
+            split = splitting_cascades_in[key][number]
             F = nx_graph.copy()
             F.remove_edges_from(split)
             A = nx.adjacency_matrix(F).A
