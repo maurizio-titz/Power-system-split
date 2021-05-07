@@ -7,6 +7,7 @@ visualise cascade results"""
 import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
+from sklearn.cluster import AgglomerativeClustering
 
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
@@ -32,10 +33,11 @@ def get_split_adjacencies_from_rocof_solutions(solution_dict,
 
     return adjacencies
 
+
 def calc_likelihood_failure(nx_graph,
                             splitting_cascades,
                             number_of_snapshots,
-                            solution_dict = {}):
+                            solution_dict={}):
     """Calculate the likelihood that a) a given edge causes a split
     if it fails (primary likelihood) and b) the likelihood that a
     given edge fails at some point during a cascade. The number of snapshots
@@ -46,9 +48,9 @@ def calc_likelihood_failure(nx_graph,
     only the cascades that were used in the solution dict are considered,
     otherwise all cascades are used to calculate the likelihood."""
 
-    likelihood_primary   = {(u,v):0.0 for u,v in nx_graph.edges()}
-    likelihood_secondary = {(u,v):0.0 for u,v in nx_graph.edges()}
-    number_of_edges      = len(nx_graph.edges())
+    likelihood_primary = {(u, v): 0.0 for u, v in nx_graph.edges()}
+    likelihood_secondary = {(u, v): 0.0 for u, v in nx_graph.edges()}
+    number_of_edges = len(nx_graph.edges())
 
     if not len(solution_dict):
         print("""Did not pass solution_dict to determine which cascades
@@ -71,7 +73,7 @@ def calc_likelihood_failure(nx_graph,
 
                 likelihood_primary[current_cascade[0]] += 1/number_of_snapshots
 
-    return likelihood_primary,likelihood_secondary
+    return likelihood_primary, likelihood_secondary
 
 
 def indicator_vectors_from_adj(adjacency_matrices):
@@ -91,7 +93,7 @@ def indicator_vectors_from_adj(adjacency_matrices):
     list_of_nodes = list(list_of_nodes)
 
     indicator_vectors = np.empty((0, n_nodes, n_nodes), bool)
-    #TODO: when we directly pass the split components to this function
+    # TODO: when we directly pass the split components to this function
     # we don't have to keep track of the graph number. Implement this in the future!
     index_of_adj_mat = []
 
@@ -105,7 +107,7 @@ def indicator_vectors_from_adj(adjacency_matrices):
 
             new_indicator_vec = np.isin(list_of_nodes, list(comp))
 
-            #TODO: Update constraint that selects "big enough" split components 
+            # TODO: Update constraint that selects "big enough" split components
             if new_indicator_vec.sum() > 19:
                 indicator_vectors = np.append(indicator_vectors,
                                               np.array([new_indicator_vec]),
@@ -113,3 +115,48 @@ def indicator_vectors_from_adj(adjacency_matrices):
                 index_of_adj_mat.append(i)
 
     return indicator_vectors, index_of_adj_mat
+
+
+def optimize_numer_of_cluster(X):
+
+    n_optimum = 1
+    silho_scores = []
+
+    return n_optimum, silho_scores
+
+
+def cluster_indicator_vectors(indicator_vectors, n_cluster=None, min_cluster_distance=0.1,
+                              cluster_distance_type='average'):
+    
+    """Cluster indicator vectors of graph components into similar groups. The distance between vectors is quantified
+    by the hamming distance, i.e. the relative number of nodes that are not in the same component. 
+
+    Args:
+        indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
+        n_cluster (int, optional): Number of cluster. If this is not None, min_cluster_distance has to be None. 
+        Defaults to None.
+        min_cluster_distance (float, optional): The minimum distance between two clusters. Below this distance, two 
+        clusters will be merged. Defaults to 0.1.
+        cluster_distance_type (str, optional): Method to compute the distance between two cluster. Available is "ward",
+        "average","single" and "maximum". Defaults to 'average'.
+
+    Returns:
+        tuple: number of cluster and array of cluster labels for each indicator vector
+    """
+    
+    if n_cluster != None and min_cluster_distance != None:
+        raise ValueError(
+            'If n_cluster is not None, min_cluster_distance has to be None')
+
+    agg_cluster = AgglomerativeClustering(affinity='hamming',
+                                          n_clusters=n_cluster,
+                                          distance_threshold=min_cluster_distance,
+                                          linkage=cluster_distance_type,
+                                          compute_distances=False)
+    agg_cluster.fit(indicator_vectors)
+
+    return agg_cluster.n_clusters_, agg_cluster.labels_
+
+
+def plot_component_cluster():
+    pass
