@@ -74,24 +74,42 @@ def calc_likelihood_failure(nx_graph,
     return likelihood_primary,likelihood_secondary
 
 
-
 def indicator_vectors_from_adj(adjacency_matrices):
+    """Construct boolean indicator vectors for connected components in a list of graphs.
 
-    
-    matrix_shape = adjacency_matrices.shape[1]
-    
-    indicator_vectors = np.empty((0,matrix_shape), bool)
-    list_of_nodes = list(nx.convert_matrix.from_numpy_matrix(adjacency_matrices[0]))
-    num_of_adj_mat = []
+    Args:
+        adjacency_matrices (array_like): An array of shape n_graphs x n_nodes x n_nodes,
+        which contains the adjacency matrices of multiple graphs.
 
-    for i,adj_mat in enumerate(adjacency_matrices):
+    Returns:
+        tuple: The array of indicator vectors and a list of the graph number i
+        to which the indicated components belong
+    """
+
+    n_nodes = adjacency_matrices.shape[1]
+    list_of_nodes = nx.convert_matrix.from_numpy_matrix(adjacency_matrices[0])
+    list_of_nodes = list(list_of_nodes)
+
+    indicator_vectors = np.empty((0, n_nodes, n_nodes), bool)
+    #TODO: when we directly pass the split components to this function
+    # we don't have to keep track of the graph number. Implement this in the future!
+    index_of_adj_mat = []
+
+    for i, adj_mat in enumerate(adjacency_matrices):
         print('\r {}'.format(i), end="\r", flush=True)
-        CCs = nx.connected_components(nx.convert_matrix.from_numpy_matrix(adj_mat))
-        
-        for cc in CCs:
-            new_indicator_vec = np.isin(list_of_nodes, list(cc))
-            if new_indicator_vec.sum()>19:
-                indicator_vectors = np.append(indicator_vectors, np.array([new_indicator_vec]), axis=0)
-                num_of_adj_mat.append(i)
-                
-    return indicator_vectors, num_of_adj_mat
+
+        adj_graph = nx.convert_matrix.from_numpy_matrix(adj_mat)
+        con_comps = nx.connected_components(adj_graph)
+
+        for comp in con_comps:
+
+            new_indicator_vec = np.isin(list_of_nodes, list(comp))
+
+            #TODO: Update constraint that selects "big enough" split components 
+            if new_indicator_vec.sum() > 19:
+                indicator_vectors = np.append(indicator_vectors,
+                                              np.array([new_indicator_vec]),
+                                              axis=0)
+                index_of_adj_mat.append(i)
+
+    return indicator_vectors, index_of_adj_mat
