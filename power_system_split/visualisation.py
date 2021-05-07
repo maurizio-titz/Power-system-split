@@ -72,3 +72,26 @@ def calc_likelihood_failure(nx_graph,
                 likelihood_primary[current_cascade[0]] += 1/number_of_snapshots
 
     return likelihood_primary,likelihood_secondary
+
+
+
+def indicator_vectors_from_adj(adjacency_matrices):
+
+    
+    matrix_shape = adjacency_matrices.shape[1]
+    
+    indicator_vectors = np.empty((0,matrix_shape), bool)
+    list_of_nodes = list(nx.convert_matrix.from_numpy_matrix(adjacency_matrices[0]))
+    num_of_adj_mat = []
+
+    for i,adj_mat in enumerate(adjacency_matrices):
+        print('\r {}'.format(i), end="\r", flush=True)
+        CCs = nx.connected_components(nx.convert_matrix.from_numpy_matrix(adj_mat))
+        
+        for cc in CCs:
+            new_indicator_vec = np.isin(list_of_nodes, list(cc))
+            if new_indicator_vec.sum()>19:
+                indicator_vectors = np.append(indicator_vectors, np.array([new_indicator_vec]), axis=0)
+                num_of_adj_mat.append(i)
+                
+    return indicator_vectors, num_of_adj_mat
