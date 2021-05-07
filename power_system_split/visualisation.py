@@ -30,7 +30,7 @@ def get_split_adjacencies_from_rocof_solutions(solution_dict,
             A = nx.adjacency_matrix(F).A
             adjacencies.append(A.astype('bool'))
 
-    return adjacencies
+    return np.array(adjacencies)
 
 def calc_likelihood_failure(nx_graph,
                             splitting_cascades,
