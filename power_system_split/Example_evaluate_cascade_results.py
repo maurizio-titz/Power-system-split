@@ -8,13 +8,13 @@ result/system split simulation
 it is for now tailored specifically for analyses of German networks that
 were obtained in 10.1109/EEM49802.2020.9221886 """
 
+import sys
+import os
+from tqdm import tqdm
+
 import pypsa
 import pickle
 
-import sys
-import os
-
-from tqdm import tqdm
 
 sys.path.append('power-system-split/power_system_split')
 import utils

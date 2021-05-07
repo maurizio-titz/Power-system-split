@@ -12,15 +12,14 @@ and is for now tailored specifically for analyses of German networks that
 were obtained in 10.1109/EEM49802.2020.9221886
 """
 import os
+from tqdm import tqdm
+import sys
 
 import pypsa
 import networkx as nx
 import numpy as np
 import pickle
 
-from tqdm import tqdm
-
-import sys
 
 script_path = os.path.dirname(os.path.realpath('__file__'))
 

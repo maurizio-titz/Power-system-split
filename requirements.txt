@@ -3,3 +3,4 @@ networkx>=2.5
 scipy>=1.5.2
 pandas>=1.2.0
 matplotlib>=3.4
+pypsa>=0.17

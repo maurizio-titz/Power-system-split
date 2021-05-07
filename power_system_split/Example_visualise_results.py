@@ -6,12 +6,12 @@
 it is for now tailored specifically for analyses of German networks that
 were obtained in 10.1109/EEM49802.2020.9221886 """
 
-import pickle
-
-import pypsa
-
 import os
 import sys
+
+import pickle
+import pypsa
+
 
 sys.path.append('power-system-split/power_system_split')
 import utils, visualisation
