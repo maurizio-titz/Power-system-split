@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
 from sklearn.cluster import AgglomerativeClustering
-
+from sklearn.metrics import silhouette_score
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
                                                splitting_cascades_in,
@@ -117,19 +117,46 @@ def indicator_vectors_from_adj(adjacency_matrices):
     return indicator_vectors, index_of_adj_mat
 
 
-def optimize_numer_of_cluster(X):
+def optimize_number_of_cluster(indicator_vectors, max_n_cluster=20,
+                              cluster_distance_type='average'):
+    
+    """Estimate optimal number of cluster via the silhouette score.
 
-    n_optimum = 1
-    silho_scores = []
+    Args:
+        indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
+        max_n_cluster (int, optional): Cluster sizes 2,3,...,max_n_cluster are tested. Defaults to 20.
+        cluster_distance_type (str, optional): Defaults to 'average'.
 
-    return n_optimum, silho_scores
+    Returns:
+        tuple: optimal number of cluster, array of tested numbers of clusters,
+        silhouette scores for each tested number
+    """
+
+
+    silhouette_avg_scores = []
+    n_cluster_test = np.arange(2, max_n_cluster+1, dtype=int)
+
+    for i in n_cluster_test:
+        print('\r {}'.format(i), end="\r", flush=True)
+        agg_cluster = AgglomerativeClustering(affinity='hamming',
+                                              n_clusters=i,
+                                              linkage=cluster_distance_type)
+        agg_cluster.fit(indicator_vectors)
+        
+        new_score = silhouette_score(indicator_vectors, agg_cluster.labels_,metric='hamming')
+        silhouette_avg_scores.append(new_score)
+
+    n_optimum = np.argmax(silhouette_avg_scores)
+
+    return n_optimum, n_cluster_test, silhouette_avg_scores
 
 
 def cluster_indicator_vectors(indicator_vectors, n_cluster=None, min_cluster_distance=0.1,
                               cluster_distance_type='average'):
+    """Cluster indicator vectors of graph components into similar groups. 
     
-    """Cluster indicator vectors of graph components into similar groups. The distance between vectors is quantified
-    by the hamming distance, i.e. the relative number of nodes that are not in the same component. 
+    The distance between vectors is quantified by the hamming distance,
+    i.e. the relative number of nodes that are not in the same component. 
 
     Args:
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
@@ -137,13 +164,13 @@ def cluster_indicator_vectors(indicator_vectors, n_cluster=None, min_cluster_dis
         Defaults to None.
         min_cluster_distance (float, optional): The minimum distance between two clusters. Below this distance, two 
         clusters will be merged. Defaults to 0.1.
-        cluster_distance_type (str, optional): Method to compute the distance between two cluster. Available is "ward",
-        "average","single" and "maximum". Defaults to 'average'.
+        cluster_distance_type (str, optional): Method to compute the distance between two cluster. 
+        Available: "ward","average","single" and "maximum". Defaults to 'average'.
 
     Returns:
         tuple: number of cluster and array of cluster labels for each indicator vector
     """
-    
+
     if n_cluster != None and min_cluster_distance != None:
         raise ValueError(
             'If n_cluster is not None, min_cluster_distance has to be None')
@@ -160,3 +187,6 @@ def cluster_indicator_vectors(indicator_vectors, n_cluster=None, min_cluster_dis
 
 def plot_component_cluster():
     pass
+
+
+#TODO: add requirements for new functions
