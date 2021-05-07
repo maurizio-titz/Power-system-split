@@ -101,9 +101,9 @@ def indicator_vectors_from_adj(adjacency_matrices):
         print('\r {}'.format(i), end="\r", flush=True)
 
         adj_graph = nx.convert_matrix.from_numpy_matrix(adj_mat)
-        con_comps = nx.connected_components(adj_graph)
+        connected_comps = nx.connected_components(adj_graph)
 
-        for comp in con_comps:
+        for comp in connected_comps:
 
             new_indicator_vec = np.isin(list_of_nodes, list(comp))
 
