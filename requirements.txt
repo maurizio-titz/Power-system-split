@@ -5,4 +5,4 @@ pandas>=1.2.0
 matplotlib>=3.4
 tqdm>=4.44
 pypsa>=0.17
-sklearn>=0.24
+scikit-learn>=0.24
