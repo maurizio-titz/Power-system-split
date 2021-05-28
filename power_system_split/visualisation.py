@@ -225,4 +225,4 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, nx_graph
 
 
 
-#TODO: add requirements for new functions
+
