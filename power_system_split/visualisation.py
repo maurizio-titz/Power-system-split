@@ -94,7 +94,7 @@ def indicator_vectors_from_adj(adjacency_matrices):
 
     indicator_vectors = np.empty((0, n_nodes, n_nodes), bool)
     # TODO: when we directly pass the split components to this function
-    # we don't have to keep track of the graph number. Implement this in the future!
+    # we don't have to keep track of the graph number "index_of_adj_mat". Implement this in the future!
     index_of_adj_mat = []
 
     for i, adj_mat in enumerate(adjacency_matrices):
@@ -185,8 +185,44 @@ def cluster_indicator_vectors(indicator_vectors, n_cluster=None, min_cluster_dis
     return agg_cluster.n_clusters_, agg_cluster.labels_
 
 
-def plot_component_cluster():
-    pass
+def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, nx_graph):
+    """Plot clusters of split components on a geographically embedded graph.
+
+    Args:
+        indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
+        plot_axs (ndarray): 1d array of axis to plot clusters on, with length n_cluster 
+        cluster_labels (ndarray): Array of cluster labels for each vector in indicator_vectors
+        nx_graph (graph): NetworkX graph with geographical location of nodes
+    """
+  
+    
+    n_samples = cluster_labels.shape[0]
+    n_cluster = plot_axs.shape[0]
+    
+    #TODO: Implement a better estimate of the cluster likelihood!
+    likelihood_of_cluster = [np.sum(cluster_labels==i) / n_samples for i in range(n_cluster)]
+    sorted_labels = np.argsort(likelihood_of_cluster)[::-1]
+
+    node_positions = nx.get_node_attributes(nx_graph,'pos')
+    
+    for i, label in enumerate(sorted_labels):
+        
+        mean_ind_vector = np.array([ indicator_vectors[cluster_labels==label].mean(0) ])
+        ax = plot_axs[i]
+        
+        nx.draw(nx_graph,
+                pos = node_positions,
+                node_size = 20,
+                width = 1,
+                alpha = 1,
+                ax = ax,
+                node_color = mean_ind_vector,
+                cmap='cividis',
+                vmin=0,
+                vmax=1)
+    
+        ax.set_title('Split {}: P = {:.2f} %'.format(i, likelihood_of_cluster))
+
 
 
 #TODO: add requirements for new functions

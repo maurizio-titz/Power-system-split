@@ -9,6 +9,8 @@ were obtained in 10.1109/EEM49802.2020.9221886 """
 import os
 import sys
 import pickle
+import numpy as np
+from matplotlib import pyplot as plt
 
 import pypsa
 
@@ -59,6 +61,20 @@ adjacencies = visualisation.get_split_adjacencies_from_rocof_solutions(solution_
 #### Do stuff with adjacencies
 ##############################
 
+indicator_vectors, index_of_adj_mat = visualisation.indicator_vectors_from_adj(adjacencies)
+n_cluster, cluster_labels = visualisation.cluster_indicator_vectors(indicator_vectors)
+
+nx_graph = pickle.load(open('nxgraph_306_Germany.p','rb')) #TODO: add correct path or nx_graph
+n_cols = 6
+n_rows = np.ceil(n_cluster/n_cols).astype(int)
+fig,ax = plt.subplots(n_rows,n_cols,figsize=(22,8))
+
+visualisation.plot_component_cluster(indicator_vectors, ax.flatten()[:n_cluster],
+                                     cluster_labels, nx_graph)
+
+
+
+#TODO: Add likelihood-vs-risk plot for clustered power system splits
 
 ##############################
 # primary secondary likelihood of failures
