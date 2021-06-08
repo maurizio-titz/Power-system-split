@@ -4,7 +4,7 @@
 
 ## Installation
 
-All the requirements can be found in `requirements.txt` and the package can be installed using `pip install .`.
+All the requirements can be found in `requirements.txt` and the package can be installed using `pip install .`. Tested for python 3.7.
 
 ## Usage
 The following image displaces the nodes that remain connected after a large system split
