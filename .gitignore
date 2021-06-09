@@ -1,1 +1,6 @@
-__pychache__/
+!**/__pycache__/
+*.pyc
+*.pickle
+*.p
+*.nc
+ 
