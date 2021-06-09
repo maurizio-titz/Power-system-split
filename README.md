@@ -6,6 +6,8 @@
 
 All the requirements can be found in `requirements.txt` and the package can be installed using `pip install .`. Tested for python 3.7.
 
+NOTE: You might have to manually install xarray and its io tools. To do this run `pip install xarray` and `pip install "xarray[io]"` to install the input/output dependencies of [xarray](http://xarray.pydata.org/en/stable/getting-started-guide/installing.html) that pypsa uses for imports. 
+
 ## Usage
 The following image displaces the nodes that remain connected after a large system split
 with 99 % probability:
