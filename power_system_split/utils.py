@@ -743,10 +743,8 @@ def evaluate_split_observables(split,
     current_storage    = pypsa_network.storage_units_t.p.loc[timestamp]
     current_load       = pypsa_network.loads_t.p.loc[timestamp]
 
-    #try:
-    assert np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<1e-3
-    #except AssertionError:
-    #    print(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum()))
+    assert np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<5e-2
+
     results_dict = {'inertia_proxy': [],'load_imbalance': [], 'available_flexible_generation': [] }
 
     evaluate_results = False
