@@ -8,27 +8,34 @@ import itertools
 import numpy as np
 import networkx as nx
 import pandas as pd
+from scipy.sparse import csc_matrix,lil_matrix,spdiags
+from scipy.sparse.linalg import spsolve
 
-def construct_incidencematrix_from_orientation(Graph):
-    """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order"""
-    B = np.zeros((len(Graph.nodes()),len(Graph.edges())))
-    orientations = nx.get_edge_attributes(Graph,'orientation')
-    node_list = list(Graph.nodes())
+def construct_incidencematrix_from_orientation(Graph,return_np_array = True):
+    """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order
+    NOTE: This function was tweaked based on networkx incidence matrix function
+    https://networkx.org/documentation/stable/_modules/networkx/linalg/graphmatrix.html#incidence_matrix"""
     if isinstance(Graph, nx.MultiGraph):
-        for i,edge in enumerate(Graph.edges(keys = True)):
-            orientation = orientations[edge]
-            n1 = node_list.index(orientation[0])
-            B[n1,i] = 1.
-            n2 = node_list.index(orientation[1])
-            B[n2,i] = -1.
-    elif isinstance(Graph, nx.Graph):
-        for i,edge in enumerate(Graph.edges()):
-            orientation = orientations[edge]
-            n1 = node_list.index(orientation[0])
-            B[n1,i] = 1.
-            n2 = node_list.index(orientation[1])
-            B[n2,i] = -1.
-    return B
+        edgelist = list(Graph.edges(keys=True))
+    else:
+        edgelist = list(Graph.edges())
+    nodelist = list(Graph.nodes())
+
+    node_index = {node: i for i, node in enumerate(nodelist)}
+    B = lil_matrix((len(nodelist),len(edgelist)))
+    orientations = nx.get_edge_attributes(Graph,'orientation')
+
+    for i,edge in enumerate(edgelist):
+        (u,v) = orientations[edge]
+        n1 = node_index[u]
+        B[n1,i] = 1.
+        n2 = node_index[v]
+        B[n2,i] = -1.
+    if return_np_array:
+        return_val = B.toarray()
+    else:
+        return_val = B.asformat("csc")
+    return return_val
 
 def redefined_index(Graph,element):
     """Get index of element in edge list for graph Graph"""
@@ -188,16 +195,18 @@ def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
     stop = 0
     system_split = False
 
-    while not stop:
-        H = Graph.copy()
+    H = Graph.copy()
 
-        H.remove_edges_from(failure_cascade)
+    while not stop:
+        for e in failure_cascade:
+            if H.has_edge(*e):
+                H.remove_edge(*e)
 
         if not nx.is_connected(H):
             system_split = True
             break
 
-        I = construct_incidencematrix_from_orientation(H)
+        I = construct_incidencematrix_from_orientation(H,return_np_array = False)
 
         line_weights = nx.get_edge_attributes(H,'weight')
 
@@ -206,18 +215,19 @@ def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
         else:
             line_susceptances = np.array([line_weights[(u,v,key)] for u,v,key in H.edges(keys = True)])
 
-        B_d = np.diag(line_susceptances)
-
-        L = np.linalg.multi_dot([I,B_d,I.T])
+        #B_d = np.diag(line_susceptances)
+        #L = np.dot(np.dot(I,B_d),I.T)
+        B_d = spdiags(line_susceptances,0,len(line_susceptances),len(line_susceptances))
+        L = I.dot(B_d).dot(I.T)
         #L = nx.laplacian_matrix(H)
         try:
-            theta = np.linalg.solve(L,P0)
+            theta = spsolve(L,P0)#solve(L,P0)
         except np.linalg.LinAlgError:
             # pseudoinverse
-            L_inv = np.linalg.pinv(L)
+            L_inv = np.linalg.pinv(L.toarray())
             theta = np.dot(L_inv,P0)
 
-        flows_H = np.linalg.multi_dot([B_d,I.T,theta])
+        flows_H = B_d.dot((I.T).dot(theta))
 
         if not multi_graph:
             smax = np.array([line_limits[(u,v)] for u,v in H.edges()])
@@ -259,6 +269,7 @@ def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
     else:
         return_vals = [failure_cascade,loading_dict,system_split]
     return return_vals
+
 
 
 
@@ -732,10 +743,8 @@ def evaluate_split_observables(split,
     current_storage    = pypsa_network.storage_units_t.p.loc[timestamp]
     current_load       = pypsa_network.loads_t.p.loc[timestamp]
 
-    #try:
-    assert np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<1e-3
-    #except AssertionError:
-    #    print(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum()))
+    assert np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<5e-2
+
     results_dict = {'inertia_proxy': [],'load_imbalance': [], 'available_flexible_generation': [] }
 
     evaluate_results = False
