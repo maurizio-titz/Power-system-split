@@ -31,18 +31,13 @@ number_of_nodes = 306
 month = 1
 
 network = pypsa.Network()
-network.import_from_netcdf(path_to_pypsa_network + 
+network.import_from_netcdf(path_to_pypsa_network +
                            str(year) +
                            '/elec_s_' +
                            str(number_of_nodes) +
                            '_ec_lv1.0_1H.nc')
 
-network.determine_network_topology()
-
-branches = network.branches()
-
-branches = branches[["bus0", "bus1", "x_pu_eff", "s_nom"]]
-Graph = utils.build_networkx_graph(branches)
+Graph = utils.build_networkx_graph(network)
 
 use_pnom = True
 criterion = 'load'

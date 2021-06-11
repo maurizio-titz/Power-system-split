@@ -379,14 +379,27 @@ def simulate_cascade_PTDF_based_edge_based(Graph,trigger_links,initial_flows,lin
     return return_vals
 
 
-def build_networkx_graph(snet_branches,multi_graph = False):
+def build_networkx_graph(pypsa_network,multi_graph = False, snet_index = None):
     """Build a networkx graph from the pypsa networks"""
+    pypsa_network.determine_network_topology()
+
+    try:
+        snet = pypsa_network.sub_networks['obj'][snet_index]
+    except KeyError:
+        snet = pypsa_network
+
+    branches = snet.branches()
+    positions = pypsa_network.buses[["x","y"]]
+    pos = dict(zip(positions.index,list(zip(positions.x,positions.y))))
+
+    branches = branches[["bus0", "bus1", "x_pu_eff", "s_nom"]]
+
     if not multi_graph:
         F = nx.Graph()
     else:
         F = nx.MultiGraph()
 
-    for line_index,line in snet_branches.iterrows():
+    for line_index,line in branches.iterrows():
 
         if not F.has_edge(line['bus0'],line['bus1']):
             F.add_edge(line['bus0'],line['bus1'],
@@ -409,6 +422,7 @@ def build_networkx_graph(snet_branches,multi_graph = False):
                            orientation = (line['bus0'],line['bus1']),
                            line_index = [line_index[1]],
                            s_nom = line['s_nom'])
+    nx.set_node_attributes(F,pos,'pos')
     return F
 
 
@@ -726,13 +740,8 @@ def evaluate_split_observables(split,
 
     assert isinstance(timestamp,pd.Timestamp)
 
-    try:
-        snet = pypsa_network.sub_networks['obj'][snet_index]
-    except KeyError:
-        snet = pypsa_network
+    Graph              = build_networkx_graph(pypsa_network,snet_index)
 
-    branches           = snet.branches()[["bus0","bus1","x_pu_eff","s_nom"]]
-    Graph              = build_networkx_graph(branches)
 
     # Rescale load shedding since units for load shedding are different
     # than for generation, storage and load
