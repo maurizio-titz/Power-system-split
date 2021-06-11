@@ -4,7 +4,6 @@
 """ This module contains useful methods to analyse and
 visualise cascade results"""
 
-import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
 from sklearn.cluster import AgglomerativeClustering
@@ -92,7 +91,7 @@ def indicator_vectors_from_adj(adjacency_matrices):
     list_of_nodes = nx.convert_matrix.from_numpy_matrix(adjacency_matrices[0])
     list_of_nodes = list(list_of_nodes)
 
-    indicator_vectors = np.empty((0, n_nodes, n_nodes), bool)
+    indicator_vectors = np.empty((0, n_nodes), bool)
     # TODO: when we directly pass the split components to this function
     # we don't have to keep track of the graph number "index_of_adj_mat". Implement this in the future!
     index_of_adj_mat = []
@@ -221,7 +220,7 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, nx_graph
                 vmin=0,
                 vmax=1)
     
-        ax.set_title('Split {}: P = {:.2f} %'.format(i, likelihood_of_cluster))
+        ax.set_title('Split {}: P = {:.2f} %'.format(label, likelihood_of_cluster[label]*100))
 
 
 

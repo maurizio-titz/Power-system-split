@@ -19,11 +19,10 @@ sys.path.append('power-system-split/power_system_split')
 import utils, visualisation
 
 script_path = os.path.dirname(os.path.realpath('__file__'))
-
 path_to_pypsa_network = script_path + '/data/'
 path_to_cascade_results = script_path + '/data/'
 
-year = 2015
+year = 2018
 number_of_nodes = 306
 month = 1
 
@@ -64,6 +63,8 @@ splitting_cascades = pickle.load(open(path_to_cascade_results+\
 adjacencies = visualisation.get_split_adjacencies_from_rocof_solutions(solution_dict,
                                                                        splitting_cascades,
                                                                        nx_graph)
+
+
 ##############################
 #### Do stuff with adjacencies
 ##############################
@@ -71,14 +72,14 @@ adjacencies = visualisation.get_split_adjacencies_from_rocof_solutions(solution_
 indicator_vectors, index_of_adj_mat = visualisation.indicator_vectors_from_adj(adjacencies)
 n_cluster, cluster_labels = visualisation.cluster_indicator_vectors(indicator_vectors)
 
-nx_graph = pickle.load(open('nxgraph_306_Germany.p','rb')) #TODO: add correct path or nx_graph
-n_cols = 6
+nx_graph = pickle.load(open(path_to_pypsa_network + str(year) + '/nxgraph_306_Germany.p','rb')) 
+n_cols = 3
 n_rows = np.ceil(n_cluster/n_cols).astype(int)
-fig,ax = plt.subplots(n_rows,n_cols,figsize=(22,8))
+fig,ax = plt.subplots(n_rows,n_cols,figsize=(22,15))
 
 visualisation.plot_component_cluster(indicator_vectors, ax.flatten()[:n_cluster],
                                      cluster_labels, nx_graph)
-
+plt.show()
 
 
 #TODO: Add likelihood-vs-risk plot for clustered power system splits
@@ -87,7 +88,7 @@ visualisation.plot_component_cluster(indicator_vectors, ax.flatten()[:n_cluster]
 # primary secondary likelihood of failures
 
 
-likelihood_primary, likelihood_secondary = visualisation.calc_likelihood_failure(nx_graph,
-                                                                                 splitting_cascades,
-                                                                                 number_of_snapshots,
-                                                                                 solution_dict=solution_dict)
+# likelihood_primary, likelihood_secondary = visualisation.calc_likelihood_failure(nx_graph,
+#                                                                                  splitting_cascades,
+#                                                                                  number_of_snapshots,
+#                                                                                  solution_dict=solution_dict)
