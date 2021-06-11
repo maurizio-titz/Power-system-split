@@ -379,15 +379,16 @@ def simulate_cascade_PTDF_based_edge_based(Graph,trigger_links,initial_flows,lin
     return return_vals
 
 
-def build_networkx_graph(pypsa_network,multi_graph = False, snet_index = -1):
+def build_networkx_graph(pypsa_network,multi_graph = False, snet_index = None):
     """Build a networkx graph from the pypsa networks"""
     pypsa_network.determine_network_topology()
 
-    if snet_index >= 0:
+    try:
         snet = pypsa_network.sub_networks['obj'][snet_index]
-        branches = snet.branches()
-    else:
-        branches = pypsa_network.branches()
+    except KeyError:
+        snet = pypsa_network
+
+    branches = snet.branches()
     positions = pypsa_network.buses[["x","y"]]
     pos = dict(zip(positions.index,list(zip(positions.x,positions.y))))
 
@@ -739,13 +740,8 @@ def evaluate_split_observables(split,
 
     assert isinstance(timestamp,pd.Timestamp)
 
-    try:
-        snet = pypsa_network.sub_networks['obj'][snet_index]
-    except KeyError:
-        snet = pypsa_network
+    Graph              = build_networkx_graph(pypsa_network,snet_index)
 
-    branches           = snet.branches()[["bus0","bus1","x_pu_eff","s_nom"]]
-    Graph              = build_networkx_graph(branches)
 
     # Rescale load shedding since units for load shedding are different
     # than for generation, storage and load
