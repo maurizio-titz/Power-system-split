@@ -38,12 +38,8 @@ load_path = '%i/networks/' % current_year
 
 network = pypsa.Network()
 network.import_from_netcdf(load_path + 'elec_s_%i_ec_lv1.0_1H.nc' % number_of_nodes)
-network.determine_network_topology()
 
-branches = network.branches()
-branches = branches[["bus0", "bus1", "x_pu_eff", "s_nom"]]
-
-G = utils.build_networkx_graph(branches)
+G = utils.build_networkx_graph(network)
 
 current_snapshots = network.snapshots[(network.snapshots.month == current_month) & (network.snapshots.day == 1)]
 
