@@ -1,6 +1,5 @@
-!**/__pycache__/
+data/
+*.ipynb
+__pycache__/
 *.pyc
-*.pickle
-*.p
-*.nc
- 
+
