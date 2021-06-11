@@ -6,7 +6,7 @@
 
 All the requirements can be found in `requirements.txt` and the package can be installed using `pip install -r requirements.txt`. Tested for python 3.7.
 
-To get the code running, copy the data into a folder `power_system_split/data/`. 
+To get the code running, copy the German data into a folder `power_system_split/data/Germany/`. The European data should lie under `power_system_split/data/European_networks/`.
 
 ## Usage
 

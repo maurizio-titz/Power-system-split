@@ -17,9 +17,8 @@ sys.path.append('power-system-split/power_system_split')
 import utils, visualisation
 
 script_path = os.path.dirname(os.path.realpath('__file__'))
-
-path_to_pypsa_network = script_path + '/data/'
-path_to_cascade_results = script_path + '/data/'
+path_to_pypsa_network = script_path + '/data/Germany/'
+path_to_cascade_results = script_path + '/data/Germany/'
 
 year = 2015
 number_of_nodes = 306

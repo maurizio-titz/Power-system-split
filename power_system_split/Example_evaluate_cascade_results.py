@@ -21,10 +21,10 @@ import utils
 
 script_path = os.path.dirname(os.path.realpath('__file__'))
 
-path_to_pypsa_network = script_path + '/data/'
-path_to_cascade_results = script_path + '/data/'
+path_to_pypsa_network = script_path + '/data/Germany/'
+path_to_cascade_results = script_path + '/data/Germany/'
 
-save_path = script_path + '/data/'
+save_path = script_path + '/data/Germany/'
 
 year = 2015
 number_of_nodes = 306
@@ -71,6 +71,8 @@ for key in tqdm(splitting_cascades.keys()):
         if results['inertia_proxy']:
             solution_dict[key].append(i)
             solution_dict[key].append(results)
+
+
 
 pickle.dump(solution_dict,
             open(save_path +\
