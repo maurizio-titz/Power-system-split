@@ -27,18 +27,13 @@ number_of_nodes = 306
 month = 1
 
 network = pypsa.Network()
-network.import_from_netcdf(path_to_pypsa_network + 
+network.import_from_netcdf(path_to_pypsa_network +
                            str(year) +
                            '/elec_s_' +
                            str(number_of_nodes) +
                            '_ec_lv1.0_1H.nc')
 
-network.determine_network_topology()
-
-branches = network.branches()
-
-branches = branches[["bus0", "bus1", "x_pu_eff", "s_nom"]]
-nx_graph = utils.build_networkx_graph(branches)
+nx_graph = utils.build_networkx_graph(metwork)
 
 solution_dict = pickle.load(open(path_to_cascade_results +\
                                  str(year) +\
@@ -72,7 +67,7 @@ adjacencies = visualisation.get_split_adjacencies_from_rocof_solutions(solution_
 indicator_vectors, index_of_adj_mat = visualisation.indicator_vectors_from_adj(adjacencies)
 n_cluster, cluster_labels = visualisation.cluster_indicator_vectors(indicator_vectors)
 
-nx_graph = pickle.load(open(path_to_pypsa_network + str(year) + '/nxgraph_306_Germany.p','rb')) 
+nx_graph = pickle.load(open(path_to_pypsa_network + str(year) + '/nxgraph_306_Germany.p','rb'))
 n_cols = 3
 n_rows = np.ceil(n_cluster/n_cols).astype(int)
 fig,ax = plt.subplots(n_rows,n_cols,figsize=(22,15))
