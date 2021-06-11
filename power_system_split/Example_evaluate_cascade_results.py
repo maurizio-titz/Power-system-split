@@ -21,19 +21,19 @@ import utils
 
 script_path = os.path.dirname(os.path.realpath('__file__'))
 
-path_to_pypsa_network = script_path
-path_to_cascade_results = script_path + '/Results'
+path_to_pypsa_network = script_path + '/data/'
+path_to_cascade_results = script_path + '/data/'
 
-save_path = script_path + '/Results'
+save_path = script_path + '/data/'
 
 year = 2015
 number_of_nodes = 306
 month = 1
 
 network = pypsa.Network()
-network.import_from_netcdf(path_to_pypsa_network + '/' +
+network.import_from_netcdf(path_to_pypsa_network + 
                            str(year) +
-                           '/networks/elec_s_' +
+                           '/elec_s_' +
                            str(number_of_nodes) +
                            '_ec_lv1.0_1H.nc')
 
@@ -47,9 +47,13 @@ Graph = utils.build_networkx_graph(branches)
 use_pnom = True
 criterion = 'load'
 
-cascade_res_path = "{0}/system_splits_{1:d}_{2:d}_{3:d}.pickle".format(path_to_cascade_results,
-                                                                       year, month, number_of_nodes)
-splitting_cascades = pickle.load(open(cascade_res_path, 'rb'))
+splitting_cascades = pickle.load(open(path_to_cascade_results+\
+                                      str(year)+\
+                                      '/system_splits_'+\
+                                      str(year)+\
+                                      '_'+\
+                                      str(number_of_nodes)+\
+                                      '_edge_based.pickle','rb'))
 
 solution_dict = {}
 
@@ -69,8 +73,10 @@ for key in tqdm(splitting_cascades.keys()):
             solution_dict[key].append(results)
 
 pickle.dump(solution_dict,
-            open(save_path + '/Germany_' +
-                 str(number_of_nodes) +
-                 '_split_evaluation_' +
-                 str(year) +
-                 '.pickle', 'wb'))
+            open(save_path +\
+                str(year) +\
+                '/Germany_' +\
+                str(number_of_nodes) +\
+                '_split_evaluation_' +\
+                str(year) +\
+                '.pickle', 'wb'))
