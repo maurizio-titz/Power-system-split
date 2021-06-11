@@ -37,8 +37,6 @@ network.import_from_netcdf(path_to_pypsa_network +
                            str(number_of_nodes) +
                            '_ec_lv1.0_1H.nc')
 
-network.determine_network_topology()
-
 Graph = utils.build_networkx_graph(network)
 
 use_pnom = True
