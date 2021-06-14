@@ -5,9 +5,13 @@
 visualise cascade results"""
 
 import numpy as np
+import pandas as pd
 import networkx as nx
+from pypsa import components
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
+
+from utils import get_split_components
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
                                                splitting_cascades_in,
@@ -31,6 +35,66 @@ def get_split_adjacencies_from_rocof_solutions(solution_dict,
             adjacencies.append(A.astype('bool'))
 
     return np.array(adjacencies)
+
+def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_graph, criterion):
+    """Construct boolean indicator vectors for split components and retrieve component properties. 
+
+    Args:
+        solution_dict (dict): Dictionary with time stamps as keys. Each entry contains a list 
+        [split_number, result, split_number, result, ...] where split_number indicates the index of the split
+        in the splitting_cascades dictionary and result summarizes component properties such as the inertia.
+        splitting_cascades (dict):  Dictionary with time stamps as keys, which contains all splits occuring 
+        at this time stamp.
+        criterion (string): Criterion for selecting system splits. 
+
+    Returns:
+        indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes.
+        split_component_props (DataFrame): Properties of components with shape n_vectors x 5.
+    """
+
+
+    list_of_nodes = list(nx_graph)
+    n_nodes = len(list_of_nodes)
+    
+    indicator_vectors = np.empty((0, n_nodes), bool)
+    split_component_props = pd.DataFrame(columns=['time_stamp',
+                                                  'number_of_split',
+                                                  'inertia_proxy',
+                                                  'load_imbalance',
+                                                  'available_flexible_generation'],
+                                         index=[], dtype=float)
+
+
+    for time_stamp in solution_dict.keys():
+        
+        if not solution_dict[time_stamp]:
+            continue
+        
+        for i, split_number in enumerate(solution_dict[time_stamp][::2]):
+
+            split = splitting_cascades[time_stamp][split_number]
+            components = get_split_components(split, nx_graph, criterion = criterion)
+
+            component_props = solution_dict[time_stamp][i*2+1]
+   
+            for j, component in enumerate(components):
+                
+                component_indicator_vec = np.isin(list_of_nodes, list(component))
+                indicator_vectors = np.append(indicator_vectors, np.array([component_indicator_vec]),
+                                              axis=0)
+          
+                props = {'time_stamp': time_stamp,
+                         'number_of_split': split_number,
+                         'inertia_proxy': component_props['inertia_proxy'][j],
+                         'load_imbalance': component_props['load_imbalance'][j],
+                         'available_flexible_generation': component_props['available_flexible_generation'][j]
+                         }
+                
+                split_component_props.append(props, ignore_index=True)
+                
+                
+
+    return indicator_vectors, split_component_props
 
 
 def calc_likelihood_failure(nx_graph,
@@ -74,46 +138,6 @@ def calc_likelihood_failure(nx_graph,
 
     return likelihood_primary, likelihood_secondary
 
-
-def indicator_vectors_from_adj(adjacency_matrices):
-    """Construct boolean indicator vectors for connected components in a list of graphs.
-
-    Args:
-        adjacency_matrices (array_like): An array of shape n_graphs x n_nodes x n_nodes,
-        which contains the adjacency matrices of multiple graphs.
-
-    Returns:
-        tuple: The array of indicator vectors and a list of the graph number i
-        to which the indicated components belong
-    """
-
-    n_nodes = adjacency_matrices.shape[1]
-    list_of_nodes = nx.convert_matrix.from_numpy_matrix(adjacency_matrices[0])
-    list_of_nodes = list(list_of_nodes)
-
-    indicator_vectors = np.empty((0, n_nodes), bool)
-    # TODO: when we directly pass the split components to this function
-    # we don't have to keep track of the graph number "index_of_adj_mat". Implement this in the future!
-    index_of_adj_mat = []
-
-    for i, adj_mat in enumerate(adjacency_matrices):
-        print('\r {}'.format(i), end="\r", flush=True)
-
-        adj_graph = nx.convert_matrix.from_numpy_matrix(adj_mat)
-        connected_comps = nx.connected_components(adj_graph)
-
-        for comp in connected_comps:
-
-            new_indicator_vec = np.isin(list_of_nodes, list(comp))
-
-            # TODO: Update constraint that selects "big enough" split components
-            if new_indicator_vec.sum() > 19:
-                indicator_vectors = np.append(indicator_vectors,
-                                              np.array([new_indicator_vec]),
-                                              axis=0)
-                index_of_adj_mat.append(i)
-
-    return indicator_vectors, index_of_adj_mat
 
 
 def optimize_number_of_cluster(indicator_vectors, max_n_cluster=20,
