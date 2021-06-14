@@ -4,6 +4,7 @@
 """ This module contains useful methods to analyse and
 visualise cascade results"""
 
+import sys
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -11,6 +12,7 @@ from pypsa import components
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 
+sys.path.append('power-system-split/power_system_split')
 from utils import get_split_components
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
