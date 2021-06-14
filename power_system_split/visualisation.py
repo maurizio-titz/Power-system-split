@@ -12,8 +12,7 @@ from pypsa import components
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 
-sys.path.append('power-system-split/power_system_split')
-from utils import get_split_components
+from power_system_split.utils import get_split_components
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
                                                splitting_cascades_in,
