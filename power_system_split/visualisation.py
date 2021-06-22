@@ -13,7 +13,7 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 from tqdm import tqdm
 
-from utils import get_split_components
+from .utils import get_split_components
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
                                                splitting_cascades_in,
