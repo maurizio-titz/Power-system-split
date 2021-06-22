@@ -11,8 +11,9 @@ import networkx as nx
 from pypsa import components
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
+from tqdm import tqdm
 
-from power_system_split.utils import get_split_components
+from utils import get_split_components
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
                                                splitting_cascades_in,
@@ -66,7 +67,7 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
                                          index=[], dtype=float)
 
 
-    for time_stamp in solution_dict.keys():
+    for time_stamp in tqdm(solution_dict.keys()):
         
         if not solution_dict[time_stamp]:
             continue
@@ -90,9 +91,8 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
                          'load_imbalance': component_props['load_imbalance'][j],
                          'available_flexible_generation': component_props['available_flexible_generation'][j]
                          }
-                
-                split_component_props.append(props, ignore_index=True)
-                
+
+                split_component_props = split_component_props.append(props, ignore_index=True)
                 
 
     return indicator_vectors, split_component_props
@@ -209,25 +209,23 @@ def cluster_indicator_vectors(indicator_vectors, n_cluster=None, min_cluster_dis
     return agg_cluster.n_clusters_, agg_cluster.labels_
 
 
-def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, nx_graph):
+def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_props, nx_graph):
     """Plot clusters of split components on a geographically embedded graph.
 
     Args:
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
         plot_axs (ndarray): 1d array of axis to plot clusters on, with length n_cluster 
-        cluster_labels (ndarray): Array of cluster labels for each vector in indicator_vectors
+        cluster_labels (ndarray): Cluster label for each vector in indicator_vectors. 
+        cluster_props (pd.DataFrame): Data frame containing "likelihood" (of cluster) and "counts" (of components)
+        as columns. The index represents the cluster label. If None, plot titles are only cluster labels.
         nx_graph (graph): NetworkX graph with geographical location of nodes
     """
   
-    
-    n_samples = cluster_labels.shape[0]
-    n_cluster = plot_axs.shape[0]
-    
-    #TODO: Implement a better estimate of the cluster likelihood!
-    likelihood_of_cluster = [np.sum(cluster_labels==i) / n_samples for i in range(n_cluster)]
-    sorted_labels = np.argsort(likelihood_of_cluster)[::-1]
-
     node_positions = nx.get_node_attributes(nx_graph,'pos')
+    if cluster_props is not None:
+        sorted_labels = cluster_props.likelihood.sort_values().index[::-1]
+    else:
+        sorted_labels = np.unique(cluster_labels)
     
     for i, label in enumerate(sorted_labels):
         
@@ -245,7 +243,12 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, nx_graph
                 vmin=0,
                 vmax=1)
     
-        ax.set_title('Split {}: P = {:.2f} %'.format(label, likelihood_of_cluster[label]*100))
+        if cluster_props is not None:
+            ax.set_title('{}: P = {:.2f} % ({})'.format(label,
+                                                        cluster_props.loc[label].likelihood*100,
+                                                        int(cluster_props.loc[label].counts)))
+        else:
+            ax.set_title('{}'.format(label))
 
 
 
