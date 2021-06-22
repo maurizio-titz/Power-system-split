@@ -740,7 +740,7 @@ def evaluate_split_observables(split,
 
     assert isinstance(timestamp,pd.Timestamp)
 
-    Graph              = build_networkx_graph(pypsa_network,snet_index)
+    Graph              = build_networkx_graph(pypsa_network,snet_index = snet_index)
 
 
     # Rescale load shedding since units for load shedding are different
