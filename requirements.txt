@@ -8,4 +8,6 @@ pypsa>=0.17
 scikit-learn>=0.24
 netcdf4>=1.5.6
 xarray>=0.18.2
-pandas>=1.2.4  
+pickle5>=0.0.11
+statsmodels>=0.12.2 
+seaborn>=0.11.1
