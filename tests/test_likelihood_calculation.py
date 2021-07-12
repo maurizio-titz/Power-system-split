@@ -7,7 +7,7 @@ import numpy as np
 
 #sys.path.append('../power_system_split/')
 #import visualisation
-from power_system_split import utils
+from power_system_split import visualisation
 
 
 def test_likelihood_no_solution_dict():
