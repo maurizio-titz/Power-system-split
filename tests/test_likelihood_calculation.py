@@ -3,8 +3,10 @@
 
 import networkx as nx
 import numpy as np
+import sys
 
-from power_system_split import visualisation
+sys.path.append('../power_system_split/')
+import visualisation
 
 
 def test_likelihood_no_solution_dict():

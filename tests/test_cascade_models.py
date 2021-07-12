@@ -3,8 +3,10 @@
 
 import networkx as nx
 import numpy as np
+import sys
 
-from power_system_split import utils
+sys.path.append('../power_system_split/')
+import utils
 
 
 def test_cascade_no_overloads():
@@ -55,7 +57,7 @@ def test_cascade_no_overloads():
     assert(system_split == False)
     assert(np.isclose(new_loading_dict[(1,2)],0.8))
     assert(np.isclose(new_loading_dict[(3,2)],0.0))
-    
+
     return
 
 
