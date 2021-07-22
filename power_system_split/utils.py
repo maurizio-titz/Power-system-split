@@ -618,6 +618,40 @@ def verify_cascade_results(G,test_cascades,initial_loading):
     print("All results correct!")
     return
 
+def calc_system_inertia_over_time(pypsa_network,
+                                  snet_index = None,
+                                  use_pnom = True,
+                                  inertiaplants = None,
+                                  inertia_storages = None):
+    """get inertia generation for a subgraph"""
+
+    Graph              = build_networkx_graph(pypsa_network,snet_index = snet_index)
+
+    inertia_over_time = np.zeros(len(pypsa_network.snapshots))
+
+    for count,timestamp in enumerate(pypsa_network.snapshots):
+
+        # Rescale load shedding since units for load shedding are different
+        # than for generation, storage and load
+        load_shedding_indices = pypsa_network.generators[pypsa_network.generators.carrier.isin(['load'])].index
+
+        current_generation = pypsa_network.generators_t.p.loc[timestamp].copy()
+        current_generation[load_shedding_indices] /= 1e3
+        current_storage    = pypsa_network.storage_units_t.p.loc[timestamp]
+
+
+        inertia_over_time[count] = get_inertia_gen_subgraph(Graph,
+                                                          pypsa_network.generators,
+                                                          current_generation,
+                                                          pypsa_network.storage_units,
+                                                          current_storage,
+                                                           use_pnom,
+                                                          inertiaplants = inertiaplants,
+                                                          inertia_storages = inertia_storages)
+
+    return inertia_over_time
+
+
 def get_inertia_gen_subgraph(subgraph,generators,current_generation,storages,current_storage,use_pnom,inertiaplants = None, inertia_storages = None):
     """get inertia generation for a subgraph"""
     if not inertiaplants:

@@ -8,12 +8,14 @@ import sys
 import numpy as np
 import pandas as pd
 import networkx as nx
+
 from pypsa import components
 from sklearn.cluster import AgglomerativeClustering, DBSCAN
 from sklearn.metrics import silhouette_score
 from tqdm import tqdm
 
-from utils import get_split_components
+sys.path.append('../power_system_split/')
+from power_system_split.utils import get_split_components
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
                                                splitting_cascades_in,
@@ -39,15 +41,15 @@ def get_split_adjacencies_from_rocof_solutions(solution_dict,
     return np.array(adjacencies)
 
 def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_graph, criterion):
-    """Construct boolean indicator vectors for split components and retrieve component properties. 
+    """Construct boolean indicator vectors for split components and retrieve component properties.
 
     Args:
-        solution_dict (dict): Dictionary with time stamps as keys. Each entry contains a list 
+        solution_dict (dict): Dictionary with time stamps as keys. Each entry contains a list
         [split_number, result, split_number, result, ...] where split_number indicates the index of the split
         in the splitting_cascades dictionary and result summarizes component properties such as the inertia.
-        splitting_cascades (dict):  Dictionary with time stamps as keys, which contains all splits occuring 
+        splitting_cascades (dict):  Dictionary with time stamps as keys, which contains all splits occuring
         at this time stamp.
-        criterion (string): Criterion for selecting system splits. 
+        criterion (string): Criterion for selecting system splits.
 
     Returns:
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes.
@@ -57,7 +59,7 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
 
     list_of_nodes = list(nx_graph)
     n_nodes = len(list_of_nodes)
-    
+
     indicator_vectors = np.empty((0, n_nodes), bool)
     split_component_props = pd.DataFrame(columns=['time_stamp',
                                                   'number_of_split',
@@ -68,23 +70,23 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
 
 
     for time_stamp in tqdm(solution_dict.keys()):
-        
+
         if not solution_dict[time_stamp]:
             continue
-        
+
         for i, split_number in enumerate(solution_dict[time_stamp][::2]):
 
             split = splitting_cascades[time_stamp][split_number]
             components = get_split_components(split, nx_graph, criterion = criterion)
 
             component_props = solution_dict[time_stamp][i*2+1]
-   
+
             for j, component in enumerate(components):
-                
+
                 component_indicator_vec = np.isin(list_of_nodes, list(component))
                 indicator_vectors = np.append(indicator_vectors, np.array([component_indicator_vec]),
                                               axis=0)
-          
+
                 props = {'time_stamp': time_stamp,
                          'number_of_split': split_number,
                          'inertia_proxy': component_props['inertia_proxy'][j],
@@ -93,7 +95,7 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
                          }
 
                 split_component_props = split_component_props.append(props, ignore_index=True)
-                
+
 
     return indicator_vectors, split_component_props
 
@@ -143,7 +145,7 @@ def calc_likelihood_failure(nx_graph,
 
 def optimize_number_of_cluster(indicator_vectors, max_n_cluster=20,
                               cluster_distance_type='average'):
-    
+
     """Estimate optimal number of cluster via the silhouette score.
 
     Args:
@@ -166,7 +168,7 @@ def optimize_number_of_cluster(indicator_vectors, max_n_cluster=20,
                                               n_clusters=i,
                                               linkage=cluster_distance_type)
         agg_cluster.fit(indicator_vectors)
-        
+
         new_score = silhouette_score(indicator_vectors, agg_cluster.labels_,metric='hamming')
         silhouette_avg_scores.append(new_score)
 
@@ -180,15 +182,15 @@ def cluster_indicator_vectors_agglomerative(indicator_vectors, n_cluster=None, m
     """Cluster indicator vectors of graph components into similar groups with agglomerative clustering. 
     
     The distance between vectors is quantified by the hamming distance,
-    i.e. the relative number of nodes that are not in the same component. 
+    i.e. the relative number of nodes that are not in the same component.
 
     Args:
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
-        n_cluster (int, optional): Number of cluster. If this is not None, min_cluster_distance has to be None. 
+        n_cluster (int, optional): Number of cluster. If this is not None, min_cluster_distance has to be None.
         Defaults to None.
-        min_cluster_distance (float, optional): The minimum distance between two clusters. Below this distance, two 
+        min_cluster_distance (float, optional): The minimum distance between two clusters. Below this distance, two
         clusters will be merged. Defaults to 0.1.
-        cluster_distance_type (str, optional): Method to compute the distance between two cluster. 
+        cluster_distance_type (str, optional): Method to compute the distance between two cluster.
         Available: "ward","average","single" and "maximum". Defaults to 'average'.
 
     Returns:
@@ -240,24 +242,24 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_
 
     Args:
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
-        plot_axs (ndarray): 1d array of axis to plot clusters on, with length n_cluster 
-        cluster_labels (ndarray): Cluster label for each vector in indicator_vectors. 
+        plot_axs (ndarray): 1d array of axis to plot clusters on, with length n_cluster
+        cluster_labels (ndarray): Cluster label for each vector in indicator_vectors.
         cluster_props (pd.DataFrame): Data frame containing "likelihood" (of cluster) and "counts" (of components)
         as columns. The index represents the cluster label. If None, plot titles are only cluster labels.
         nx_graph (graph): NetworkX graph with geographical location of nodes
     """
-  
+
     node_positions = nx.get_node_attributes(nx_graph,'pos')
     if cluster_props is not None:
         sorted_labels = cluster_props.likelihood.sort_values().index[::-1]
     else:
         sorted_labels = np.unique(cluster_labels)
-    
+
     for i, label in enumerate(sorted_labels):
-        
+
         mean_ind_vector = np.array([ indicator_vectors[cluster_labels==label].mean(0) ])
         ax = plot_axs[i]
-        
+
         nx.draw(nx_graph,
                 pos = node_positions,
                 node_size = 20,
@@ -268,14 +270,10 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_
                 cmap='cividis',
                 vmin=0,
                 vmax=1)
-    
+
         if cluster_props is not None:
             ax.set_title('{}: P = {:.2f} % ({})'.format(label,
                                                         cluster_props.loc[label].likelihood*100,
                                                         int(cluster_props.loc[label].counts)))
         else:
             ax.set_title('{}'.format(label))
-
-
-
-
