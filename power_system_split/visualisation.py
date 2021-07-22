@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 from pypsa import components
-from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import AgglomerativeClustering, DBSCAN
 from sklearn.metrics import silhouette_score
 from tqdm import tqdm
 
@@ -175,9 +175,9 @@ def optimize_number_of_cluster(indicator_vectors, max_n_cluster=20,
     return n_optimum, n_cluster_test, silhouette_avg_scores
 
 
-def cluster_indicator_vectors(indicator_vectors, n_cluster=None, min_cluster_distance=0.1,
-                              cluster_distance_type='average'):
-    """Cluster indicator vectors of graph components into similar groups. 
+def cluster_indicator_vectors_agglomerative(indicator_vectors, n_cluster=None, min_cluster_distance=0.1,
+                                            cluster_distance_type='single'):
+    """Cluster indicator vectors of graph components into similar groups with agglomerative clustering. 
     
     The distance between vectors is quantified by the hamming distance,
     i.e. the relative number of nodes that are not in the same component. 
@@ -207,6 +207,32 @@ def cluster_indicator_vectors(indicator_vectors, n_cluster=None, min_cluster_dis
     agg_cluster.fit(indicator_vectors)
 
     return agg_cluster.n_clusters_, agg_cluster.labels_
+
+def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, n_jobs=10):
+    """Cluster indicator vectors of graph components into similar groups with DBSCAN. 
+    
+    The distance between vectors is quantified by the hamming distance,
+    i.e. the relative number of nodes that are not in the same component. 
+
+    Args:
+        indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
+        neighbor_max_sit (float): The maximum distance between two samples for one to be considered 
+        as in the neighborhood of the other (eps parameter in sklearn).
+        n_jobs (int): Number of jobs.
+
+    Returns:
+        tuple: number of cluster, number of noise samples, and array of cluster labels for each indicator vector
+    """
+
+    
+    dbscan_cluster = DBSCAN(eps=neighbor_max_dist, metric='hamming', n_jobs=n_jobs)
+    dbscan_cluster.fit(indicator_vectors)
+    
+    labels = dbscan_cluster.labels_
+    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+    n_noise = list(labels).count(-1)
+    
+    return n_clusters, n_noise, labels
 
 
 def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_props, nx_graph):
