@@ -64,8 +64,7 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
     split_component_props = pd.DataFrame(columns=['time_stamp',
                                                   'number_of_split',
                                                   'inertia_proxy',
-                                                  'load_imbalance',
-                                                  'available_flexible_generation'],
+                                                  'load_imbalance'],
                                          index=[], dtype=float)
 
 
@@ -91,7 +90,6 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
                          'number_of_split': split_number,
                          'inertia_proxy': component_props['inertia_proxy'][j],
                          'load_imbalance': component_props['load_imbalance'][j],
-                         'available_flexible_generation': component_props['available_flexible_generation'][j]
                          }
 
                 split_component_props = split_component_props.append(props, ignore_index=True)
@@ -179,8 +177,8 @@ def optimize_number_of_cluster(indicator_vectors, max_n_cluster=20,
 
 def cluster_indicator_vectors_agglomerative(indicator_vectors, n_cluster=None, min_cluster_distance=0.1,
                                             cluster_distance_type='single'):
-    """Cluster indicator vectors of graph components into similar groups with agglomerative clustering. 
-    
+    """Cluster indicator vectors of graph components into similar groups with agglomerative clustering.
+
     The distance between vectors is quantified by the hamming distance,
     i.e. the relative number of nodes that are not in the same component.
 
@@ -211,14 +209,14 @@ def cluster_indicator_vectors_agglomerative(indicator_vectors, n_cluster=None, m
     return agg_cluster.n_clusters_, agg_cluster.labels_
 
 def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, n_jobs=10):
-    """Cluster indicator vectors of graph components into similar groups with DBSCAN. 
-    
+    """Cluster indicator vectors of graph components into similar groups with DBSCAN.
+
     The distance between vectors is quantified by the hamming distance,
-    i.e. the relative number of nodes that are not in the same component. 
+    i.e. the relative number of nodes that are not in the same component.
 
     Args:
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
-        neighbor_max_sit (float): The maximum distance between two samples for one to be considered 
+        neighbor_max_sit (float): The maximum distance between two samples for one to be considered
         as in the neighborhood of the other (eps parameter in sklearn).
         n_jobs (int): Number of jobs.
 
@@ -226,14 +224,14 @@ def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, n
         tuple: number of cluster, number of noise samples, and array of cluster labels for each indicator vector
     """
 
-    
+
     dbscan_cluster = DBSCAN(eps=neighbor_max_dist, metric='hamming', n_jobs=n_jobs)
     dbscan_cluster.fit(indicator_vectors)
-    
+
     labels = dbscan_cluster.labels_
     n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
     n_noise = list(labels).count(-1)
-    
+
     return n_clusters, n_noise, labels
 
 
