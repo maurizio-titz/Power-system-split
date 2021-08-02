@@ -15,6 +15,7 @@ from sklearn.metrics import silhouette_score
 from tqdm import tqdm
 
 sys.path.append('../power_system_split/')
+sys.path.append('../')
 from power_system_split.utils import get_split_components
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
