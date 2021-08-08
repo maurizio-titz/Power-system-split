@@ -10,6 +10,7 @@ import pandas as pd
 import networkx as nx
 
 from pypsa import components
+from sklearn import cluster
 from sklearn.cluster import AgglomerativeClustering, DBSCAN
 from sklearn.metrics import silhouette_score
 from tqdm import tqdm
@@ -209,7 +210,7 @@ def cluster_indicator_vectors_agglomerative(indicator_vectors, n_cluster=None, m
 
     return agg_cluster.n_clusters_, agg_cluster.labels_
 
-def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, n_jobs=10):
+def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, neighbor_min_samples=5, n_jobs=10):
     """Cluster indicator vectors of graph components into similar groups with DBSCAN.
 
     The distance between vectors is quantified by the hamming distance,
@@ -219,6 +220,8 @@ def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, n
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
         neighbor_max_sit (float): The maximum distance between two samples for one to be considered
         as in the neighborhood of the other (eps parameter in sklearn).
+        neighbor_min_samples(float): The number of samples (or total weight) in a neighborhood 
+        for a point to be considered as a core point. This includes the point itself.
         n_jobs (int): Number of jobs.
 
     Returns:
@@ -226,7 +229,7 @@ def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, n
     """
 
 
-    dbscan_cluster = DBSCAN(eps=neighbor_max_dist, metric='hamming', n_jobs=n_jobs)
+    dbscan_cluster = DBSCAN(eps=neighbor_max_dist, min_samples=neighbor_min_samples, metric='hamming', n_jobs=n_jobs)
     dbscan_cluster.fit(indicator_vectors)
 
     labels = dbscan_cluster.labels_
@@ -236,20 +239,21 @@ def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, n
     return n_clusters, n_noise, labels
 
 
-def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_props, nx_graph):
+def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_props, nx_graph, node_size=20):
     """Plot clusters of split components on a geographically embedded graph.
 
     Args:
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
         plot_axs (ndarray): 1d array of axis to plot clusters on, with length n_cluster
         cluster_labels (ndarray): Cluster label for each vector in indicator_vectors.
-        cluster_props (pd.DataFrame): Data frame containing "likelihood" (of cluster) and "counts" (of components)
-        as columns. The index represents the cluster label. If None, plot titles are only cluster labels.
+        cluster_props (pd.DataFrame, string): Data frame containing "likelihood" (of cluster) and "counts" (of components)
+        as columns. The index represents the cluster labels and each index should match one unique label in 'cluster_labels'.
+        If None, plot titles are only cluster labels. A common title string can also be passed.
         nx_graph (graph): NetworkX graph with geographical location of nodes
     """
 
     node_positions = nx.get_node_attributes(nx_graph,'pos')
-    if cluster_props is not None:
+    if type(cluster_props) is pd.DataFrame:
         sorted_labels = cluster_props.likelihood.sort_values().index[::-1]
     else:
         sorted_labels = np.unique(cluster_labels)
@@ -261,7 +265,7 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_
 
         nx.draw(nx_graph,
                 pos = node_positions,
-                node_size = 20,
+                node_size = node_size,
                 width = 1,
                 alpha = 1,
                 ax = ax,
@@ -270,7 +274,9 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_
                 vmin=0,
                 vmax=1)
 
-        if cluster_props is not None:
+        if type(cluster_props)==str:
+            ax.set_title(cluster_props)
+        elif type(cluster_props) is pd.DataFrame:
             ax.set_title('{}: P = {:.2f} % ({})'.format(label,
                                                         cluster_props.loc[label].likelihood*100,
                                                         int(cluster_props.loc[label].counts)))
