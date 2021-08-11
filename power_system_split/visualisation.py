@@ -88,12 +88,14 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
                 component_indicator_vec = np.isin(list_of_nodes, list(component))
                 indicator_vectors = np.append(indicator_vectors, np.array([component_indicator_vec]),
                                               axis=0)
+                causing_link = split[0]
+                causing_link_index = float(nx_graph[causing_link[0]][causing_link[1]]['line_index'][0])
 
                 props = {'time_stamp': time_stamp,
                          'number_of_split': split_number,
                          'inertia_proxy': component_props['inertia_proxy'][j],
                          'load_imbalance': component_props['load_imbalance'][j],
-                         'causing_link' : split[0]
+                         'causing_link' : causing_link_index
                          }
 
                 split_component_props = split_component_props.append(props, ignore_index=True)
