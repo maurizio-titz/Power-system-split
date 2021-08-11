@@ -66,7 +66,8 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
     split_component_props = pd.DataFrame(columns=['time_stamp',
                                                   'number_of_split',
                                                   'inertia_proxy',
-                                                  'load_imbalance'],
+                                                  'load_imbalance',
+                                                  'causing_link'],
                                          index=[], dtype=float)
 
 
@@ -92,6 +93,7 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
                          'number_of_split': split_number,
                          'inertia_proxy': component_props['inertia_proxy'][j],
                          'load_imbalance': component_props['load_imbalance'][j],
+                         'causing_link' : split[0]
                          }
 
                 split_component_props = split_component_props.append(props, ignore_index=True)
@@ -220,7 +222,7 @@ def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, n
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
         neighbor_max_sit (float): The maximum distance between two samples for one to be considered
         as in the neighborhood of the other (eps parameter in sklearn).
-        neighbor_min_samples(float): The number of samples (or total weight) in a neighborhood 
+        neighbor_min_samples(float): The number of samples (or total weight) in a neighborhood
         for a point to be considered as a core point. This includes the point itself.
         n_jobs (int): Number of jobs.
 
