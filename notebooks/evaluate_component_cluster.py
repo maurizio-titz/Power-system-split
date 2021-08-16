@@ -4,6 +4,7 @@ import pickle5 as pickle
 import networkx as nx
 import numpy as np
 import pypsa
+import time
 import pandas as pd
 
 
@@ -54,7 +55,7 @@ for co2l in co2l_list:
     file = results_path+'system_splits_Co2L{:.2}.pickle'.format(co2l)
     print(file)
     splitting_cascades = pickle.load(open(file,'rb'))
-    file = results_path+'Europe_Co2L{:.2}_split_evaluation_'.format(co2l)+criterion+'_based_snet_%i'%snet_index+'.pickle'
+    file = results_path+'Europe_Co2L{:.2}_split_evaluation_'.format(co2l)+criterion+'_based_snet_%i'%snet_index+'_w_hvdc.pickle'
     print(file)
     solution_dict = pickle.load(open(file,'rb'))
    
@@ -83,18 +84,44 @@ indicator_vectors = indicator_vectors.astype(bool)
 #...this can take a few hours for all time steps and co2 levels
 
 #Agglomerative clustering
-#(the node-criterion only selects splits with >10 nodes, so we have to resolve a hamming distance between the cluster of >19)
+# (the node-criterion only selects splits with >10 nodes, so we have to resolve a least hamming distance between the cluster of >19)
+
+start_time = time.time()
 min_cluster_distance = 19./ len(G) 
 n_cluster, cluster_labels = visualisation.cluster_indicator_vectors_agglomerative(indicator_vectors,
                                                                                   min_cluster_distance=min_cluster_distance,
                                                                                   cluster_distance_type='single')
 component_props.loc[:, 'cluster_label_agg_mdist{:.3}'.format(min_cluster_distance)] = cluster_labels
+print('Agg.cluster. mdist {:.3} time: '.format(min_cluster_distance), (time.time() -start_time)/3600.)
+
+start_time = time.time()
+min_cluster_distance = 9./ len(G) 
+n_cluster, cluster_labels = visualisation.cluster_indicator_vectors_agglomerative(indicator_vectors,
+                                                                                  min_cluster_distance=min_cluster_distance,
+                                                                                  cluster_distance_type='single')
+component_props.loc[:, 'cluster_label_agg_mdist{:.3}'.format(min_cluster_distance)] = cluster_labels
+print('Agg.cluster. mdist {:.3} time: '.format(min_cluster_distance), (time.time() -start_time)/3600.)
+
+component_props.to_hdf(cluster_results_path + 'split_component_properties_all_co2level_{}_based.h5'.format(criterion), key='df')
+np.save(cluster_results_path + 'indicator_vectors_all_co2level_{}_based.npy'.format(criterion), indicator_vectors)
 
 # # DBSCAN
-# neighbor_max_dist = 19./ len(G) 
-# n_cluster, n_noise, cluster_labels = visualisation.cluster_indicator_vectors_dbscan(indicator_vectors,
-#                                                                                     neighbor_max_dist=neighbor_max_dist)
-# component_props.loc[:, 'cluster_label_db_mdist{:.3}'.format(neighbor_max_dist)] = cluster_labels
+start_time = time.time()
+neighbor_max_dist = 19./ len(G) 
+neighbor_min_samples = 20
+n_cluster, n_noise, cluster_labels = visualisation.cluster_indicator_vectors_dbscan(indicator_vectors,
+                                                                                    neighbor_max_dist=neighbor_max_dist,
+                                                                                    neighbor_min_samples=neighbor_min_samples)
+component_props.loc[:, 'cluster_label_db_mdist{:.3}'.format(neighbor_max_dist)] = cluster_labels
+print('DBSCAN mdist {:.3} time: '.format(neighbor_max_dist), (time.time() -start_time)/3600.)
+
+start_time = time.time()
+neighbor_max_dist = 9./ len(G) 
+n_cluster, n_noise, cluster_labels = visualisation.cluster_indicator_vectors_dbscan(indicator_vectors,
+                                                                                    neighbor_max_dist=neighbor_max_dist,
+                                                                                    neighbor_min_samples=neighbor_min_samples)
+component_props.loc[:, 'cluster_label_db_mdist{:.3}'.format(neighbor_max_dist)] = cluster_labels
+print('DBSCAN mdist {:.3} time: '.format(neighbor_max_dist), (time.time() -start_time)/3600.)
 
 # %%
 component_props.to_hdf(cluster_results_path + 'split_component_properties_all_co2level_{}_based.h5'.format(criterion), key='df')

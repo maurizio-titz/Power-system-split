@@ -11,3 +11,4 @@ xarray>=0.18.2
 pickle5>=0.0.11
 statsmodels>=0.12.2 
 seaborn>=0.11.1
+palettable>=3.3.0

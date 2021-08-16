@@ -688,7 +688,14 @@ def get_inertia_gen_subgraph(subgraph,generators,current_generation,storages,cur
     return inertia_generation
 
 
-def get_load_imbalance_subgraph(subgraph,generators,current_generation,storages,current_storage,loads,current_load):
+def get_load_imbalance_subgraph(subgraph,
+                                generators,
+                                current_generation,
+                                storages,
+                                current_storage,
+                                loads,
+                                current_load,
+                                HVDC_transport):
     """Calculate load imbalance due to subgraph"""
     gens   = generators[generators["bus"].isin(list(subgraph.nodes()))]
     loads  = loads[loads["bus"].isin(list(subgraph.nodes()))]
@@ -697,6 +704,7 @@ def get_load_imbalance_subgraph(subgraph,generators,current_generation,storages,
 
     load_imbalance = current_generation.loc[list(gens.index)].sum() + current_storage.loc[list(stores.index)].sum()-\
                         current_load.loc[list(loads.index)].sum()
+    load_imbalance -= HVDC_transport[HVDC_transport.index.isin(list(subgraph.nodes()))].sum()
     return load_imbalance
 
 
@@ -728,7 +736,14 @@ def get_available_flexible_generation(subgraph,
     #flexible_generation += maximal_storage - current_storages.groupby(stores.carrier).sum().loc[existing_flexible_storages].sum()
     return flexible_generation
 
-def check_load_criterion(subgraphs,generators,current_generation,storages,current_storage,loads,current_load):
+def check_load_criterion(subgraphs,
+                         generators,
+                         current_generation,
+                         storages,
+                         current_storage,
+                         loads,
+                         current_load,
+                         HVDC_transport):
     """ Check load/generation criterion which means
     that none of the subgraph accounts for 90 % of the load
     or generation at the current timestamp"""
@@ -747,6 +762,7 @@ def check_load_criterion(subgraphs,generators,current_generation,storages,curren
         loads               = loads[loads["bus"].isin(list(subgraph.nodes()))]
         stores              = storages[storages["bus"].isin(list(subgraph.nodes()))]
         subgraph_generation = current_generation.loc[list(gens.index)].sum() + current_storage.loc[list(stores.index)].sum()
+        subgraph_generation -= HVDC_transport[HVDC_transport.index.isin(list(subgraph.nodes()))].sum()
         subgraph_load       = current_load.loc[list(loads.index)].sum()
 
         subgraph_contributions[count] = np.array([subgraph_generation/overall_generation,subgraph_load/overall_load])
@@ -785,10 +801,13 @@ def evaluate_split_observables(split,
     current_generation[load_shedding_indices] /= 1e3
     current_storage    = pypsa_network.storage_units_t.p.loc[timestamp]
     current_load       = pypsa_network.loads_t.p.loc[timestamp]
+    HVDC_transport     = pypsa_network.links_t.p0.loc[timestamp].groupby(pypsa_network.links["bus0"]).sum()
+    HVDC_transport     = HVDC_transport.add(pypsa_network.links_t.p1.loc[timestamp].groupby(pypsa_network.links["bus1"]).sum(),
+                                            fill_value = 0)
 
     assert np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<5e-2
 
-    results_dict = {'inertia_proxy': [],'load_imbalance': [], 'available_flexible_generation': [] }
+    results_dict = {'inertia_proxy': [],'load_imbalance': []}#, 'available_flexible_generation': [] }
 
     evaluate_results = False
 
@@ -804,7 +823,8 @@ def evaluate_split_observables(split,
                                                 pypsa_network.storage_units,
                                                 current_storage,
                                                 pypsa_network.loads,
-                                                current_load)
+                                                current_load,
+                                                HVDC_transport)
 
     if evaluate_results:
         for subgraph in subgraphs:
@@ -823,19 +843,20 @@ def evaluate_split_observables(split,
                                                           pypsa_network.storage_units,
                                                           current_storage,
                                                           pypsa_network.loads,
-                                                          current_load)
+                                                          current_load,
+                                                          HVDC_transport)
 
-            available_flexible_generation = get_available_flexible_generation(subgraph,
-                                                          pypsa_network.generators,
-                                                          current_generation,
-                                                          pypsa_network.storage_units,
-                                                          current_storage,
-                                                          flexible_plants = flexible_plants,
-                                                          flexible_storages = flexible_storage)
+            #available_flexible_generation = get_available_flexible_generation(subgraph,
+            #                                              pypsa_network.generators,
+            #                                              current_generation,
+            #                                              pypsa_network.storage_units,
+            #                                              current_storage,
+            #                                              flexible_plants = flexible_plants,
+            #                                              flexible_storages = flexible_storage)
 
             results_dict['inertia_proxy'].append(inertia_generation)
             results_dict['load_imbalance'].append(load_imbalance)
-            results_dict['available_flexible_generation'].append(available_flexible_generation)
+            #results_dict['available_flexible_generation'].append(available_flexible_generation)
 
     return results_dict
 
