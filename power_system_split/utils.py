@@ -778,14 +778,78 @@ def evaluate_split_observables(split,
                                use_pnom = True,
                                inertiaplants = None,
                                inertia_storages = None,
-                               flexible_plants = None,
-                               flexible_storage = None,
                                snet_index = None,
                                criterion = 'nodes'):
     """
+    ARGUMENTS:
+
     split: list of edges split to be used with networkx graph created from pypsa network
 
     pypsa_network: pypsa network object containing solution for timestamps
+
+    timestamp: a pandas timestamp that is contained in the snapshots of the
+               pypsa network
+
+    use_pnom (optional): boolean, whether or not to use the nominal power of a generator to
+              to estimate its inertia
+              defaults to True
+
+    inertiaplants (optional): list of strings that describes the carriers that are assumed
+                   to contribute to the system inertia
+
+                   defaults to None which uses the list of inertia plants provided
+                   in the function "get_inertia_gen_subgraph"
+
+    inertia_storages (optional): list of strings that describes the carriers that are assumed
+                   to contribute to the system inertia
+
+                   defaults to None which uses the list of inertia storages provided
+                   in the function "get_inertia_gen_subgraph"
+
+    snet_index (optional): integer, gives the index of the subnet of the pypsa network to use
+                 defaults to None
+
+    criterio (optional): string, that describes which criterion to use to determine which
+               subgraphs are evaluated.
+               defaults to "nodes"
+
+               If "nodes" is chosen, only subgraphs with
+               at least 10 nodes are evaluated.
+
+               If "load" is chosen, the split is only evaluated if none of the split
+               components contains 90 % of the total load or generation. In this case,
+               every split component is evaluated independent of the component size
+
+    RETURNS:
+
+    results_dict: dictionary of results with keywords 'inertia_proxy' and
+                  'load_imbalance'.
+                  NOTE: TO GET THE ROCOF FROM LOAD IMBALANCE AND INERTIA PROXY
+                  YOU NEED TO MULTIPLY INERTIA PROXY BY THE INERTIA CONSTANT
+                  (SEE BELOW) AND TAKE INTO ACCOUNT THE SYSTEM FREQUENCY
+
+                  Each keyword contains a list with length corresponding to the number
+                  of split components as evaluated based on the criterion given.
+                  To reproduce these split components call
+                  "get_split_components(split,Graph, criterion = criterion)" with
+                  the split and the networkx Graph representing the subnetwork under
+                  consideration.
+
+                  'inertia_proxy' is the inertia estimate based on the sum of nominal powers
+                  of all plants and storages that contribute with at least 5 % of their
+                  nominal power at the given point in time and are listed in the inertia
+                  plants list.
+                  NOTE: THIS ESTIMATE DOES NOT INCORPORATE THE INERTIA CONSTANT.
+                  TO GET THE ACTUAL INERTIA, MULTIPLY EITHER BY A GLOBAL CONSTANT
+                  (e.g. H = 6s^{-1}) OR DEFINE INDDIVIDUAL INERTIA CONSTANTS IN
+                  THE FUNCTION "get_inertia_gen_subgraph"
+
+                  'load_imbalance' is the load imbalance for each subgraph in units
+                  of MW, i.e. its generation surplus or the missing generation.
+                  It assumes that HVDC transport stays the same as before the split,
+                  since the split is assumed to occur instantenously and thus leaves
+                  HVDC transport unchanged.
+
     """
 
     assert isinstance(timestamp,pd.Timestamp)
