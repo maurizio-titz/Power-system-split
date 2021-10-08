@@ -2,21 +2,46 @@
 [![pipeline status](https://jugit.fz-juelich.de/network-science-group/power-system-split/badges/master/pipeline.svg)](https://jugit.fz-juelich.de/network-science-group/power-system-split/-/commits/master)
 [![coverage report](https://jugit.fz-juelich.de/network-science-group/power-system-split/badges/master/coverage.svg)](https://jugit.fz-juelich.de/network-science-group/power-system-split/-/commits/master)
 
+Code accompanying the mansucript "Blabla". Preprint: https://arxiv.org/abs/blabla
+
+TODO: Insert title and arxiv link
+
 ## Installation
 
-All the requirements can be found in `requirements.txt` and the package can be installed using `pip install -r requirements.txt`. Tested for python 3.7.
+The code is written in Python (tested with python 3.7). To install the required dependencies execute the following commands:
 
-To get the code running, copy the German data into a folder `power_system_split/data/Germany/`. The European data should lie under `power_system_split/data/European_networks/`.
+```[python]
+python3.7 -m venv ./venv
+source ./venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Content
+
+The `scripts` folder contains scripts to reproduce the paper results. The `notebook` folder contains a notebook to produce the paper figures from the results and an overview notebook of the workflow. The `power_system_split` folder contains the relevant utilities for cascade simulation and evaluation, as well as functions for visualisation.
 
 ## Usage
-The typical procedure consists of 
-1. Running the cascade algorithm (see [example file](power_system_split/Example_run_cascades.py) )
-1. Evaluating the cascade results by calculating inertia and load imbalance for each split component and split (see [example file](power_system_split/Example_evaluate_cascade_results.py))
-1. Visualising the results and calculating additional features, such as prototypical, clustered splits (see [example file](power_system_split/Example_visualise_results.py))
 
-The entire workflow is summarised examplarily in a [jupyter notebook](Example_run.ipynb).
+The `scripts` contain our workflow with three stages:
+
+- `1_run_cascade_code.py` : Running the cascade algorithm. 
+- `2_evaluate_cascade.py`: Evaluating the cascade results by calculating inertia and load imbalance for each split component and split. 
+- `3_cluster_split_components.py`: Calculating prototypical, clustered splits.
+
+TODO: add script parameters and outputs
+
+The entire workflow is again summarised examplarily in a [jupyter notebook](notebooks/Example_of_whole_workflow.ipynb).
+
+## Input data and results
+All the input data to run the scripts is publicly available. We have uploaded the input data and the results of our workflow [on zenodo](https://zenodo.org/record/blabla).
+
+TODO: Insert zenodo link and complete info on data below
+
+- Input data: 
+- Results:  
 
 ## Illustration
+
 The following image displays nodes that remain connected after a large system split
 with 99 % probability:
 ![alt text](img/Likely_splits_node_based_2013_threshold_0.99_edges.png "Nodes that remain connected likely after a large system split")
