@@ -24,21 +24,30 @@ The `scripts` folder contains scripts to reproduce the paper results. The `noteb
 
 The `scripts` contain our workflow with three stages:
 
-- `1_run_cascade_code.py` : Running the cascade algorithm. 
+- `1_run_cascade_code.py` : Running the cascade algorithm.
 - `2_evaluate_cascade.py`: Evaluating the cascade results by calculating inertia and load imbalance for each split component and split. 
 - `3_cluster_split_components.py`: Calculating prototypical, clustered splits.
 
-TODO: add script parameters and outputs
+TODO: add script parameters and outputs,
 
 The entire workflow is again summarised examplarily in a [jupyter notebook](notebooks/Example_of_whole_workflow.ipynb).
 
 ## Input data and results
+
 All the input data to run the scripts is publicly available. We have uploaded the input data and the results of our workflow [on zenodo](https://zenodo.org/record/blabla).
 
 TODO: Insert zenodo link and complete info on data below
 
-- Input data: 
+- Input data: Put the solved pypsa networks in `data/European_networks/`. 
 - Results:  
+
+## Runtime
+
+These runtimes are estimated on a machine with 32 CPUs of type "Intel(R) Xeon(R) CPU E5-2667 v4 @ 3.20GHz" and 504 GB of memory.
+
+- `1_run_cascade_code.py`: ~ 12 hour for one Co2 level
+- `2_evaluate_cascade.py`: ~ 24 hours for one Co2 level 
+- `3_cluster_split_components.py`: 
 
 ## Illustration
 

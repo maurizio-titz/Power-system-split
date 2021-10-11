@@ -1,50 +1,51 @@
+import pickle
 import sys
-import pickle,itertools
-import requests, json
-import copy
 
 import networkx as nx
 import numpy as np
 import pypsa
+from tqdm import tqdm
 
-#date_string = datetime.datetime.now().strftime("%I_%M_%B_%d")
+sys.path.append('./power_system_split/')
+import utils
 
-path = '/media/fkaiser/'
+# Setup paths to solved PyPSA networks and results of this script
+path_to_pypsa_network   = './data/European_networks/'
+save_path =  './results/cascade_results/'
 
-sys.path.append(path+'Code/power-system-split/power_system_split/')
-import utils,visualisation
+# Load co2 level
+co2l = float(sys.argv[1])
 
-path_to_pypsa_network   = path + 'Data/system_split/European_Networks/New_networks_CO2_levels/'
-save_path = path + 'Data/system_split/European_Networks/New_networks_CO2_levels/Results/'
-
-current_month = int(sys.argv[1])
-co2l = float(sys.argv[2])
-
+# Load PyPSA network
 network = pypsa.Network()
-network.import_from_netcdf(path_to_pypsa_network+'elec_s_800_ec_lv1.0_Co2L%.1f-3H.nc'%co2l) 
+network.import_from_netcdf(path_to_pypsa_network+f'elec_s_800_ec_lv1.0_Co2L{co2l}-3H.nc')
 network.determine_network_topology()
 
+# Select a particular subnetwork for calculations (if the pypsa network has different ones).
+# Otherwise you can choose None or -1.
+# For our data set, "0" indicates the Continental European AC grid. 
 snet_index = 0
-snet = network.sub_networks['obj'][snet_index]
 
-branches = snet.branches()
-branches = branches[["bus0","bus1","x_pu_eff","s_nom"]]
+# Build graph for subnetwork
+G = utils.build_networkx_graph(network, snet_index= snet_index)
 
-G = utils.build_networkx_graph(branches)
-
+# Get line index and line limits for cascade simulation
+# Line index is a unique number to identify the given edge.
+# It is directly extracted from pypsa
 indices = nx.get_edge_attributes(G, 'line_index')
 line_limits = nx.get_edge_attributes(G, 's_nom')
 
-current_snapshots = network.snapshots[network.snapshots.month == current_month]
+# Extract time steps
+current_snapshots = network.snapshots
 
-### iterate only over non-bridge edges for now
+# Iterate only over non-bridge edges for now
 bridges = list(nx.bridges(nx.Graph(G)))
-
 non_bridges = list(set(list(G.edges())) - set(bridges))
 
 splitting_cascades = {}
 
-for snapshot in current_snapshots:
+# Iterate over each time step in data set
+for snapshot in tqdm(current_snapshots[:10]):
 
     splitting_cascades[snapshot.strftime('%d_%m_%Y_%H')] = []
 
@@ -56,6 +57,7 @@ for snapshot in current_snapshots:
     for key in l_copy.keys():
         initial_loading[key[::-1]] = initial_loading[key]
 
+    # Simulate cascade for every (non-bridge) edge in the (sub)network
     for edge in non_bridges:
 
         failing_links, system_split = utils.simulate_cascade_PTDF_based_edge_based_reduced(G,
@@ -65,5 +67,5 @@ for snapshot in current_snapshots:
         if system_split:
             splitting_cascades[snapshot.strftime('%d_%m_%Y_%H')].append(failing_links)
 
-with open(save_path + 'system_splits_%i_Co2L%.1f.pickle' % (current_month, co2l), 'wb') as handle:
+with open(save_path + f'system_splits_Co2L{co2l}.pickle' , 'wb') as handle:
     pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)

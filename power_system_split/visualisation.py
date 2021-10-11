@@ -5,19 +5,17 @@
 visualise cascade results"""
 
 import sys
+
+import networkx as nx
 import numpy as np
 import pandas as pd
-import networkx as nx
-
-from pypsa import components
-from sklearn import cluster
-from sklearn.cluster import AgglomerativeClustering, DBSCAN
+from sklearn.cluster import DBSCAN, AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 from tqdm import tqdm
 
 sys.path.append('../power_system_split/')
-sys.path.append('../')
-from power_system_split.utils import get_split_components
+from utils import get_split_components
+
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
                                                splitting_cascades_in,

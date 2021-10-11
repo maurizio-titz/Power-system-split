@@ -8,7 +8,7 @@ import itertools
 import numpy as np
 import networkx as nx
 import pandas as pd
-from scipy.sparse import csc_matrix,lil_matrix,spdiags
+from scipy.sparse import lil_matrix,spdiags
 from scipy.sparse.linalg import spsolve
 
 def construct_incidencematrix_from_orientation(Graph,return_np_array = True):

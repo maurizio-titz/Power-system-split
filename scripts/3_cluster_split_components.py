@@ -1,39 +1,37 @@
-import sys
 import pickle
+import sys
 
 import networkx as nx
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pypsa
-
 from sklearn.neighbors import RadiusNeighborsClassifier
 
-
-path = '/media/fkaiser/'
-
-#sys.path.append(path+'Code/power-system-split/power_system_split/')
-sys.path.append('../power_system_split/')
-#sys.path.append('./')
-import utils,visualisation
-
+sys.path.append('./power_system_split/')
+import utils
+import visualisation
 
 # Setup paths 
-path_to_pypsa_network   = path + 'Data/system_split/European_Networks/New_networks_CO2_levels/'
-evaluation_result_path = path + 'Data/system_split/European_Networks/New_networks_CO2_levels/Results/'
-cluster_results_path = '/media/jkruse/Projects/system_splits/power-system-split/results/'
+path_to_pypsa_network   = './data/European_networks/'
+path_to_cascades   = './results/cascade_results/'
+path_to_evaluation = './results/evaluation_results/'
+save_path = './results/split_clustering_results/'
 
-# Setup parameters
-criterion = 'nodes' # or 'load'
+# Setup parameters for network
+criterion = 'nodes' 
 snet_index = 0 # only AC grid of CE
 co2l_list = np.arange(0.0,0.99,0.05)
-subset_size_for_clustering = 0.01
-# the node-criterion only selects splits with >10 nodes, 
-# so we have to resolve a least hamming distance between the cluster of >9
+
+# Choose fraction of simulations for agglomerative clustering
+# (the rest is classified via NN classifier)
+subset_size_for_clustering = 0.1 # 0.01
+
+# Choose minimum distance betweem seperated cluster
+# (the node-criterion only selects splits with >10 nodes, 
+# so we have to resolve a least hamming distance between the cluster of >9)
 min_cluster_distance_in_nodes = 9
 
-
 # Load network
-# TODO: the graph G should be independent of co2l right? so that we can load it out of the loop!?
 network = pypsa.Network()
 network.import_from_netcdf(path_to_pypsa_network+'elec_s_800_ec_lv1.0_Co2L0.5-3H.nc') 
 G = utils.build_networkx_graph(network, snet_index = snet_index)
@@ -47,28 +45,32 @@ n_time_stamps = network.snapshots.size
 number_of_simulations = n_initial_failures*n_time_stamps
 
 
-# Indicator vector construction 
+### Indicator vector construction ###
 # (Construct one data set of split components from all CO$_2$ level simulations)
+print('\nConstructing indicator vectors of split components...\n')
 
 component_props = pd.DataFrame(columns= ['co2l','time_stamp', 'number_of_split', 'inertia_proxy',
                                          'load_imbalance', 'available_flexible_generation'])
 indicator_vectors = np.empty((0, len(G)),dtype = 'int')
 
+# Iterate through all Co2 levels
 for co2l in co2l_list[::-1]:
-    print('\n','CO2 level ', co2l)
+    
+    print('Co2 level %.2f' % co2l)
     level = np.round(co2l,2)
     level_string = f'Co2L{level}'
-    print(level_string)
-    splitting_cascades = pickle.load(open(evaluation_result_path+f'system_splits_Co2L{level}.pickle' ,'rb'))
+    
+    # Load results
+    splitting_cascades = pickle.load(open(path_to_cascades+f'system_splits_Co2L{level}.pickle' ,'rb'))
     fname = f'Europe_Co2L{level}_split_evaluation_'+criterion+'_based_snet_%i'%snet_index+'_w_hvdc.pickle'
-    solution_dict = pickle.load(open(evaluation_result_path + fname,'rb'))
+    solution_dict = pickle.load(open(path_to_evaluation + fname,'rb'))
    
-
+    # Construct vectors and their properties
     indicator_vec_level, comp_props_level = visualisation.indicator_vectors_from_rocof_solution(solution_dict,
                                                                                                 splitting_cascades,
                                                                                                 G,
                                                                                                 criterion=criterion)
-
+    # Append to set of vectors and properties
     indicator_vectors = np.concatenate([indicator_vectors, indicator_vec_level])
     comp_props_level.loc[:, 'co2l'] = co2l
     component_props = component_props.append(comp_props_level, ignore_index=True)
@@ -85,7 +87,8 @@ component_props.co2l = component_props.co2l.round(2)
 #component_props = pd.read_hdf(cluster_results_path + 'split_component_properties_all_co2level_{}_based_w_hvdc.h5'.format(criterion))
 
 
-# Cluster split components 
+### Cluster split components ### 
+print('\nClustering indicator vectors...\n')
 
 # Select subset of components for random time stemps and co2 levels
 indices_all_components = np.arange(indicator_vectors.shape[0])
@@ -110,16 +113,12 @@ rnc = RadiusNeighborsClassifier(radius= min_c_distance, metric='hamming', outlie
 rnc.fit(indicator_vectors[subset_indices], subset_c_labels)
 remaining_cluster_labels = rnc.predict(indicator_vectors[remaining_indices])
 component_props.loc[remaining_indices,'cluster_label'] = remaining_cluster_labels
-
-print(component_props.shape)
-print(indicator_vectors.shape)
-print(np.unique(component_props["cluster_label"]))
+print('There are ',np.unique(component_props["cluster_label"]).shape[0], 'unique split cluster.')
 
 
 # Save results
-np.save(cluster_results_path +\
-        'indicator_vectors_all_co2level_{}_based_w_hvdc.npy'.format(criterion),indicator_vectors)
-component_props.to_hdf(cluster_results_path +\
-                       'split_component_properties_all_co2level_{}_based_w_hvdc.h5'.format(criterion),
+np.save(save_path + 'ind_vec_all_co2level_{}_based_w_hvdc.npy'.format(criterion),
+        indicator_vectors)
+component_props.to_hdf(save_path + 'split_comp_props_all_co2level_{}_based_w_hvdc.h5'.format(criterion),
                        key='df')
 
