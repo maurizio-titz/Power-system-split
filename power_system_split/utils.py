@@ -659,7 +659,7 @@ def get_inertia_gen_subgraph(subgraph,generators,current_generation,storages,cur
     if not inertia_storages:
         inertia_storages = ['PHS']
 
-    # threshold below which a generator or  is not counted as being participating
+    # threshold below which a generator or storage is not counted as being participating
     participation_threshold = 0.05
 
     gens                     = generators[generators["bus"].isin(list(subgraph.nodes()))]
@@ -809,7 +809,7 @@ def evaluate_split_observables(split,
     snet_index (optional): integer, gives the index of the subnet of the pypsa network to use
                  defaults to None
 
-    criterio (optional): string, that describes which criterion to use to determine which
+    criterion (optional): string, that describes which criterion to use to determine which
                subgraphs are evaluated.
                defaults to "nodes"
 
