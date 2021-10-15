@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import DBSCAN, AgglomerativeClustering
 from sklearn.metrics import silhouette_score
+from sklearn.neighbors import RadiusNeighborsClassifier
 from tqdm import tqdm
 
 sys.path.append('../power_system_split/')
@@ -49,6 +50,7 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
         in the splitting_cascades dictionary and result summarizes component properties such as the inertia.
         splitting_cascades (dict):  Dictionary with time stamps as keys, which contains all splits occuring
         at this time stamp.
+        nx_graph (networkx graph): Graph of PyPSA network.
         criterion (string): Criterion for selecting system splits.
 
     Returns:
@@ -96,6 +98,8 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
                          'causing_link' : causing_link_index
                          }
 
+                # With `ignore_index=True`, the resulting axis will be labeled 0, 1, …, n - 1.
+                # (such that split_component_props.loc[i] match indicator_vectors[i])
                 split_component_props = split_component_props.append(props, ignore_index=True)
 
 
@@ -240,6 +244,58 @@ def cluster_indicator_vectors_dbscan(indicator_vectors, neighbor_max_dist=0.1, n
 
     return n_clusters, n_noise, labels
 
+
+def cluster_indicator_vectors_combined(indicator_vectors, min_cluster_distance=0.1, subset_ratio=0.01,
+                                       n_jobs=20):
+    """Cluster indicator vectors of graph components into similar groups with Agglomerative clustering and 
+    Nearest-Neighbor classification combined.
+
+    The distance between vectors is quantified by the hamming distance,
+    i.e. the relative number of nodes that are not in the same component (number between 0 and 1).
+    
+    First, a subset of indicator vectors is clustered with Agg. clustering. The rest is then assigned to the cluster
+    with Nearest-Neighbor classification. We use a fixed radius to determine nearest neighbors to account
+    for a minimum distance that should seperate the clusters. 
+
+    Args:
+        indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
+        min_cluster_distance (float): The minimum hamming distance between two clusters (number between 0 and 1).
+        Below this distance, two clusters will be merged during Agglomerative clustering. 
+        subset_ratio (float):  Ratio of indicator vectors used in Agglomerative clustering. 
+        n_jobs (int): Number of jobs.
+
+    Returns:
+        tuple: number of cluster and array of cluster labels for each indicator vector
+    """
+
+    # Select subset of indicator vectors
+    indices_all_components = np.arange(indicator_vectors.shape[0])
+    np.random.shuffle(indices_all_components)
+    subset_indices = indices_all_components[:int(subset_ratio*indicator_vectors.shape[0])]
+    remaining_indices = indices_all_components[int(subset_ratio*indicator_vectors.shape[0]):]
+    
+    print('\n',subset_indices.size, 'components will be used.')
+    print(remaining_indices.size, 'components will be assigned via NN classification.')
+
+    # Cluster subset of vectors
+    n_cluster, subset_c_labels = cluster_indicator_vectors_agglomerative(indicator_vectors[subset_indices], 
+                                                                         min_cluster_distance = min_cluster_distance,
+                                                                         cluster_distance_type = 'average')
+    
+
+
+    # Assign cluster labels to remaining vectors
+    rnc = RadiusNeighborsClassifier(radius= min_cluster_distance, metric='hamming', outlier_label=-1, n_jobs=n_jobs)
+    rnc.fit(indicator_vectors[subset_indices], subset_c_labels)
+    remaining_c_labels = rnc.predict(indicator_vectors[remaining_indices])
+    
+    all_c_labels = np.zeros(indicator_vectors.shape[0])
+    all_c_labels[subset_indices] = subset_c_labels
+    all_c_labels[remaining_indices] = remaining_c_labels
+
+    print('There are ',n_cluster, 'unique split cluster.')
+
+    return n_cluster, all_c_labels
 
 def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_props, nx_graph, node_size=20):
     """Plot clusters of split components on a geographically embedded graph.
