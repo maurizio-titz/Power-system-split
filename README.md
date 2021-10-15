@@ -11,9 +11,8 @@ TODO: Insert title and arxiv link
 The code is written in Python (tested with python 3.7). To install the required dependencies execute the following commands:
 
 ```[python]
-python3.7 -m venv ./venv
-source ./venv/bin/activate
-pip install -r requirements.txt
+conda env create -f environment.yml 
+conda activate system_split
 ```
 
 ## Content
@@ -26,7 +25,7 @@ The `scripts` contain our workflow with three stages:
 
 - `1_run_cascade_code.py` : Running the cascade algorithm.
 - `2_evaluate_cascade.py`: Evaluating the cascade results by calculating inertia and load imbalance for each split component and split. 
-- `3_cluster_split_components.py`: Calculating prototypical, clustered splits.
+- `3_calc_visualization_data.py`: Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits. 
 
 TODO: add script parameters and outputs,
 
@@ -47,7 +46,7 @@ These runtimes are estimated on a machine with 32 CPUs of type "Intel(R) Xeon(R)
 
 - `1_run_cascade_code.py`: ~ 12 hour for one Co2 level
 - `2_evaluate_cascade.py`: ~ 24 hours for one Co2 level 
-- `3_cluster_split_components.py`: 
+- `3_cluster_split_components.py`: ~ 4h 
 
 ## Illustration
 
