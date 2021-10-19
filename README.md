@@ -1,10 +1,10 @@
 # Power System Split
-[![pipeline status](https://jugit.fz-juelich.de/network-science-group/power-system-split/badges/master/pipeline.svg)](https://jugit.fz-juelich.de/network-science-group/power-system-split/-/commits/master)
-[![coverage report](https://jugit.fz-juelich.de/network-science-group/power-system-split/badges/master/coverage.svg)](https://jugit.fz-juelich.de/network-science-group/power-system-split/-/commits/master)
+Code accompanying the mansucript "Blabla". Preprint: https://arxiv.org/abs/blabla .
 
-Code accompanying the mansucript "Blabla". Preprint: https://arxiv.org/abs/blabla
+This project evaluates cascading failures of transmission lines in the European power grid. The project uses PyPSA  
+to simulate future renewable power grids. 
 
-TODO: Insert title and arxiv link
+TODO: Insert title and arxiv link. 
 
 ## Installation
 
@@ -17,19 +17,20 @@ conda activate system_split
 
 ## Content
 
-The `scripts` folder contains scripts to reproduce the paper results. The `notebook` folder contains a notebook to produce the paper figures from the results and an overview notebook of the workflow. The `power_system_split` folder contains the relevant utilities for cascade simulation and evaluation, as well as functions for visualisation.
+The `scripts` folder contains scripts to reproduce the paper results. The `notebook` folder contains a notebook to produce the paper figures from the results. The `power_system_split` folder contains the relevant utilities for cascade simulation and evaluation, as well as functions for visualisation.
 
 ## Usage
 
-The `scripts` contain our workflow with three stages:
+The `scripts` contain our workflow with five stages:
 
-- `1_run_cascade_code.py` : Running the cascade algorithm.
-- `2_evaluate_cascade.py`: Evaluating the cascade results by calculating inertia and load imbalance for each split component and split. 
-- `3_calc_visualization_data.py`: Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits. 
+- `1_calc_pre_outage_data.py`: Calculate inertia and other properties from the (solved) PyPSA networks.
+- `2_run_cascade_code.py` : Run the cascade algorithm on the PyPSA networks.
+- `3_evaluate_cascade.py`: Evaluating the cascade results by calculating inertia and load imbalance for each split.
+- `4_prepare_split_visualization.py`: Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits.
+- `5_calc_inertia_placement.py` : Determine optimal inertia placement to mitigate the impact of system splits. 
 
 TODO: add script parameters and outputs,
 
-The entire workflow is again summarised examplarily in a [jupyter notebook](notebooks/Example_of_whole_workflow.ipynb).
 
 ## Input data and results
 
@@ -44,12 +45,11 @@ TODO: Insert zenodo link and complete info on data below
 
 These runtimes are estimated on a machine with 32 CPUs of type "Intel(R) Xeon(R) CPU E5-2667 v4 @ 3.20GHz" and 504 GB of memory.
 
-- `1_run_cascade_code.py`: ~ 12 hour for one Co2 level
-- `2_evaluate_cascade.py`: ~ 24 hours for one Co2 level 
-- `3_cluster_split_components.py`: ~ 4h 
+- `1_calc_pre_outage_data.py`: ~ 30 min 
+- `2_run_cascade_code.py`: ~ 12 hour for one Co2 level
+- `3_evaluate_cascade.py`: ~ 24 hours for one Co2 level 
+- `4_prepare_split_visualization.py`: ~ 4h 
+- `5_calc_inertia_placement.py` : 
 
-## Illustration
+#TODO: check runtime for first and last script
 
-The following image displays nodes that remain connected after a large system split
-with 99 % probability:
-![alt text](img/Likely_splits_node_based_2013_threshold_0.99_edges.png "Nodes that remain connected likely after a large system split")
