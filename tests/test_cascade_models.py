@@ -3,9 +3,7 @@
 
 import networkx as nx
 import numpy as np
-#import sys
 
-#sys.path.append('../power_system_split/')
 from power_system_split import utils
 
 
