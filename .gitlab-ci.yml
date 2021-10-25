@@ -17,11 +17,11 @@ doctest:
     - python -m doctest README.md
 
 
-pylint:
-  stage: Static Analysis
-  allow_failure: true
-  script:
-  - pylint -d C0301 power_system_split/*.py
+#pylint:
+#  stage: Static Analysis
+#  allow_failure: true
+#  script:
+#  - pylint -d C0301 power_system_split/*.py
 
 testing:
   stage: Test
