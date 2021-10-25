@@ -3,10 +3,8 @@
 
 import networkx as nx
 import numpy as np
-#import sys
+import sys
 
-#sys.path.append('../power_system_split/')
-#import visualisation
 from power_system_split import visualisation
 
 
