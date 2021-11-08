@@ -1,9 +1,12 @@
-image: python:3.7
+image: continuumio/miniconda:4.7.10
 
 before_script:
   - python --version
-  - pip install -r requirements.txt
-  - pip install . pytest pytest-cov pylint
+  - conda env create -f environment.yml --name test 
+  - conda init bash
+  - source ~/.bashrc 
+  - conda activate test 
+  - conda install pytest pytest-cov
 
 
 stages:
@@ -17,11 +20,11 @@ doctest:
     - python -m doctest README.md
 
 
-pylint:
-  stage: Static Analysis
-  allow_failure: true
-  script:
-  - pylint -d C0301 power_system_split/*.py
+#pylint:
+#  stage: Static Analysis
+#  allow_failure: true
+#  script:
+#  - pylint -d C0301 power_system_split/*.py
 
 testing:
   stage: Test

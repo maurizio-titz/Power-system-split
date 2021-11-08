@@ -14,8 +14,8 @@ from sklearn.metrics import silhouette_score
 from sklearn.neighbors import RadiusNeighborsClassifier
 from tqdm import tqdm
 
-sys.path.append('../power_system_split/')
-from utils import get_split_components
+#sys.path.append('../power_system_split/')
+from power_system_split.utils import get_split_components
 
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
