@@ -3,6 +3,7 @@ import sys
 
 import numpy as np
 import pypsa
+import pandas as pd 
 
 sys.path.append('./power_system_split/')
 import utils
@@ -42,51 +43,51 @@ network.import_from_netcdf(path_to_pypsa_network+'elec_s_800_ec_lv1.0_Co2L0.5-3H
 G = utils.build_networkx_graph(network, snet_index = snet_index)
 
 
-# ##### Indicator vector construction for split clustering #####
-# # (Construct one data set of split components from all CO$_2$ level simulations)
+##### Indicator vector construction for split clustering #####
+# (Construct one data set of split components from all CO$_2$ level simulations)
 
-# print('\nConstructing indicator vectors of split components...\n')
-# component_props = pd.DataFrame(columns= ['co2l','time_stamp', 'number_of_split',
-#                                          'inertia_proxy', 'load_imbalance' ])
-# indicator_vectors = np.empty((0, len(G)),dtype = 'int')
+print('\nConstructing indicator vectors of split components...\n')
+component_props = pd.DataFrame(columns= ['co2l','time_stamp', 'number_of_split',
+                                         'inertia_proxy', 'load_imbalance' ])
+indicator_vectors = np.empty((0, len(G)),dtype = 'int')
 
-# # Iterate through all Co2 levels
-# for co2l in co2l_list[::-1]:
+# Iterate through all Co2 levels
+for co2l in co2l_list[::-1]:
     
-#     print('Co2 level %.2f' % co2l)
-#     level = np.round(co2l,2)
+    print('Co2 level %.2f' % co2l)
+    level = np.round(co2l,2)
     
-#     # Load results
-#     splitting_cascades = pickle.load(open(path_to_cascades+f'system_splits_Co2L{level}.pickle' ,'rb'))
-#     fname = f'Europe_Co2L{level}_split_evaluation_'+criterion+'_based_snet_%i'%snet_index+'_w_hvdc.pickle'
-#     solution_dict = pickle.load(open(path_to_evaluation + fname,'rb'))
+    # Load results
+    splitting_cascades = pickle.load(open(path_to_cascades+f'system_splits_Co2L{level}.pickle' ,'rb'))
+    fname = f'Europe_Co2L{level}_split_evaluation_'+criterion+'_based_snet_%i'%snet_index+'_w_hvdc.pickle'
+    solution_dict = pickle.load(open(path_to_evaluation + fname,'rb'))
    
-#     # Construct vectors and their properties
-#     indicator_vec_level, comp_props_level = vis.indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades,
-#                                                                                       G, criterion=criterion)
-#     # Append to set of vectors and properties
-#     indicator_vectors = np.concatenate([indicator_vectors, indicator_vec_level])
-#     comp_props_level.loc[:, 'co2l'] = co2l
-#     component_props = component_props.append(comp_props_level, ignore_index=True)
+    # Construct vectors and their properties
+    indicator_vec_level, comp_props_level = vis.indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades,
+                                                                                      G, criterion=criterion)
+    # Append to set of vectors and properties
+    indicator_vectors = np.concatenate([indicator_vectors, indicator_vec_level])
+    comp_props_level.loc[:, 'co2l'] = co2l
+    component_props = component_props.append(comp_props_level, ignore_index=True)
     
-# indicator_vectors = indicator_vectors.astype('int')
-# component_props.co2l = component_props.co2l.round(2)
+indicator_vectors = indicator_vectors.astype('int')
+component_props.co2l = component_props.co2l.round(2)
 
-# # Alternatively: Load old indicator vector results
-# #indicator_vectors = np.load(save_path + ind_vec_file)
-# #component_props = pd.read_hdf(save_path + props_file)
+# Alternatively: Load old indicator vector results
+#indicator_vectors = np.load(save_path + ind_vec_file)
+#component_props = pd.read_hdf(save_path + props_file)
 
-# #### Cluster split components #### 
+#### Cluster split components #### 
 
-# print('\nClustering indicator vectors...\n')
-# n_cluster, cluster_labels = vis.cluster_indicator_vectors_combined(indicator_vectors,
-#                                                                    min_cluster_distance=min_cluster_dist_nodes/len(G),
-#                                                                    subset_ratio=subset_size_for_clustering)
-# component_props.loc[:, 'cluster_label'] = cluster_labels
+print('\nClustering indicator vectors...\n')
+n_cluster, cluster_labels = vis.cluster_indicator_vectors_combined(indicator_vectors,
+                                                                   min_cluster_distance=min_cluster_dist_nodes/len(G),
+                                                                   subset_ratio=subset_size_for_clustering)
+component_props.loc[:, 'cluster_label'] = cluster_labels
 
-# # Save cluster results 
-# np.save(save_path + ind_vec_file, indicator_vectors)
-# component_props.to_hdf(save_path + props_file, key='df')
+# Save cluster results 
+np.save(save_path + ind_vec_file, indicator_vectors)
+component_props.to_hdf(save_path + props_file, key='df')
 
 
      
