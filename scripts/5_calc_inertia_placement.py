@@ -38,8 +38,8 @@ component_props = pd.read_hdf(path_to_vis_results + 'split_comp_props_all_co2lev
 indicator_vectors = np.load(path_to_vis_results + 'ind_vec_all_co2level_{}_based_w_hvdc_dist_9.npy'.format(criterion))
 
 # assume that synthetic inertia corresponding to
-# a generator with 1 GW is added
-additional_synthetic_inertia_per_step = 10000 # [MW]
+# a generator with x MW is added
+additional_synthetic_inertia_per_step = 1000 # [MW]
 
 # Quantile for value at risk (var) estimation
 q= 0.999
@@ -47,7 +47,7 @@ q= 0.999
 # Calculate reference var from 95% Co2 system
 comp_props_co2l95 = component_props[component_props.co2l==0.95].copy()
 comp_props_co2l95['rocof'] = 50*comp_props_co2l95.load_imbalance /  (comp_props_co2l95.inertia_proxy*2*6)
-var_co2l95 = vis.val_at_risk_rocof(comp_props_co2l95, number_of_simulations, q)
+var_co2l95 = vis.val_at_risk(comp_props_co2l95, number_of_simulations, q)
 
 
 for co2l in co2l_list:
@@ -63,8 +63,7 @@ for co2l in co2l_list:
     # Initialize values for inertia placement
     step=1
     new_rocof = comp_props_level.old_rocof.values
-    new_var = vis.val_at_risk_rocof(comp_props_level, number_of_simulations, q,
-                                    'old_rocof')
+    new_var = vis.val_at_risk(comp_props_level, number_of_simulations, q, 'old_rocof')
     new_inertia = comp_props_level.inertia_proxy.values
     old_inertia = comp_props_level.inertia_proxy.values
     inertia_placement_steps = pd.DataFrame(columns=['new_var', 'added_node_index'], dtype=np.float)
@@ -91,7 +90,7 @@ for co2l in co2l_list:
             potential_rocof = 50*comp_props_level.load_imbalance.values / (potential_inertia*2*6)
             potential_comp_props.loc[:, 'rocof'] = potential_rocof
             
-            potential_var = vis.val_at_risk_rocof(potential_comp_props, number_of_simulations, q)
+            potential_var = vis.val_at_risk(potential_comp_props, number_of_simulations, q)
                     
             # Accept inertia placement if it improves the var
             if potential_var < new_var:

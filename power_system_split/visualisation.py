@@ -4,8 +4,6 @@
 """ This module contains useful methods to analyse and
 visualise cascade results"""
 
-import sys
-
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -14,8 +12,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.neighbors import RadiusNeighborsClassifier
 from tqdm import tqdm
 
-#sys.path.append('../power_system_split/')
-from power_system_split.utils import get_split_components
+from utils import get_split_components
 
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
@@ -342,34 +339,38 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_
             ax.set_title('{}'.format(label))
 
 
-def val_at_risk_rocof(data, n_total, q, target='rocof', method='min'):
-    """ Calculate value at risk of RoCoF data for one Co2 level.
+def val_at_risk(data, n_total, q, target='rocof', method='min'):
+    """ Calculate value at risk of a target for one Co2 level.
 
     Args:
         data (pandas.DataFrame): Split component properties for one Co2 level, with 
-        'time_stamp', 'number_of_split', 'rocof', ... as columns. 
-        n_total (int): Total number of cascade simulations
+        'time_stamp', 'number_of_split', <target> as columns. If 
+        n_total (int): Total number of data points 
         q (float): Quantile, between 0 and 1. 
-        target (str, optional): Specify column name where RoCoF is stored. 
-        method (str, optional): Method to extract one RoCof from all components
-        in one split event. Defaults to 'min'.
+        target (str, optional): Specify column name where RoCoF is stored. Defaults to 'rocof'. 
+        method (str, optional): Method to quantify risk of one split component. Defaults to 'min'.
 
     Returns:
         [float]: value at risk
     """    
     
-    group_keys = [data.time_stamp, data.number_of_split]
-    
     if method=='min':
-        result = data.loc[:, target].groupby(by=group_keys).min().abs().values
-    if method=='max':
-        result = data.loc[:, target].groupby(by=group_keys).max().values
-    if method=='abs_max':
-        result = data.loc[:, target].abs().groupby(by=group_keys).max().values   
+        r_tl = -data.loc[:,target].clip(upper=0).copy()
+    elif method=='max':
+        r_tl = data.loc[:,target].clip(lower=0).copy()
+    elif method=='abs':
+        r_tl = data.loc[:,target].abs().copy()
+    else:
+        raise('Method {} not implemented'.format(method))
+         
+    group_keys = [data.time_stamp, data.number_of_split]
+    r_tl = r_tl.groupby(by=group_keys).max().values
     
-    n_data = result.shape[0]
-    n_missing = n_total - n_data
+    n_r_tl = r_tl.shape[0]
+    n_missing = n_total - n_r_tl
+  
     if n_missing > 0:
-        result = np.append(result, np.zeros(n_missing))
+        r_tl = np.append(r_tl, np.zeros(n_missing))
     
-    return np.quantile(result,q)
+    
+    return np.quantile(r_tl,q)
