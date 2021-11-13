@@ -12,7 +12,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.neighbors import RadiusNeighborsClassifier
 from tqdm import tqdm
 
-from utils import get_split_components
+from .utils import get_split_components
 
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,

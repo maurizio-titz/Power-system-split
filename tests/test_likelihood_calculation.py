@@ -3,7 +3,6 @@
 
 import networkx as nx
 import numpy as np
-import sys
 
 from power_system_split import visualisation
 
