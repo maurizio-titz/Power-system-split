@@ -10,12 +10,11 @@ before_script:
 
 
 stages:
-  - Static Analysis
   - Test
 
 
 doctest:
-  stage: Static Analysis
+  stage: Test
   script:
     - python -m doctest README.md
 
