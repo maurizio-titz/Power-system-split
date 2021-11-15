@@ -633,6 +633,7 @@ def calc_system_inertia_over_time(pypsa_network,
 
         # Rescale load shedding since units for load shedding are different
         # than for generation, storage and load
+        # (Note: In this project load shedding is not implement)
         load_shedding_indices = pypsa_network.generators[pypsa_network.generators.carrier.isin(['load'])].index
 
         current_generation = pypsa_network.generators_t.p.loc[timestamp].copy()
@@ -859,6 +860,7 @@ def evaluate_split_observables(split,
 
     # Rescale load shedding since units for load shedding are different
     # than for generation, storage and load
+    # (Note: In this project load shedding is not implement)
     load_shedding_indices = pypsa_network.generators[pypsa_network.generators.carrier.isin(['load'])].index
 
     current_generation = pypsa_network.generators_t.p.loc[timestamp].copy()
