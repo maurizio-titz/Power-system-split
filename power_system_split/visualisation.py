@@ -338,39 +338,42 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_
         else:
             ax.set_title('{}'.format(label))
 
-
-def val_at_risk(data, n_total, q, target='rocof', method='min'):
-    """ Calculate value at risk of a target for one Co2 level.
+import warnings
+def val_at_risk(data, n_total, q, target='rocof', method='abs'):
+    """ Calculate value at impact of a target for one Co2 level.
 
     Args:
         data (pandas.DataFrame): Split component properties for one Co2 level, with 
-        'time_stamp', 'number_of_split', <target> as columns. If 
-        n_total (int): Total number of data points 
+        'time_stamp', 'number_of_split', <target> as columns. 
+        n_total (int): Total number of data points for which the quantile is calculated. If <data> does not
+        supply all data points, they will be extended by zeros. The quantile is then evaluated on the extended
+        data array.
         q (float): Quantile, between 0 and 1. 
-        target (str, optional): Specify column name where RoCoF is stored. Defaults to 'rocof'. 
-        method (str, optional): Method to quantify risk of one split component. Defaults to 'min'.
+        target (str, optional): Specify column name where target is stored. Defaults to 'rocof'. 
+        method (str, optional): Method to quantify impact of one split component. Defaults to 'abs'.
 
     Returns:
         [float]: value at risk
     """    
-    
+
+        
     if method=='min':
-        r_tl = -data.loc[:,target].clip(upper=0).copy()
+        r = -data.loc[:,target].clip(upper=0).copy()
     elif method=='max':
-        r_tl = data.loc[:,target].clip(lower=0).copy()
+        r = data.loc[:,target].clip(lower=0).copy()
     elif method=='abs':
-        r_tl = data.loc[:,target].abs().copy()
+        r = data.loc[:,target].abs().copy()
     else:
         raise('Method {} not implemented'.format(method))
-         
+        
     group_keys = [data.time_stamp, data.number_of_split]
-    r_tl = r_tl.groupby(by=group_keys).max().values
+    r = r.groupby(by=group_keys).max().values
     
-    n_r_tl = r_tl.shape[0]
-    n_missing = n_total - n_r_tl
-  
+    n_r = r.shape[0]
+    n_missing = n_total - n_r
+
     if n_missing > 0:
-        r_tl = np.append(r_tl, np.zeros(n_missing))
+        r = np.append(r, np.zeros(n_missing))
     
-    
-    return np.quantile(r_tl,q)
+    # Use interpolation other than 'linear', as that would cause problems with np.inf in the data
+    return np.quantile(r,q, interpolation='higher')

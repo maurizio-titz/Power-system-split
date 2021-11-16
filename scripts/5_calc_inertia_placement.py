@@ -5,10 +5,9 @@ import pypsa
 import pandas as pd
 import networkx as nx 
 
-sys.path.append('./power_system_split/')
-import utils
-import visualisation as vis 
-
+sys.path.append('./')
+from power_system_split import utils
+from power_system_split import visualisation as vis 
 
 
 # Setup paths 
@@ -39,15 +38,16 @@ indicator_vectors = np.load(path_to_vis_results + 'ind_vec_all_co2level_{}_based
 
 # assume that synthetic inertia corresponding to
 # a generator with x MW is added
-additional_synthetic_inertia_per_step = 1000 # [MW]
+additional_synthetic_inertia_per_step = 10000 # [MW]
 
 # Quantile for value at risk (var) estimation
-q= 0.999
+q= 0.997
 
-# Calculate reference var from 95% Co2 system
-comp_props_co2l95 = component_props[component_props.co2l==0.95].copy()
-comp_props_co2l95['rocof'] = 50*comp_props_co2l95.load_imbalance /  (comp_props_co2l95.inertia_proxy*2*6)
-var_co2l95 = vis.val_at_risk(comp_props_co2l95, number_of_simulations, q)
+# Calculate reference var from reference level
+ref_level = 0.9
+comp_props_co2lref = component_props[component_props.co2l==ref_level].copy()
+comp_props_co2lref['rocof'] = 50*comp_props_co2lref.load_imbalance /  (comp_props_co2lref.inertia_proxy*2*6)
+var_co2lref = vis.val_at_risk(comp_props_co2lref, number_of_simulations, q, method='abs')
 
 
 for co2l in co2l_list:
@@ -63,7 +63,7 @@ for co2l in co2l_list:
     # Initialize values for inertia placement
     step=1
     new_rocof = comp_props_level.old_rocof.values
-    new_var = vis.val_at_risk(comp_props_level, number_of_simulations, q, 'old_rocof')
+    new_var = vis.val_at_risk(comp_props_level, number_of_simulations, q, 'old_rocof', method='abs')
     new_inertia = comp_props_level.inertia_proxy.values
     old_inertia = comp_props_level.inertia_proxy.values
     inertia_placement_steps = pd.DataFrame(columns=['new_var', 'added_node_index'], dtype=np.float)
@@ -72,9 +72,11 @@ for co2l in co2l_list:
     potential_comp_props = comp_props_level.copy()
     
     
-    # Continue placing inertia until the 95% reference value is reached
-    while new_var > var_co2l95 :
+    # Continue placing inertia until the reference value is reached
+    while new_var > var_co2lref :
 
+        best_step_node_index = np.nan
+        
         # Try all potential nodes 
         for count, node in enumerate(list(G.nodes())):
 
@@ -90,8 +92,8 @@ for co2l in co2l_list:
             potential_rocof = 50*comp_props_level.load_imbalance.values / (potential_inertia*2*6)
             potential_comp_props.loc[:, 'rocof'] = potential_rocof
             
-            potential_var = vis.val_at_risk(potential_comp_props, number_of_simulations, q)
-                    
+            potential_var = vis.val_at_risk(potential_comp_props, number_of_simulations, q, method='abs')
+
             # Accept inertia placement if it improves the var
             if potential_var < new_var:
                 
@@ -100,7 +102,11 @@ for co2l in co2l_list:
                 new_inertia = potential_inertia
                 best_step_node_index = count
 
-        print(step, ' New var:', new_var, 'Target Var:', var_co2l95)
+        print(step, ' New var:', new_var, 'Target Var:', var_co2lref)
+        
+        if best_step_node_index==np.nan:
+            print('VaR could not be improved through inertia placement.'+\
+                  'You probably need lower quantiles or larger inertia steps')
         
         # Save the best inertia allocation of this placement step      
         inertia_placement_steps.loc[step, 'added_node_index'] = best_step_node_index
