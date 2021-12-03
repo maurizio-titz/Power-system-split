@@ -12,8 +12,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.neighbors import RadiusNeighborsClassifier
 from tqdm import tqdm
 
-from .utils import get_split_components
-
+from power_system_split import utils
 
 def get_split_adjacencies_from_rocof_solutions(solution_dict,
                                                splitting_cascades_in,
@@ -76,7 +75,7 @@ def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_
         for i, split_number in enumerate(solution_dict[time_stamp][::2]):
 
             split = splitting_cascades[time_stamp][split_number]
-            components = get_split_components(split, nx_graph, criterion = criterion)
+            components = utils.get_split_components(split, nx_graph, criterion = criterion)
 
             component_props = solution_dict[time_stamp][i*2+1]
 
@@ -338,9 +337,9 @@ def plot_component_cluster(indicator_vectors, plot_axs, cluster_labels, cluster_
         else:
             ax.set_title('{}'.format(label))
 
-import warnings
+
 def val_at_risk(data, n_total, q, target='rocof', method='abs'):
-    """ Calculate value at impact of a target for one Co2 level.
+    """ Calculate value at risk of a target for one Co2 level.
 
     Args:
         data (pandas.DataFrame): Split component properties for one Co2 level, with 
@@ -377,3 +376,7 @@ def val_at_risk(data, n_total, q, target='rocof', method='abs'):
     
     # Use interpolation other than 'linear', as that would cause problems with np.inf in the data
     return np.quantile(r,q, interpolation='higher')
+
+
+def calc_rocof(load_imbalance, inertia_proxy):
+    return 50*load_imbalance /  (inertia_proxy*2*6)
