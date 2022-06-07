@@ -180,7 +180,6 @@ def get_effective_injections(Graph,initial_flows):
 def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
                                                    P0,
                                                    trigger_links,
-                                                   line_limits,
                                                    return_loading_dict = False):
     """Simulate a cascade of failures using the network topology G, which is assumed to have a property 'orientation'
     for each edge, the initially failing links, the initial flows (as dictionary) and the line limits (as dictionary).
@@ -192,7 +191,7 @@ def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
     if isinstance(Graph,nx.MultiGraph):
         multi_graph = True
 
-    failure_cascade = trigger_links
+    failure_cascade = trigger_links.copy()
 
     stop = 0
     system_split = False
@@ -200,9 +199,11 @@ def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
     H = Graph.copy()
 
     while not stop:
+        
+
         for e in failure_cascade:
             if H.has_edge(*e):
-                H.remove_edge(*e)
+                apply_line_failure(H, e)
 
         if not nx.is_connected(H):
             system_split = True
@@ -230,11 +231,16 @@ def simulate_cascade_PTDF_based_edge_based_reduced(Graph,
             theta = np.dot(L_inv,P0)
 
         flows_H = B_d.dot((I.T).dot(theta))
-
-        if not multi_graph:
-            smax = np.array([line_limits[(u,v)] for u,v in H.edges()])
-        else:
-            smax = np.array([line_limits[(u,v,key)] for u,v,key in H.edges(keys = True)])
+        
+        # Get a list of (updated) line limits
+        line_limits = nx.get_edge_attributes(H, 's_nom')
+        smax = np.array([line_limits[(u,v)] for u,v in H.edges()])
+        
+        #TODO: clean following code up if not needed anymore
+        # if not multi_graph:
+        #     smax = np.array([line_limits[(u,v)] for u,v in H.edges()])
+        # else:
+        #     smax = np.array([line_limits[(u,v,key)] for u,v,key in H.edges(keys = True)])
 
         next_indices = np.where(np.abs(flows_H)>smax)[0]
 
@@ -394,13 +400,13 @@ def build_networkx_graph(pypsa_network,multi_graph = False, snet_index = None):
     positions = pypsa_network.buses[["x","y"]]
     pos = dict(zip(positions.index,list(zip(positions.x,positions.y))))
 
-    branches = branches[["bus0", "bus1", "x_pu_eff", "s_nom"]]
+    branches = branches[["bus0", "bus1", "x_pu_eff", "s_nom", "num_parallel"]]
 
     if not multi_graph:
         F = nx.Graph()
     else:
         F = nx.MultiGraph()
-
+    
     for line_index,line in branches.iterrows():
 
         if not F.has_edge(line['bus0'],line['bus1']):
@@ -408,8 +414,12 @@ def build_networkx_graph(pypsa_network,multi_graph = False, snet_index = None):
                        weight = 1/line['x_pu_eff'],
                        orientation = (line['bus0'],line['bus1']),
                        line_index = [line_index[1]],
-                       s_nom = line['s_nom'])
+                       s_nom = line['s_nom'],
+                       num_parallel= line['num_parallel'])
         else:
+            #TODO check wether we really have to add up lines here. If not: remove this option and state clearly that we
+            # assume single line graphs!
+            print('WARNING: Multiple lines between two buses are not supported! The results might be incorrect!')
             if not multi_graph:
                 ### add up line susceptance and line limit to add the lines to a bulk and store the line indices of all lines
                 ### that were grouped together
@@ -1024,3 +1034,64 @@ def inertia_placement(comp_props, indicator_vectors, var_ref, m, q, number_of_si
         step+=1
     
     return comp_props_new, inertia_placement_info
+
+
+
+def apply_line_failure(graph, edge):
+
+    num_parallel = graph.edges[edge]['num_parallel']
+    s_nom = graph.edges[edge]['s_nom']
+    weight = graph.edges[edge]['weight']  
+
+    new_num_parallel =  calc_num_parallel_after_failure(num_parallel) 
+    
+    if new_num_parallel==0:
+        graph.remove_edge(*edge)
+    else:
+        graph.edges[edge]['num_parallel'] = new_num_parallel
+        graph.edges[edge]['weight'] = weight * new_num_parallel / num_parallel
+        graph.edges[edge]['s_nom'] =  s_nom * new_num_parallel / num_parallel
+
+
+def calc_num_parallel_after_failure(num_parallel):
+    
+
+    if num_parallel==0:
+        raise ValueError('With num_parallel = 0 no failure is possible!')
+    elif 0<num_parallel<0.5:
+        num_parallel_new = 0
+    elif 0.5<=num_parallel<1:
+        num_parallel_new = num_parallel / 2
+    elif np.isclose(num_parallel,1):
+        num_parallel_new = 0
+    elif num_parallel>1:
+        num_parallel_new = num_parallel - 1
+    else:
+        raise ValueError('num_parallel does not have a valid value!')
+
+        
+    return num_parallel_new
+
+
+def calc_possible_double_line_failures(graph):
+    
+    bridges = list(nx.bridges(nx.Graph(graph)))
+    non_bridges = list(set(list(graph.edges())) - set(bridges))
+    
+    possible_double_failures = []
+    
+    # First failure
+    for edge1 in non_bridges:        
+        
+        num_parallel_first_failure  = calc_num_parallel_after_failure(graph.edges[edge1]['num_parallel'])                 
+        
+        # Second failure
+        for edge2 in non_bridges:
+            
+            if edge1==edge2 and (num_parallel_first_failure==0):
+                #Common mode failure not possible when first failure already removed all circuits
+                continue
+            else:
+                possible_double_failures += [[edge1, edge2]]
+ 
+    return possible_double_failures
