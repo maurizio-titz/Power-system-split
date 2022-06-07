@@ -6,12 +6,12 @@ import numpy as np
 import pypsa
 from shapely.geometry import Point
 
-sys.path.append('./power_system_split/')
-import utils
+sys.path.append('./')
+from power_system_split import utils
 
 # Setup paths 
-path_to_pypsa_network   = './data/European_networks/'
-save_path = './results/pre_outage_data/'
+path_to_pypsa_network   = './data/European_networks_scopf/'
+save_path = './results/sclopf/pre_outage_data/'
 
 # Setup parameters for network
 criterion = 'nodes' 
