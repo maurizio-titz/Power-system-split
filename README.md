@@ -29,6 +29,8 @@ The `scripts` contain our workflow with five stages:
 - `4_prepare_split_visualization.py`: Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits.
 - `5_calc_inertia_placement.py` : Determine optimal inertia placement to mitigate the impact of system splits. 
 
+All code assume that your PYTHONPATH contains the repository directory and the code is executed in there, too. 
+
 TODO: add script parameters and outputs,
 
 
