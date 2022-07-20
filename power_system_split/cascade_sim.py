@@ -5,9 +5,31 @@
 
 
 import numpy as np
+from numpy import dtype
 from scipy import sparse
 from scipy import linalg as sc_linalg
 from scipy.sparse.csgraph import connected_components
+
+
+def calc_num_parallel_after_failure(num_parallel):
+    
+    
+    assert num_parallel >= 0, ('Line removal for num_parallel={0:3f} not correct.'+
+                               ' Line was either already removed a wrong num_parallel was assigned. ')
+
+    if 0<num_parallel<0.5:
+        num_parallel_new = 0
+    elif 0.5<=num_parallel<1:
+        num_parallel_new = num_parallel / 2
+    elif np.isclose(num_parallel,1):
+        num_parallel_new = 0
+    elif num_parallel>1:
+        num_parallel_new = num_parallel - 1
+    else:
+        raise ValueError('num_parallel does not have a valid value!')
+
+        
+    return num_parallel_new
 
 
 def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, atol=1e-8):
@@ -27,14 +49,7 @@ def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, atol=1
                                ' Line was either already removed a wrong num_parallel was assigned. ')
     
     
-    if 0 < num_parallel < .5:
-        num_parallel_new = 0
-    elif 0.5 <= num_parallel < (1 - atol):
-        num_parallel_new = num_parallel/2.
-    elif abs(num_parallel - 1) < atol:
-        num_parallel_new = 0.
-    else:
-        num_parallel_new = num_parallel - 1.
+    num_parallel_new = calc_num_parallel_after_failure(num_parallel)
         
     num_par_factor = (num_parallel_new /num_parallel)
     num_parallel_ls[del_idx] = num_parallel_new
