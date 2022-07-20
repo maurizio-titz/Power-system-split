@@ -1056,25 +1056,6 @@ def apply_line_failure(graph, edge):
         graph.edges[edge]['s_nom'] =  s_nom * new_num_parallel / num_parallel
 
 
-def calc_num_parallel_after_failure(num_parallel):
-    
-    
-    assert num_parallel >= 0, ('Line removal for num_parallel={0:3f} not correct.'+
-                               ' Line was either already removed a wrong num_parallel was assigned. ')
-
-    if 0<num_parallel<0.5:
-        num_parallel_new = 0
-    elif 0.5<=num_parallel<1:
-        num_parallel_new = num_parallel / 2
-    elif np.isclose(num_parallel,1):
-        num_parallel_new = 0
-    elif num_parallel>1:
-        num_parallel_new = num_parallel - 1
-    else:
-        raise ValueError('num_parallel does not have a valid value!')
-
-        
-    return num_parallel_new
 
 
 def calc_possible_double_line_failures(graph):
@@ -1101,85 +1082,4 @@ def calc_possible_double_line_failures(graph):
     return possible_double_failures
 
 
-
-def remove_line_from_Bd(B_d_in, num_parallel, line_limits_ls, del_idx, atol=1e-8):
-    """Remove a line by changing the value in the sparse matrix B_d_in
-    that collects all susceptences according to a heuristic that 
-    keeps the effective nature of the links in mind.
-
-    Args:
-        B_d_in (sparse diagonal matrix): Matrix collecting the susceptances
-        num_parallel (_type_): number quantifying the effective number of parrallel lines
-        line_limit_ls (list): List of line limits that will be modified.
-        del_idx (idx of ): idx of edge in graph that will be modified due to overloaded power line
-    """
-    # Decide what to change num_parallel
-
-        
-    num_parallel_new = calc_num_parallel_after_failure(num_parallel)
-        
-    num_par_factor = (num_parallel_new /num_parallel)
-    B_d_in[del_idx, del_idx] *= num_par_factor
-    line_limits_ls[del_idx] *= num_par_factor
-    
-    return
-
-
-def simulate_cascade_matrix_based(II_in, B_d_in,
-                     P0, line_limits, num_parallel_in, failure_links):
-    
-    II = II_in.copy()
-    B_d = B_d_in.copy()
-    num_parallel_ls = num_parallel_in.copy()
-    
-    # Solve the inital case
-    # todo is this really the fastest to do the product???
-    #LL = II.dot(num_parallel * B_d).dot(II.T)
-    
-    # Remove inital failures
-    for del_idx in failure_links:
-        remove_line_from_Bd(B_d, num_parallel_ls,
-                            line_limits, del_idx)
-        
-    did_system_split = False
-    still_going = True
-    failure_cascade = [failure_links]
-    
-    while still_going:
-        
-        # Check if network is still connected
-        LL_r = II.dot(B_d).dot(II.T)
-        AA = - LL_r + sparse.diag(LL_r.diagonal())
-        
-        nr_components = connected_components(AA)[0]
-        
-        if nr_components > 1:
-            did_system_split = True
-            break
-        
-        # Solve the power flow Equation
-        try:
-            theta = sc_linalg.spsolve(LL_r, P0)
-        except np.linalg.LinAlgError:
-            LL_inv = np.linalg.pinv(LL_r.todense())
-            theta = np.dot(LL_inv, P0)
-            
-        flows = B_d.dot((II.T).dot(theta))
-        
-        # Check line limits
-        idxs_overloaded =  np.where(abs(flows) > line_limits)[0]
-        # Stop if no new lines where overloaded
-        if len(idxs_overloaded) == 0:
-            # Cascade stopped
-            still_going = False
-        
-        else:
-            failure_cascade.append(idxs_overloaded)
-            # Delete overloaded lines
-            for idx_r in idxs_overloaded:
-                remove_line_from_Bd(B_d, num_parallel_ls,
-                                    line_limits, idx_r)
-
-            
-    return failure_cascade, did_system_split
 
