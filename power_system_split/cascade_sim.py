@@ -20,21 +20,22 @@ def set_spmatrix_col_zero(II_in, B_d_in, del_idx):
     
     return
 
-def remove_line_from_Bd(B_d_in, num_parallel, line_limits_ls, del_idx, atol=1e-8):
+def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, atol=1e-8):
     """Remove a line by changing the value in the sparse matrix B_d_in
     that collects all susceptences according to a heuristic that 
     keeps the effective nature of the links in mind.
 
     Args:
         B_d_in (sparse diagonal matrix): Matrix collecting the susceptances
-        num_parallel (_type_): number quantifying the effective number of parrallel lines
+        num_parallel_ls (list): number quantifying the effective number of parrallel lines
         line_limit_ls (list): List of line limits that will be modified.
         del_idx (idx of ): idx of edge in graph that will be modified due to overloaded power line
     """
     # Decide what to change num_parallel
-    
+    num_parallel = num_parallel_ls[del_idx]
     assert num_parallel >= 0, ('Line removal for num_parallel={0:3f} not correct.'+
                                ' Line was either already removed a wrong num_parallel was assigned. ')
+    
     
     if 0 < num_parallel < .5:
         num_parallel_new = 0
@@ -46,6 +47,7 @@ def remove_line_from_Bd(B_d_in, num_parallel, line_limits_ls, del_idx, atol=1e-8
         num_parallel_new = num_parallel - 1.
         
     num_par_factor = (num_parallel_new /num_parallel)
+    num_parallel_ls[del_idx] = num_parallel_new
     B_d_in[del_idx, del_idx] *= num_par_factor
     line_limits_ls[del_idx] *= num_par_factor
     
@@ -54,7 +56,20 @@ def remove_line_from_Bd(B_d_in, num_parallel, line_limits_ls, del_idx, atol=1e-8
 
 def simulate_cascade(II_in, B_d_in,
                      P0, line_limits, num_parallel_in, failure_links):
-    
+    """Simulate a cascade with the given inital failure links:
+
+    Args:
+        II_in (sparse matrix): Incidence matrix
+        B_d_in (_type_): Diagonal matrix with susecptance on diagonal.
+        P0 (1d numpy array): power injections/extractions 
+        line_limits (_type_): Limits of of power lines. 's_nom' in PyPSA
+        num_parallel_in (list): List with 'num_parrallel' that gives a effective number
+        for each edge the line quantifying different and also multiple lines between two nodes.
+        failure_links (tuple): Collects the initial failure links
+
+    Returns:
+        failure_cascase, did_system_split: Links involved in the cascase, boolean if the system did split
+    """
     II = II_in.copy()
     B_d = B_d_in.copy()
     num_parallel_ls = num_parallel_in.copy()
