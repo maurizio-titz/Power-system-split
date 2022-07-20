@@ -5,20 +5,10 @@
 
 
 import numpy as np
-from numpy import dtype
 from scipy import sparse
 from scipy import linalg as sc_linalg
 from scipy.sparse.csgraph import connected_components
 
-
-def set_spmatrix_col_zero(II_in, B_d_in, del_idx):
-    
-    zero_spdiag = sparse.diags([1 if ii != del_idx else 0 for ii in range(II_in.shape[1])],
-                                    dtype=II_in.dtype)
-    II_in = II_in * zero_spdiag
-    B_d_in[del_idx] = 0
-    
-    return
 
 def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, atol=1e-8):
     """Remove a line by changing the value in the sparse matrix B_d_in
