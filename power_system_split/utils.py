@@ -1091,7 +1091,7 @@ def calc_possible_double_line_failures(graph):
             if edge1==edge2 and (num_parallel_first_failure==0):
                 #Common mode failure not possible when first failure already removed all circuits
                 continue
-            else:
+            elif not [edge2, edge1] in possible_double_failures:
                 possible_double_failures += [[edge1, edge2]]
  
     return possible_double_failures
