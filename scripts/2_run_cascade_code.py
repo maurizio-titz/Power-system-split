@@ -6,6 +6,7 @@ import numpy as np
 import pypsa
 from tqdm import tqdm
 import pandas as pd
+from scipy.sparse import spdiags
 
 sys.path.append('./')
 from power_system_split import utils
@@ -63,6 +64,16 @@ current_snapshots = network.snapshots[:1]
 # Calculate possible double line failure (using non-bridges)
 possible_failures = utils.calc_possible_double_line_failures(G)
 
+# Build incidence matrix and susceptance matrix
+I_m = utils.construct_incidencematrix_from_orientation(G,return_np_array = False) 
+B_d = spdiags(np.array([attribs['weight'] for u,v, attribs in G.edges(data=True)]),
+              0,G.number_of_edges,G.number_of_edges)
+
+# Get array of num_parallels and of line limits
+num_parallel_list = np.array([attribs['num_parallel'] for u,v, attribs in G.edges(data=True)])
+line_limit_list = np.array([attribs['s_nom'] for u,v, attribs in G.edges(data=True)])
+
+
 splitting_cascades = {}
 
 # Iterate over each time step in data set
@@ -72,7 +83,7 @@ for snapshot in current_snapshots:
 
     initial_loading = {e: np.sum([network.lines_t.p0.loc[snapshot].loc[index] for index in index_list]) for
                        e, index_list in indices.items()}
-    P0 = utils.get_effective_injections(G, initial_loading)
+    P_0 = utils.get_effective_injections(G, initial_loading)
 
     l_copy = initial_loading.copy()
     for key in l_copy.keys():
@@ -81,9 +92,8 @@ for snapshot in current_snapshots:
     # Simulate cascade for every tuple of trigger links
     for initial_failure in tqdm(possible_failures):
 
-        failing_links, system_split = utils.simulate_cascade_PTDF_based_edge_based_reduced(G,
-                                                                                           trigger_links=initial_failure,
-                                                                                           P0=P0)
+        failing_links, system_split = utils.simulate_cascade_matrix_based(I_m, B_d, P_0, line_limit_list,
+                                                                          num_parallel_list, initial_failure)
         if system_split:
             splitting_cascades[snapshot.strftime('%d_%m_%Y_%H')].append(failing_links)
 
