@@ -9,7 +9,7 @@ from numpy import dtype
 from scipy import sparse
 from scipy import linalg as sc_linalg
 from scipy.sparse.csgraph import connected_components
-
+import itertools
 
 def calc_num_parallel_after_failure(num_parallel):
     
@@ -30,6 +30,25 @@ def calc_num_parallel_after_failure(num_parallel):
 
         
     return num_parallel_new
+
+def calc_possible_double_line_failures(num_parallel_ls):
+    
+    
+    possible_failures = []
+    
+    # Add failures on two different links
+    possible_failures += list(itertools.combinations(range(3),2))
+    
+    # Add common mode failures (two circuits failing in one link)
+    for i in range(len(num_parallel_ls)):
+        num_parallel_one_fail = calc_num_parallel_after_failure(num_parallel_ls[i])
+        
+        # Only add common mode failure if more than one circuit is present
+        # (i.e., first failure did not remove all circuits)
+        if not np.isclose(num_parallel_one_fail,0):
+            possible_failures += [(i,i)]
+        
+    return possible_failures
 
 
 def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, atol=1e-8):
