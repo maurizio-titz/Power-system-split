@@ -10,9 +10,18 @@ from scipy import sparse
 from scipy import linalg as sc_linalg
 from scipy.sparse.csgraph import connected_components
 import itertools
+import scipy
 
 def calc_num_parallel_after_failure(num_parallel):
-    
+    """Calculate the new effective number of circuits on a line 
+    after removing one circuit. 
+
+    Args:
+        num_parallel (float): Old value of effective number of circuits
+
+    Returns:
+        float: new value
+    """        
     
     assert num_parallel >= 0, ('Line removal for num_parallel={0:3f} not correct.'+
                                ' Line was either already removed a wrong num_parallel was assigned. ')
@@ -31,10 +40,12 @@ def calc_num_parallel_after_failure(num_parallel):
         
     return num_parallel_new
 
-def calc_possible_double_line_failures(num_parallel_ls):
+def calc_possible_double_line_failures(num_parallel_ls, bridge_idxs=None): 
     
-    
-    edge_indices = range(len(num_parallel_ls))
+    if bridge_idxs is None:
+        edge_indices = range(len(num_parallel_ls))
+    else:
+        edge_indices = list(set(range(len(num_parallel_ls))) - set(bridge_idxs))
     
     # Add failures on two different links
     possible_failures = list(map(list, itertools.combinations(edge_indices,2)))
@@ -51,25 +62,31 @@ def calc_possible_double_line_failures(num_parallel_ls):
     return possible_failures
 
 
-def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, atol=1e-8):
+def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, remove_all_circuits=False):
     """Remove a line by changing the value in the sparse matrix B_d_in
     that collects all susceptences according to a heuristic that 
     keeps the effective nature of the links in mind.
 
     Args:
-        B_d_in (sparse diagonal matrix): Matrix collecting the susceptances
-        num_parallel_ls (list): number quantifying the effective number of parrallel lines
+        B_d_in (sparse diagonal matrix): Diagonal matrix with susceptances
+        num_parallel_ls (list): number quantifying the effective number of parrallel circuits on a line
         line_limit_ls (list): List of line limits that will be modified.
         del_idx (idx of ): idx of edge in graph that will be modified due to overloaded power line
+        remove_all_circuits (bool): If False, remove only one circuit from the line. If True, remove the whole line with all circuits.  
     """
-    # Decide what to change num_parallel
+
+    # Select num_parallel of removed link
     num_parallel = num_parallel_ls[del_idx]
     assert num_parallel >= 0, ('Line removal for num_parallel={0:3f} not correct.'+
                                ' Line was either already removed a wrong num_parallel was assigned. ')
     
-    
-    num_parallel_new = calc_num_parallel_after_failure(num_parallel)
+    # Calculate new num_parallel after removal
+    if remove_all_circuits:
+        num_parallel_new = 0 
+    else:
+        num_parallel_new = calc_num_parallel_after_failure(num_parallel)
         
+    # Adapt network parameters accordingly
     num_par_factor = (num_parallel_new /num_parallel)
     num_parallel_ls[del_idx] = num_parallel_new
     B_d_in[del_idx, del_idx] *= num_par_factor
@@ -145,7 +162,8 @@ def simulate_cascade(II_in, B_d_in,
             # Delete overloaded lines
             for idx_r in idxs_overloaded:
                 remove_line_from_Bd(B_d, num_parallel_ls,
-                                    line_limits, idx_r)
+                                    line_limits, idx_r,
+                                    remove_all_circuits=True)
 
             
     return failure_cascade, did_system_split

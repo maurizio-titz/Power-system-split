@@ -71,7 +71,11 @@ num_parallel_list = np.array([attribs['num_parallel'] for u,v, attribs in G.edge
 line_limit_list = np.array([attribs['s_nom'] for u,v, attribs in G.edges(data=True)])
 
 # Calculate possible double line failure (using non-bridges)
-possible_failures = cascade_sim.calc_possible_double_line_failures(num_parallel_list)
+bridges = list(nx.bridges(nx.Graph(G)))
+link_indices = dict(zip(G.edges(), range(G.number_of_edges())))
+bridges_indices = [link_indices[link_name] for link_name in bridges]
+possible_failures = cascade_sim.calc_possible_double_line_failures(num_parallel_list,
+                                                                   bridges_indices)
 
 
 splitting_cascades = {}
@@ -90,7 +94,7 @@ for snapshot in current_snapshots[:1]:
         initial_loading[key[::-1]] = initial_loading[key]
 
     # Simulate cascade for every tuple of trigger links
-    for initial_failure in tqdm(possible_failures):
+    for initial_failure in tqdm(possible_failures[:5000]):
 
         failing_links, system_split = cascade_sim.simulate_cascade(I_m, B_d, P_0, line_limit_list,
                                                                    num_parallel_list, initial_failure)
