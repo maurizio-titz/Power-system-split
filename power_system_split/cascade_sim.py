@@ -34,13 +34,13 @@ def calc_num_parallel_after_failure(num_parallel):
 def calc_possible_double_line_failures(num_parallel_ls):
     
     
-    possible_failures = []
+    edge_indices = range(len(num_parallel_ls))
     
     # Add failures on two different links
-    possible_failures += list(itertools.combinations(range(3),2))
+    possible_failures = list(map(list, itertools.combinations(edge_indices,2)))
     
     # Add common mode failures (two circuits failing in one link)
-    for i in range(len(num_parallel_ls)):
+    for i in edge_indices:
         num_parallel_one_fail = calc_num_parallel_after_failure(num_parallel_ls[i])
         
         # Only add common mode failure if more than one circuit is present
@@ -79,7 +79,7 @@ def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, atol=1
 
 
 def simulate_cascade(II_in, B_d_in,
-                     P0, line_limits, num_parallel_in, failure_links):
+                     P0, line_limits_in, num_parallel_in, failure_links):
     """Simulate a cascade with the given inital failure links:
 
     Args:
@@ -97,6 +97,7 @@ def simulate_cascade(II_in, B_d_in,
     II = II_in.copy()
     B_d = B_d_in.copy()
     num_parallel_ls = num_parallel_in.copy()
+    line_limits = line_limits_in.copy()
     
     # Solve the inital case
     # todo is this really the fastest to do the product???
@@ -109,13 +110,13 @@ def simulate_cascade(II_in, B_d_in,
         
     did_system_split = False
     still_going = True
-    failure_cascade = [failure_links]
+    failure_cascade = failure_links.copy()
     
     while still_going:
         
         # Check if network is still connected
         LL_r = II.dot(B_d).dot(II.T)
-        AA = - LL_r + sparse.diag(LL_r.diagonal())
+        AA = - LL_r + sparse.diags(LL_r.diagonal())
         
         nr_components = connected_components(AA)[0]
         
@@ -125,7 +126,7 @@ def simulate_cascade(II_in, B_d_in,
         
         # Solve the power flow Equation
         try:
-            theta = sc_linalg.spsolve(LL_r, P0)
+            theta = sparse.linalg.spsolve(LL_r, P0)
         except np.linalg.LinAlgError:
             LL_inv = np.linalg.pinv(LL_r.todense())
             theta = np.dot(LL_inv, P0)
@@ -140,7 +141,7 @@ def simulate_cascade(II_in, B_d_in,
             still_going = False
         
         else:
-            failure_cascade.append(idxs_overloaded)
+            failure_cascade += list(idxs_overloaded)
             # Delete overloaded lines
             for idx_r in idxs_overloaded:
                 remove_line_from_Bd(B_d, num_parallel_ls,

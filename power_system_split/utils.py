@@ -1040,46 +1040,24 @@ def inertia_placement(comp_props, indicator_vectors, var_ref, m, q, number_of_si
 
 
 
-def apply_line_failure(graph, edge):
+# def apply_line_failure(graph, edge):
 
-    num_parallel = graph.edges[edge]['num_parallel']
-    s_nom = graph.edges[edge]['s_nom']
-    weight = graph.edges[edge]['weight']  
+#     num_parallel = graph.edges[edge]['num_parallel']
+#     s_nom = graph.edges[edge]['s_nom']
+#     weight = graph.edges[edge]['weight']  
 
-    new_num_parallel =  calc_num_parallel_after_failure(num_parallel) 
+#     new_num_parallel =  calc_num_parallel_after_failure(num_parallel) 
     
-    if new_num_parallel==0:
-        graph.remove_edge(*edge)
-    else:
-        graph.edges[edge]['num_parallel'] = new_num_parallel
-        graph.edges[edge]['weight'] = weight * new_num_parallel / num_parallel
-        graph.edges[edge]['s_nom'] =  s_nom * new_num_parallel / num_parallel
+#     if new_num_parallel==0:
+#         graph.remove_edge(*edge)
+#     else:
+#         graph.edges[edge]['num_parallel'] = new_num_parallel
+#         graph.edges[edge]['weight'] = weight * new_num_parallel / num_parallel
+#         graph.edges[edge]['s_nom'] =  s_nom * new_num_parallel / num_parallel
 
 
 
 
-def calc_possible_double_line_failures(graph):
-    
-    bridges = list(nx.bridges(nx.Graph(graph)))
-    non_bridges = list(set(list(graph.edges())) - set(bridges))
-    
-    possible_double_failures = []
-    
-    # First failure
-    for edge1 in non_bridges:        
-        
-        num_parallel_first_failure  = calc_num_parallel_after_failure(graph.edges[edge1]['num_parallel'])                 
-        
-        # Second failure
-        for edge2 in non_bridges:
-            print(edge1, edge2)
-            if edge1==edge2 and (num_parallel_first_failure==0):
-                #Common mode failure not possible when first failure already removed all circuits
-                continue
-            elif not [edge2, edge1] in possible_double_failures:
-                possible_double_failures += [[edge1, edge2]]
- 
-    return possible_double_failures
 
 
 
