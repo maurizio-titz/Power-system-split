@@ -64,7 +64,7 @@ current_snapshots = network.snapshots[:1]
 # Build incidence matrix and susceptance matrix
 I_m = utils.construct_incidencematrix_from_orientation(G,return_np_array = False) 
 B_d = spdiags(np.array([attribs['weight'] for u,v, attribs in G.edges(data=True)]),
-              0,G.number_of_edges(),G.number_of_edges())
+              0,G.number_of_edges(),G.number_of_edges()).asformat('csr')
 
 # Get array of num_parallels and of line limits
 num_parallel_list = np.array([attribs['num_parallel'] for u,v, attribs in G.edges(data=True)])
@@ -92,8 +92,8 @@ for snapshot in current_snapshots[:1]:
     # Simulate cascade for every tuple of trigger links
     for initial_failure in tqdm(possible_failures):
 
-        failing_links, system_split = cascade_sim.simulate_cascade_matrix_based(I_m, B_d, P_0, line_limit_list,
-                                                                                num_parallel_list, initial_failure)
+        failing_links, system_split = cascade_sim.simulate_cascade(I_m, B_d, P_0, line_limit_list,
+                                                                   num_parallel_list, initial_failure)
         if system_split:
             splitting_cascades[snapshot.strftime('%d_%m_%Y_%H')].append(failing_links)
 
