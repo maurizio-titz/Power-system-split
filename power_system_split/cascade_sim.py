@@ -72,7 +72,8 @@ def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, remove
         num_parallel_ls (list): number quantifying the effective number of parrallel circuits on a line
         line_limit_ls (list): List of line limits that will be modified.
         del_idx (idx of ): idx of edge in graph that will be modified due to overloaded power line
-        remove_all_circuits (bool): If False, remove only one circuit from the line. If True, remove the whole line with all circuits.  
+        remove_all_circuits (bool): If False, remove only one circuit from the line. 
+        If True, remove the whole line with all circuits.  
     """
 
     # Select num_parallel of removed link
@@ -96,7 +97,8 @@ def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, remove
 
 
 def simulate_cascade(II_in, B_d_in,
-                     P0, line_limits_in, num_parallel_in, failure_links):
+                     P0, line_limits_in, num_parallel_in, failure_links,
+                     epsilon=1e-2):
     """Simulate a cascade with the given inital failure links:
 
     Args:
@@ -107,6 +109,7 @@ def simulate_cascade(II_in, B_d_in,
         num_parallel_in (list): List with 'num_parrallel' that gives a effective number
         for each edge the line quantifying different and also multiple lines between two nodes.
         failure_links (tuple): Collects the initial failure links
+        epsilon (float): Share of capacity that has to be overloaded for a link to fail
 
     Returns:
         failure_cascase, did_system_split: Links involved in the cascase, boolean if the system did split
@@ -151,7 +154,8 @@ def simulate_cascade(II_in, B_d_in,
         flows = B_d.dot((II.T).dot(theta))
         
         # Check line limits
-        idxs_overloaded =  np.where(abs(flows) > line_limits)[0]
+        idxs_overloaded =  np.where(abs(flows) > line_limits*(1+epsilon))[0]
+        
         # Stop if no new lines where overloaded
         if len(idxs_overloaded) == 0:
             # Cascade stopped

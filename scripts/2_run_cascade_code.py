@@ -16,7 +16,7 @@ path_to_pypsa_network   = './data/European_networks_sclopf/'
 save_path =  './results/sclopf/cascade_results/'
 
 # Load co2 level
-co2l = 0.1 # float(sys.argv[1])
+co2l = float(sys.argv[1])
 
 # Load PyPSA network
 network = pypsa.Network()
@@ -30,7 +30,7 @@ network.determine_network_topology()
 
 
 ######
-#TODO: remove this line if the networks contain timestamp snapshots
+#TODO: add function for this. Adding time stamps is necessary because they are missing in the pypsa networks
 network.snapshots = pd.date_range(start='2013', freq='3H', periods=len(network.snapshots))
 
 network.snapshot_weightings.index = pd.date_range(start='2013', freq='3H', periods=len(network.snapshots))
@@ -81,8 +81,10 @@ possible_failures = cascade_sim.calc_possible_double_line_failures(num_parallel_
 splitting_cascades = {}
 
 # Iterate over each time step in data set
-for snapshot in current_snapshots[:1]:
+for snapshot in current_snapshots:
 
+    print('#### Co2 level', co2l, ' snapshot ', snapshot.strftime('%d_%m_%Y_%H'), ' ####')
+    
     splitting_cascades[snapshot.strftime('%d_%m_%Y_%H')] = []
 
     initial_loading = {e: np.sum([network.lines_t.p0.loc[snapshot].loc[index] for index in index_list]) for
@@ -94,12 +96,13 @@ for snapshot in current_snapshots[:1]:
         initial_loading[key[::-1]] = initial_loading[key]
 
     # Simulate cascade for every tuple of trigger links
-    for initial_failure in tqdm(possible_failures[:5000]):
+    for initial_failure in tqdm(possible_failures):
 
         failing_links, system_split = cascade_sim.simulate_cascade(I_m, B_d, P_0, line_limit_list,
                                                                    num_parallel_list, initial_failure)
         if system_split:
             splitting_cascades[snapshot.strftime('%d_%m_%Y_%H')].append(failing_links)
 
-with open(save_path + f'system_splits_Co2L{co2l}.pickle' , 'wb') as handle:
-    pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
+    # Save the current results after each snapshot and replace old version
+    with open(save_path + f'system_splits_Co2L{co2l}.pickle' , 'wb') as handle:
+        pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
