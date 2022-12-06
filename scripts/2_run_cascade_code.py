@@ -59,7 +59,7 @@ G = utils.build_networkx_graph(network, snet_index= snet_index)
 indices = nx.get_edge_attributes(G, 'line_index')
 
 # Extract time steps
-current_snapshots = network.snapshots[:1]
+current_snapshots = network.snapshots
 
 # Build incidence matrix and susceptance matrix
 I_m = utils.construct_incidencematrix_from_orientation(G,return_np_array = False) 
@@ -91,6 +91,7 @@ for snapshot in current_snapshots:
                        e, index_list in indices.items()}
     P_0 = utils.get_effective_injections(G, initial_loading)
 
+    #TODO: do we still need the following three line?
     l_copy = initial_loading.copy()
     for key in l_copy.keys():
         initial_loading[key[::-1]] = initial_loading[key]
@@ -99,7 +100,8 @@ for snapshot in current_snapshots:
     for initial_failure in tqdm(possible_failures):
 
         failing_links, system_split = cascade_sim.simulate_cascade(I_m, B_d, P_0, line_limit_list,
-                                                                   num_parallel_list, initial_failure)
+                                                                   num_parallel_list, initial_failure,
+                                                                   epsilon=0.1)
         if system_split:
             splitting_cascades[snapshot.strftime('%d_%m_%Y_%H')].append(failing_links)
 
