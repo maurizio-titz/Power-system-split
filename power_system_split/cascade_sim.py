@@ -57,7 +57,7 @@ def calc_possible_double_line_failures(num_parallel_ls, bridge_idxs=None):
         # Only add common mode failure if more than one circuit is present
         # (i.e., first failure did not remove all circuits)
         if not np.isclose(num_parallel_one_fail,0):
-            possible_failures += [(i,i)]
+            possible_failures += [[i,i]]
         
     return possible_failures
 
