@@ -108,7 +108,7 @@ def simulate_cascade(II_in, B_d_in,
         line_limits (_type_): Limits of of power lines. 's_nom' in PyPSA
         num_parallel_in (list): List with 'num_parrallel' that gives a effective number
         for each edge the line quantifying different and also multiple lines between two nodes.
-        failure_links (tuple): Collects the initial failure links
+        failure_links (list): Collects the initial failure links
         epsilon (float): Share of capacity that has to be overloaded for a link to fail
 
     Returns:
