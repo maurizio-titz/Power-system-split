@@ -95,10 +95,35 @@ def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, remove
     
     return
 
+def solve_lpf(P, B_d, I, L=None):
+    """Solve linear power flow.
+
+    Args:
+        P (1d numpy array): Power injections
+        B_d (sparse matrix): Susceptance matrix
+        I (sparse matrix): Incidence matrix
+        L (sparse matrix): Laplacian matrix
+
+    Returns:
+        flows: Power flows
+    """
+    
+    if L==None:
+        L = I.dot(B_d).dot(I.T)
+    
+    try:
+        theta = sparse.linalg.spsolve(L, P)
+    except np.linalg.LinAlgError:
+        L_inv = np.linalg.pinv(L.todense())
+        theta = np.dot(L_inv, P)
+        
+    flows = B_d.dot((I.T).dot(theta))
+    
+    return flows
 
 def simulate_cascade(II_in, B_d_in,
                      P0, line_limits_in, num_parallel_in, failure_links,
-                     epsilon=1e-2):
+                     epsilon=1e-2, max_cascade_length=np.inf):
     """Simulate a cascade with the given inital failure links:
 
     Args:
@@ -110,6 +135,7 @@ def simulate_cascade(II_in, B_d_in,
         for each edge the line quantifying different and also multiple lines between two nodes.
         failure_links (list): Collects the initial failure links
         epsilon (float): Share of capacity that has to be overloaded for a link to fail
+        max_cascade_length (int): Maximum number of secondary failure to investigate.
 
     Returns:
         failure_cascase, did_system_split: Links involved in the cascase, boolean if the system did split
@@ -130,6 +156,7 @@ def simulate_cascade(II_in, B_d_in,
         
     did_system_split = False
     still_going = True
+    cascade_length = 0
     failure_cascade = failure_links.copy()
     
     while still_going:
@@ -137,21 +164,14 @@ def simulate_cascade(II_in, B_d_in,
         # Check if network is still connected
         LL_r = II.dot(B_d).dot(II.T)
         AA = - LL_r + sparse.diags(LL_r.diagonal())
-        
+  
         nr_components = connected_components(AA)[0]
         
         if nr_components > 1:
             did_system_split = True
             break
         
-        # Solve the power flow Equation
-        try:
-            theta = sparse.linalg.spsolve(LL_r, P0)
-        except np.linalg.LinAlgError:
-            LL_inv = np.linalg.pinv(LL_r.todense())
-            theta = np.dot(LL_inv, P0)
-            
-        flows = B_d.dot((II.T).dot(theta))
+        flows = solve_lpf(P0, B_d, II, LL_r)
         
         # Check line limits
         idxs_overloaded =  np.where(abs(flows) > line_limits*(1+epsilon))[0]
@@ -168,6 +188,11 @@ def simulate_cascade(II_in, B_d_in,
                 remove_line_from_Bd(B_d, num_parallel_ls,
                                     line_limits, idx_r,
                                     remove_all_circuits=True)
+                
+        # Stop if max length of cascade simulation is reached
+        cascade_length+=1
+        if cascade_length==max_cascade_length:
+            break
 
             
     return failure_cascade, did_system_split
