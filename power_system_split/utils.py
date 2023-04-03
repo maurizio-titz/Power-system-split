@@ -39,7 +39,7 @@ def construct_incidencematrix_from_orientation(Graph,return_np_array = True):
     if return_np_array:
         return_val = B.toarray()
     else:
-        return_val = B.asformat("csc")
+        return_val = B.asformat("csr")
     return return_val
 
 def redefined_index(Graph,element):
@@ -432,7 +432,6 @@ def build_networkx_graph(pypsa_network,multi_graph = False, snet_index = None):
             else:
 
                 F.add_edge(line['bus0'],line['bus1'],
-
                            weight = 1/line['x_pu_eff'],
                            orientation = (line['bus0'],line['bus1']),
                            line_index = [line_index[1]],
@@ -457,8 +456,8 @@ def get_split_components(split,Graph,criterion):
             return_val = []
         else:
             return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
-    elif criterion == 'load':
-        ## new criterion based on load where all subgraphs are considered
+    elif (criterion == 'load') or (criterion=='all') :
+        ## all subgraphs are considered
         ## independent of their number of nodes
         relevant_subgraphs = [i for i in range(len(subgraphs))]
         return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
@@ -723,6 +722,22 @@ def get_load_imbalance_subgraph(subgraph,
     load_imbalance -= HVDC_transport[HVDC_transport.index.isin(list(subgraph.nodes()))].sum()
     return load_imbalance
 
+def get_load_subgraph(subgraph,
+                    generators,
+                    current_generation,
+                    storages,
+                    current_storage,
+                    loads,
+                    current_load,
+                    HVDC_transport):
+    """Calculate load in subgraph (ingnoring HVDC and storage consumption)"""
+    loads  = loads[loads["bus"].isin(list(subgraph.nodes()))]
+    #stores = storages[storages["bus"].isin(list(subgraph.nodes()))]
+    #HVDC =...
+    
+    subgraph_load = current_load.loc[list(loads.index)].sum()
+    
+    return subgraph_load
 
 def get_available_flexible_generation(subgraph,
                                       generators,
@@ -835,6 +850,8 @@ def evaluate_split_observables(split,
                If "load" is chosen, the split is only evaluated if none of the split
                components contains 90 % of the total load or generation. In this case,
                every split component is evaluated independent of the component size
+               
+               If "all" is chosen, all subgraphs are evaluated.
 
     RETURNS:
 
@@ -888,13 +905,13 @@ def evaluate_split_observables(split,
 
     assert np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())<5e-2
 
-    results_dict = {'inertia_proxy': [],'load_imbalance': []}#, 'available_flexible_generation': [] }
+    results_dict = {'inertia_proxy': [],'load_imbalance': [], 'load':[]} #, 'available_flexible_generation': [] }
 
     evaluate_results = False
 
     subgraphs = get_split_components(split,Graph, criterion = criterion)
 
-    if criterion == 'nodes':
+    if (criterion == 'nodes') or (criterion =='all'):
         if len(subgraphs) >= 2:
             evaluate_results = True
     elif criterion == 'load':
@@ -927,6 +944,15 @@ def evaluate_split_observables(split,
                                                           current_load,
                                                           HVDC_transport)
 
+            subgraph_load = get_load_subgraph(subgraph,
+                                            pypsa_network.generators,
+                                            current_generation,
+                                            pypsa_network.storage_units,
+                                            current_storage,
+                                            pypsa_network.loads,
+                                            current_load,
+                                            HVDC_transport)
+
             #available_flexible_generation = get_available_flexible_generation(subgraph,
             #                                              pypsa_network.generators,
             #                                              current_generation,
@@ -937,6 +963,7 @@ def evaluate_split_observables(split,
 
             results_dict['inertia_proxy'].append(inertia_generation)
             results_dict['load_imbalance'].append(load_imbalance)
+            results_dict['load'].append(subgraph_load) 
             #results_dict['available_flexible_generation'].append(available_flexible_generation)
 
     return results_dict
