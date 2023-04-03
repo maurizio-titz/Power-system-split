@@ -88,7 +88,8 @@ for snapshot in current_snapshots:
     splitting_cascades[snapshot.strftime('%d_%m_%Y_%H')] = []
 
     initial_loading = {e: np.sum([network.lines_t.p0.loc[snapshot].loc[index] for index in index_list]) for
-                       e, index_list in indices.items()}
+                       e, index_list in indices.items()} # index_list contains only one line if G is not a multigraph 
+                                                         # (we use a simple graph at the moment)
     P_0 = utils.get_effective_injections(G, initial_loading)
 
     #TODO: do we still need the following three line?
