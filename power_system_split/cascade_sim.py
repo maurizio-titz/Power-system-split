@@ -134,7 +134,8 @@ def simulate_cascade(II_in, B_d_in,
         num_parallel_in (list): List with 'num_parrallel' that gives a effective number
         for each edge the line quantifying different and also multiple lines between two nodes.
         failure_links (list): Collects the initial failure links
-        epsilon (float): Share of capacity that has to be overloaded for a link to fail
+        epsilon (float): Margin above capacity that has to be exceeded for a link to fail. 
+        The margin should be given as a share of the capacity (between 0 and 1).
         max_cascade_length (int): Maximum number of secondary failure to investigate.
 
     Returns:
