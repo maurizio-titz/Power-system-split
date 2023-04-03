@@ -2,23 +2,44 @@ import pickle
 import sys
 
 import pypsa
+import pandas as pd
 from tqdm import tqdm
 
-sys.path.append('./power_system_split/')
-import utils
+sys.path.append('./')
+from power_system_split import utils
 
 # Setup paths to solved PyPSA networks and results own scripts
-path_to_pypsa_network   = './data/European_networks/'
-path_to_cascade_results   = './results/cascade_results/'
-save_path =  './results/evaluation_results/'
+path_to_pypsa_network   = './data/European_networks_lopf/'
+path_to_cascade_results  = './results/lopf/cascade_results/'
+save_path =  './results/sclopf/evaluation_results/'
 
 # Load co2 level
-co2l = float(sys.argv[1])
+co2l = 0.9# float(sys.argv[1])
 
 # Load PyPSA network
 network = pypsa.Network()
 network.import_from_netcdf(path_to_pypsa_network+f'elec_s_800_ec_lv1.0_Co2L{co2l}-3H.nc')
+#network.import_from_netcdf(path_to_pypsa_network+f'sclopf-elec_s_800_ec_lv1.0_Co2L{co2l}-3H.nc')
+
+# The following line is needed to remove the outage lines used for SCLOPF. When not removed, multiple edges 
+# are added to the network graph
+outage_lines = network.lines[network.lines.index.str[-6:]=='outage'].index
+network.mremove('Line', outage_lines)
 network.determine_network_topology()
+
+######
+#TODO: add function for this. Adding time stamps is necessary because they are missing in the pypsa networks
+network.snapshots = pd.date_range(start='2013', freq='3H', periods=len(network.snapshots))
+
+network.snapshot_weightings.index = pd.date_range(start='2013', freq='3H', periods=len(network.snapshots))
+
+for component in network.all_components:
+    pnl = network.pnl(component)
+    attrs = network.components[component]["attrs"]
+
+    for k,default in attrs.default[attrs.varying].iteritems():
+        pnl[k].index = pd.date_range(start='2013', freq='3H', periods=len(network.snapshots))
+######
 
 
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
@@ -26,13 +47,10 @@ network.determine_network_topology()
 # For our data set, "0" indicates the Continental European AC grid. 
 snet_index = 0
 
-# Build graph for subnetwork
-G = utils.build_networkx_graph(network, snet_index= snet_index)
-
 # "Node" criterion means that only split components 
 # with at least 10 nodes are evaluated
 use_pnom  = True
-criterion = 'nodes'
+criterion = 'all'
 
 # Load cascade results
 splitting_cascades = pickle.load(open(path_to_cascade_results+
