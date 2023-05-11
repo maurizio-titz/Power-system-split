@@ -12,9 +12,54 @@ from scipy.sparse.csgraph import connected_components
 import itertools
 import scipy
 
+
+# def load_num_parallel_table():
+#     """Load lookup table for changing number of parallel lines after
+#     failure. 
+
+#     Returns:
+#         1d numpy array: lookup table
+#     """
+    
+    
+#     lookup_table = np.array([
+#         0.28947368421052,					               0,
+#         0.57894736842105,					0.28947368421052,
+#         0.59210526315789,					               0,
+#         0.86842105263157,					0.57894736842105,
+#         0.88157894736842,					0.28947368421052,
+#                        1,				                   0,
+#         1.15789473684211,					0.86842105263157,
+#         1.18421052631579,					0.59210526315789,
+#         1.28947368421053,					0.28947368421052,
+#         1.44736842105263,					1.15789473684211,
+#         1.47368421052632,					0.88157894736842,
+#         1.57894736842105,					0.57894736842105,
+#         1.73684210526316,					1.44736842105263,
+#         1.77631578947368,					1.18421052631579,
+#         1.86842105263158,					0.86842105263157,
+#                        2,					               1,
+#         2.02631578947368,					1.73684210526316,
+#         2.06578947368421,					1.47368421052632,
+#         2.15789473684211,					1.15789473684211,
+#         2.18421052631579,					1.18421052631579,
+#         2.28947368421053,					1.28947368421053,
+#         2.31578947368421,					2.02631578947368,
+#         2.36842105263158,					1.77631578947368,
+#         2.57894736842105,					1.57894736842105,
+#         2.59210526315789,					1.59210526315789,
+#         2.65789473684211,					2.06578947368421,
+#         2.86842105263158,					1.86842105263158
+#     ])
+    
+    
+#     return lookup_table
+
+
 def calc_num_parallel_after_failure(num_parallel):
     """Calculate the new effective number of circuits on a line 
-    after removing one circuit. 
+    after removing one circuit. The new value depends on the line type
+    and is indicated in a lookup table.  
 
     Args:
         num_parallel (float): Old value of effective number of circuits
@@ -26,13 +71,48 @@ def calc_num_parallel_after_failure(num_parallel):
     assert num_parallel >= 0, ('Line removal for num_parallel={0:3f} not correct.'+
                                ' Line was either already removed a wrong num_parallel was assigned. ')
 
-    if 0<num_parallel<0.5:
-        num_parallel_new = 0
-    elif 0.5<=num_parallel<1:
-        num_parallel_new = num_parallel / 2
-    elif np.isclose(num_parallel,1):
-        num_parallel_new = 0
-    elif num_parallel>1:
+
+    # First column: num_parallel before failure
+    # Second column: num_parallel after failure
+    lookup_table = np.array([
+        [0.28947368, 0.        ],
+        [0.57894737, 0.28947368],
+        [0.59210526, 0.        ],
+        [0.86842105, 0.57894737],
+        [0.88157895, 0.28947368],
+        [1.        , 0.        ],
+        [1.15789474, 0.86842105],
+        [1.18421053, 0.59210526],
+        [1.28947368, 0.28947368],
+        [1.44736842, 1.15789474],
+        [1.47368421, 0.88157895],
+        [1.57894737, 0.57894737],
+        [1.59210526, 0.59210526],
+        [1.73684211, 1.44736842],
+        [1.77631579, 1.18421053],
+        [1.86842105, 0.86842105],
+        [2.        , 1.        ],
+        [2.02631579, 1.73684211],
+        [2.06578947, 1.47368421],
+        [2.15789474, 1.15789474],
+        [2.18421053, 1.18421053],
+        [2.28947368, 1.28947368],
+        [2.31578947, 2.02631579],
+        [2.36842105, 1.77631579],
+        [2.44736842, 1.44736842],
+        [2.57894737, 1.57894737],
+        [2.59210526, 1.59210526],
+        [2.65789474, 2.06578947],
+        [2.73684211, 1.73684211],
+        [2.77631579, 1.77631579],
+        [2.86842105, 1.86842105]
+       ])
+
+
+    if 0<num_parallel<3:
+        num_parallel_case = np.argwhere(np.isclose(lookup_table[:,0], num_parallel))[0,0]
+        num_parallel_new = lookup_table[num_parallel_case,1]
+    elif num_parallel>=3:
         num_parallel_new = num_parallel - 1
     else:
         raise ValueError('num_parallel does not have a valid value!')
@@ -63,9 +143,8 @@ def calc_possible_double_line_failures(num_parallel_ls, bridge_idxs=None):
 
 
 def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, remove_all_circuits=False):
-    """Remove a line by changing the value in the sparse matrix B_d_in
-    that collects all susceptences according to a heuristic that 
-    keeps the effective nature of the links in mind.
+    """Remove a line by changing the susceptances, the number of parallel lines and 
+    the line limits.
 
     Args:
         B_d_in (sparse diagonal matrix): Diagonal matrix with susceptances
@@ -123,7 +202,7 @@ def solve_lpf(P, B_d, I, L=None):
 
 def simulate_cascade(II_in, B_d_in,
                      P0, line_limits_in, num_parallel_in, failure_links,
-                     epsilon=1e-2, max_cascade_length=np.inf):
+                     epsilon=0, max_cascade_length=np.inf):
     """Simulate a cascade with the given inital failure links:
 
     Args:
@@ -136,7 +215,7 @@ def simulate_cascade(II_in, B_d_in,
         failure_links (list): Collects the initial failure links
         epsilon (float): Margin above capacity that has to be exceeded for a link to fail. 
         The margin should be given as a share of the capacity (between 0 and 1).
-        max_cascade_length (int): Maximum number of secondary failure to investigate.
+        max_cascade_length (int): Maximum number of secondary failures to investigate.
 
     Returns:
         failure_cascase, did_system_split: Links involved in the cascase, boolean if the system did split
