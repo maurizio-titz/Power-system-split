@@ -1,7 +1,6 @@
-#!usr/bin/env python
-# -*- coding: utf-8 -*-
-
-"""This implemention follows Dirk's idea in the matlab script"""
+"""
+Purely matrix-based simulation of cascading failures in power grids
+"""
 
 
 import numpy as np

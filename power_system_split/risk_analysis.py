@@ -1,8 +1,6 @@
-#!usr/bin/env python
-# -*- coding: utf-8 -*-
-
-""" This module contains useful methods to analyse and
-visualise cascade results"""
+""" 
+Risk analysis for power system splits
+"""
 
 import networkx as nx
 import numpy as np
@@ -10,96 +8,43 @@ import pandas as pd
 from sklearn.cluster import DBSCAN, AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 from sklearn.neighbors import RadiusNeighborsClassifier
-from tqdm import tqdm
-
-from power_system_split import utils
-
-def get_split_adjacencies_from_rocof_solutions(solution_dict,
-                                               splitting_cascades_in,
-                                               nx_graph):
-    """obtain the adjacency matrices for each split in the
-    rocof solution dictionary (see evaluate_split_observables).
-
-    NOTE: This only takes into account splits that have been
-    prefiltered according to the 'nodes' criterion or the 'load' criterion
-    passed to the evaluation function"""
-
-    adjacencies = []
-
-    for key in solution_dict.keys():
-        for number in solution_dict[key][::2]:
-
-            split = splitting_cascades_in[key][number]
-            F = nx_graph.copy()
-            F.remove_edges_from(split)
-            A = nx.adjacency_matrix(F).A
-            adjacencies.append(A.astype('bool'))
-
-    return np.array(adjacencies)
-
-def indicator_vectors_from_rocof_solution(solution_dict, splitting_cascades, nx_graph, criterion):
-    """Construct boolean indicator vectors for split components and retrieve component properties.
-
-    Args:
-        solution_dict (dict): Dictionary with time stamps as keys. Each entry contains a list
-        [split_number, result, split_number, result, ...] where split_number indicates the index of the split
-        in the splitting_cascades dictionary and result summarizes component properties such as the inertia.
-        splitting_cascades (dict):  Dictionary with time stamps as keys, which contains all splits occuring
-        at this time stamp.
-        nx_graph (networkx graph): Graph of PyPSA network.
-        criterion (string): Criterion for selecting system splits.
-
-    Returns:
-        indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes.
-        split_component_props (DataFrame): Properties of components with shape n_vectors x 5.
-    """
 
 
-    list_of_nodes = list(nx_graph)
-    n_nodes = len(list_of_nodes)
-
-    indicator_vectors = np.empty((0, n_nodes), bool)
-    split_component_props = pd.DataFrame(columns=['time_stamp',
-                                                  'number_of_split',
-                                                  'inertia_proxy',
-                                                  'load_imbalance',
-                                                  'causing_link'],
-                                         index=[], dtype=float)
+from power_system_split.data_handling import get_inertia_gen_subgraph
 
 
-    for time_stamp in tqdm(solution_dict.keys()):
+def calc_system_inertia_over_time(pypsa_network,
+                                  Graph,
+                                  snet_index = None,
+                                  use_pnom = True,
+                                  inertiaplants = None,
+                                  inertia_storages = None):
+    """get inertia generation for a subgraph"""
 
-        if not solution_dict[time_stamp]:
-            continue
+    inertia_over_time = np.zeros(len(pypsa_network.snapshots))
 
-        for i, split_number in enumerate(solution_dict[time_stamp][::2]):
+    for count,timestamp in enumerate(pypsa_network.snapshots):
 
-            split = splitting_cascades[time_stamp][split_number]
-            components = utils.get_split_components(split, nx_graph, criterion = criterion)
+        # Rescale load shedding since units for load shedding are different
+        # than for generation, storage and load
+        # (Note: In this project load shedding is not implement)
+        load_shedding_indices = pypsa_network.generators[pypsa_network.generators.carrier.isin(['load'])].index
 
-            component_props = solution_dict[time_stamp][i*2+1]
-
-            for j, component in enumerate(components):
-
-                component_indicator_vec = np.isin(list_of_nodes, list(component))
-                indicator_vectors = np.append(indicator_vectors, np.array([component_indicator_vec]),
-                                              axis=0)
-                causing_link = split[0]
-                causing_link_index = float(nx_graph[causing_link[0]][causing_link[1]]['line_index'][0])
-
-                props = {'time_stamp': time_stamp,
-                         'number_of_split': split_number,
-                         'inertia_proxy': component_props['inertia_proxy'][j],
-                         'load_imbalance': component_props['load_imbalance'][j],
-                         'causing_link' : causing_link_index
-                         }
-
-                # With `ignore_index=True`, the resulting axis will be labeled 0, 1, …, n - 1.
-                # (such that split_component_props.loc[i] match indicator_vectors[i])
-                split_component_props = split_component_props.append(props, ignore_index=True)
+        current_generation = pypsa_network.generators_t.p.loc[timestamp].copy()
+        current_generation[load_shedding_indices] /= 1e3
+        current_storage    = pypsa_network.storage_units_t.p.loc[timestamp]
 
 
-    return indicator_vectors, split_component_props
+        inertia_over_time[count] = get_inertia_gen_subgraph(Graph,
+                                                          pypsa_network.generators,
+                                                          current_generation,
+                                                          pypsa_network.storage_units,
+                                                          current_storage,
+                                                           use_pnom,
+                                                          inertiaplants = inertiaplants,
+                                                          inertia_storages = inertia_storages)
+
+    return inertia_over_time
 
 
 def calc_likelihood_failure(nx_graph,
@@ -380,3 +325,7 @@ def val_at_risk(data, n_total, q, target='rocof', method='abs'):
 
 def calc_rocof(load_imbalance, inertia_proxy):
     return 50*load_imbalance /  (inertia_proxy*2*6)
+
+
+
+
