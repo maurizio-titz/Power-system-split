@@ -47,6 +47,7 @@ def construct_incidencematrix_from_orientation(Graph,return_np_array = True):
     NOTE: This function was tweaked based on networkx incidence matrix function
     https://networkx.org/documentation/stable/_modules/networkx/linalg/graphmatrix.html#incidence_matrix"""
 
+    #TODO: Why do we need an extra function? Why not just take networkx's function?
 
     edgelist = list(Graph.edges())
     nodelist = list(Graph.nodes())
@@ -67,22 +68,39 @@ def construct_incidencematrix_from_orientation(Graph,return_np_array = True):
         return_val = B.asformat("csr")
     return return_val
 
-def get_effective_injections(Graph,initial_flows):
-    """get effective injections from the initial flows"""
+def get_effective_injections(network, snapshot, nx_graph):
+    """Get effective nodal injections on nx_graph for certain snapshot from PyPSA network. 
 
-    flows_G = np.array([initial_flows[(u,v)] for u,v in Graph.edges()])
+    Args:
+        network (_type_): _description_
+        snapshot (_type_): _description_
+        nx_graph (networkx graph, ): _description_
 
-    I = construct_incidencematrix_from_orientation(Graph)
-    P0 = np.dot(I,flows_G)
+    Returns:
+        numpy array: n_nodes x 1 array with nodal injections
+    """
+
+    #TODO: Maybe introduce a general "pypsa flow vector > nx_graph flow dict > matrix flow vector" transformation routine
+
+    I_m = construct_incidencematrix_from_orientation(nx_graph)
+
+    flows_network = network.lines_t.p0.loc[snapshot]        
+    flows_matrix = np.array([flows_network[attribs['line_index']] for u,v, attribs in nx_graph.edges(data=True)])
+
+    P0 = np.dot(I_m,flows_matrix)
+
     return P0
 
 
-def load_pypsa_network(path_to_pypsa_network='./data/sclopf_test_data/'):
+def load_pypsa_network(co2l, path_to_pypsa_network='./data/sclopf_test_data/'):
 
-
+    # Select a particular subnetwork for calculations (if the pypsa network has different ones).
+    # For our data set, "0" indicates the Continental European AC grid. -> snet doc
+    
+    file_name = 'sclopf-elec_s_200_ec_lv1.0_Co2L{:.1f}-2920SEG-0.nc'.format(co2l)
     # Load PyPSA network
     network = pypsa.Network()
-    network.import_from_netcdf(path_to_pypsa_network+ 'sclopf-elec_s_200_ec_lv1.0_Co2L0.0-2920SEG-0.nc') #f'sclopf-elec_s_800_ec_lv1.0_Co2L{co2l}-3H.nc')
+    network.import_from_netcdf(path_to_pypsa_network+ file_name) #f'sclopf-elec_s_800_ec_lv1.0_Co2L{co2l}-3H.nc')
 
     # The following line is needed to remove the outage lines used for SCLOPF. For SCLOPF,
     # the Lines are split into 2, one that fails during N-1 stability test, except from
@@ -112,56 +130,93 @@ def load_pypsa_network(path_to_pypsa_network='./data/sclopf_test_data/'):
             pnl[k].index = pd.date_range(start='2013', freq='3H', periods=len(network.snapshots))
     ######
 
-    # Select a particular subnetwork for calculations (if the pypsa network has different ones).
-    # For our data set, "0" indicates the Continental European AC grid. 
-    snet_index = 0
 
-    # Build graph for subnetwork
-    G = build_networkx_graph(network, snet_index= snet_index)
+    return network
 
 
-def solution_key_to_pandas_timestamp(key):
-    """Convert from dictionary key used in solution dictionaries
-    to pandas datetime index used in pypsa networks"""
-    day,month,year,hour = key.split('_')
-    snapshot = pd.Timestamp(year = int(year),month = int(month),hour = int(hour),day = int(day))
-    return snapshot
+# def solution_key_to_pandas_timestamp(key):
+#     """Convert from dictionary key used in solution dictionaries
+#     to pandas datetime index used in pypsa networks"""
+#     day,month,year,hour = key.split('_')
+#     snapshot = pd.Timestamp(year = int(year),month = int(month),hour = int(hour),day = int(day))
+#     return snapshot
 
-def pandas_timestamp_to_solution_key(timestamp):
-    """Convert from pandas datetime index to
-    to dictionary key used in solution dictionaries used in pypsa networks"""
-    return timestamp.strftime('%d_%m_%Y_%H')
+# def pandas_timestamp_to_solution_key(timestamp):
+#     """Convert from pandas datetime index to
+#     to dictionary key used in solution dictionaries used in pypsa networks"""
+#     return timestamp.strftime('%d_%m_%Y_%H')
 
-def transform_cascade_results(Graph,cascade):
-    """Cascade model used to save indices of edges
-    but the new format should be the edges itself"""
+# def transform_cascade_results(Graph,cascade):
+#     """Cascade model used to save indices of edges
+#     but the new format should be the edges itself"""
 
-    Graph_edges = list(Graph.edges())
-    return [Graph_edges[index] for index in cascade]
+#     Graph_edges = list(Graph.edges())
+#     return [Graph_edges[index] for index in cascade]
 
-def edge_list_to_subgraph(split,Graph,criterion):
-    """Return the split resulting from the edge list in split if the resulting subgraphs are larger than 10 nodes"""
-    assert isinstance(split[0],tuple),"""Format of split data has been changed.
-                   Please use transform_cascade_results to adjust to new format"""
-    F = Graph.copy()
-    #cascade_edges = [list(F.edges())[index] for index in split]
-    F.remove_edges_from(split)
+def get_subgraphs_from_edges(edge_indices,nx_graph):
+    """Generate subgraphs that result from removing the edges. 
+
+    Args:
+        edge_indices (iterable): indices of edges to remove (indices from matrix format)
+        nx_graph (networkx graph): _description_
+
+    Returns:
+        list: List of networkx graphs
+    """    
+
+    nx_edges = matrix_indices_to_nx_edges(edge_indices, nx_graph)
+    
+    F = nx_graph.copy()
+    F.remove_edges_from(nx_edges)
     subgraphs =  list((F.subgraph(c).copy() for c in nx.connected_components(F)))
-    if criterion == 'nodes':
-        ## old criterion of considering only cases where at least two subgraphs
-        ## with at least two nodes each exist
-        relevant_subgraphs = [i for i in range(len(subgraphs)) if len(subgraphs[i].nodes())>10]
-        if len(relevant_subgraphs)<2:
-            return_val = []
-        else:
-            return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
-    elif (criterion == 'load') or (criterion=='all') :
-        ## all subgraphs are considered
-        ## independent of their number of nodes
-        relevant_subgraphs = [i for i in range(len(subgraphs))]
-        return_val = [subgraphs[relevant_subgraphs[i]] for i in range(len(relevant_subgraphs))]
 
-    return return_val
+    return subgraphs
+
+def nx_edges_to_matrix_indices(nx_edges, nx_graph):
+    """Transform edge names from networkx graph format to matrix format.
+
+    Args:
+        nx_edges (_type_): _description_
+        nx_graph (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    lookup_dict = dict(zip(nx_graph.edges(), range(nx_graph.number_of_edges())))
+    matrix_indices = [lookup_dict[link_name] for link_name in nx_edges]
+
+    return matrix_indices
+
+def matrix_indices_to_nx_edges(indices, nx_graph):
+    """Transform edge indices from matrix format to edge names in networkx graph.
+
+    Args:
+        nx_edges (_type_): _description_
+        nx_graph (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    lookup_dict = dict(zip(range(nx_graph.number_of_edges()), nx_graph.edges()))
+    edge_names = [lookup_dict[ind] for ind in indices]
+
+    return edge_names
+
+
+def get_matrices_from_nx_graph(nx_graph):
+
+    # Build incidence matrix and susceptance matrix
+    I_m = construct_incidencematrix_from_orientation(nx_graph,return_np_array = False) 
+    B_d = sparse.spdiags(np.array([attribs['weight'] for u,v, attribs in nx_graph.edges(data=True)]),
+                         0,nx_graph.number_of_edges(),nx_graph.number_of_edges()).asformat('csr')
+
+    # Get array of num_parallels and of line limits
+    num_parallels = np.array([attribs['num_parallel'] for u,v, attribs in nx_graph.edges(data=True)])
+    line_limits = np.array([attribs['s_nom'] for u,v, attribs in nx_graph.edges(data=True)])
+
+
+    #TODO: maybe also return positions of nodes, as this is the last remaining information in the graph
+    return I_m, B_d, num_parallels, line_limits
 
 
 def split_evaluation_to_indicator_vectors(solution_dict, splitting_cascades, nx_graph, criterion):
