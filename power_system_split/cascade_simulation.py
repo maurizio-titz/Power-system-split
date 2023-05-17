@@ -4,12 +4,9 @@ Purely matrix-based simulation of cascading failures in power grids
 
 
 import numpy as np
-from numpy import dtype
 from scipy import sparse
-from scipy import linalg as sc_linalg
 from scipy.sparse.csgraph import connected_components
 import itertools
-import scipy
 
 
 # def load_num_parallel_table():
@@ -119,19 +116,29 @@ def calc_num_parallel_after_failure(num_parallel):
         
     return num_parallel_new
 
-def calc_possible_double_line_failures(num_parallel_ls, bridge_idxs=None): 
-    
-    if bridge_idxs is None:
-        edge_indices = range(len(num_parallel_ls))
+def calc_possible_double_line_failures(num_parallels, bridge_idxs=None): 
+    """_summary_
+
+    Args:
+        num_parallels (_type_): _description_
+        bridge_idxs (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        list: List of lists, where each list contains two matrix indices of lines
+    """
+
+
+    if not bridge_idxs:
+        edge_indices = range(len(num_parallels))
     else:
-        edge_indices = list(set(range(len(num_parallel_ls))) - set(bridge_idxs))
+        edge_indices = list(set(range(len(num_parallels))) - set(bridge_idxs))
     
-    # Add failures on two different links
+    # Add failures on two different lines
     possible_failures = list(map(list, itertools.combinations(edge_indices,2)))
     
-    # Add common mode failures (two circuits failing in one link)
+    # Add common mode failures (two circuits failing in one line)
     for i in edge_indices:
-        num_parallel_one_fail = calc_num_parallel_after_failure(num_parallel_ls[i])
+        num_parallel_one_fail = calc_num_parallel_after_failure(num_parallels[i])
         
         # Only add common mode failure if more than one circuit is present
         # (i.e., first failure did not remove all circuits)
@@ -139,6 +146,26 @@ def calc_possible_double_line_failures(num_parallel_ls, bridge_idxs=None):
             possible_failures += [[i,i]]
         
     return possible_failures
+
+
+def calc_possible_single_line_failures(num_parallels, bridge_idxs=None):
+    """_summary_
+
+    Args:
+        num_parallels (_type_): _description_
+        bridge_idxs (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        list: List of lists, where each list contains one matrix index of a line
+    """
+
+    if not bridge_idxs:
+        possible_failures = list(range(len(num_parallels)))
+    else:
+        possible_failures = list(set(range(len(num_parallels))) - set(bridge_idxs))
+
+    return [[failure] for failure in possible_failures]
+
 
 
 def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, remove_all_circuits=False):
@@ -200,24 +227,26 @@ def solve_lpf(P, B_d, I, L=None):
     return flows
 
 def simulate_cascade(II_in, B_d_in,
-                     P0, line_limits_in, num_parallel_in, failure_links,
-                     epsilon=0, max_cascade_length=np.inf):
-    """Simulate a cascade with the given inital failure links:
+                     P0, line_limits_in, num_parallel_in, failure_lines,
+                     epsilon=1e-6, max_cascade_length=np.inf): 
+    """Simulate a cascade with the given inital failure lines. 
 
+    
     Args:
         II_in (sparse matrix): Incidence matrix
-        B_d_in (_type_): Diagonal matrix with susecptance on diagonal.
+        B_d_in (sparse matrix): Diagonal matrix with susecptance on diagonal.
         P0 (1d numpy array): power injections/extractions 
-        line_limits (_type_): Limits of of power lines. 's_nom' in PyPSA
-        num_parallel_in (list): List with 'num_parrallel' that gives a effective number
+        line_limits (1d numpy array): Limits of of power lines. 's_nom' in PyPSA
+        num_parallel_in (1d numpy array): List with 'num_parrallel' that gives a effective number
         for each edge the line quantifying different and also multiple lines between two nodes.
-        failure_links (list): Collects the initial failure links
+        failure_lines (list): Collects the initial failure lines
         epsilon (float): Margin above capacity that has to be exceeded for a link to fail. 
         The margin should be given as a share of the capacity (between 0 and 1).
         max_cascade_length (int): Maximum number of secondary failures to investigate.
 
     Returns:
-        failure_cascase, did_system_split: Links involved in the cascase, boolean if the system did split
+        failure_cascade, did_system_split: Lines involved in the cascade and boolean if the system did split.
+        The cascade list only includes lines where all circuits have failed. 
     """
     II = II_in.copy()
     B_d = B_d_in.copy()
@@ -229,14 +258,16 @@ def simulate_cascade(II_in, B_d_in,
     #LL = II.dot(num_parallel * B_d).dot(II.T)
     
     # Remove inital failures
-    for del_idx in failure_links:
+    for del_idx in failure_lines:
         remove_line_from_Bd(B_d, num_parallel_ls,
                             line_limits, del_idx)
         
     did_system_split = False
     still_going = True
     cascade_length = 0
-    failure_cascade = failure_links.copy()
+
+    # Only add initial failure that fully removed a line
+    failure_cascade = list(np.argwhere(np.isclose(num_parallel_ls, 0))[:,0])
     
     while still_going:
         
@@ -262,7 +293,7 @@ def simulate_cascade(II_in, B_d_in,
         
         else:
             failure_cascade += list(idxs_overloaded)
-            # Delete overloaded lines
+            # Delete all circuits in a line if line is overloaded
             for idx_r in idxs_overloaded:
                 remove_line_from_Bd(B_d, num_parallel_ls,
                                     line_limits, idx_r,
