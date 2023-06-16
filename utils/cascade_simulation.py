@@ -2,54 +2,48 @@
 Purely matrix-based simulation of cascading failures in power grids
 """
 
-
 import numpy as np
 from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 import itertools
 
 
-# def load_num_parallel_table():
-#     """Load lookup table for changing number of parallel lines after
-#     failure. 
+# First column: num_parallel before failure
+# Second column: num_parallel after failure
+LOOKUP_TABLE_NP = np.array([
+    [0.28947368, 0.        ],
+    [0.57894737, 0.28947368],
+    [0.59210526, 0.        ],
+    [0.86842105, 0.57894737],
+    [0.88157895, 0.28947368],
+    [1.        , 0.        ],
+    [1.15789474, 0.86842105],
+    [1.18421053, 0.59210526],
+    [1.28947368, 0.28947368],
+    [1.44736842, 1.15789474],
+    [1.47368421, 0.88157895],
+    [1.57894737, 0.57894737],
+    [1.59210526, 0.59210526],
+    [1.73684211, 1.44736842],
+    [1.77631579, 1.18421053],
+    [1.86842105, 0.86842105],
+    [2.        , 1.        ],
+    [2.02631579, 1.73684211],
+    [2.06578947, 1.47368421],
+    [2.15789474, 1.15789474],
+    [2.18421053, 1.18421053],
+    [2.28947368, 1.28947368],
+    [2.31578947, 2.02631579],
+    [2.36842105, 1.77631579],
+    [2.44736842, 1.44736842],
+    [2.57894737, 1.57894737],
+    [2.59210526, 1.59210526],
+    [2.65789474, 2.06578947],
+    [2.73684211, 1.73684211],
+    [2.77631579, 1.77631579],
+    [2.86842105, 1.86842105]
+])
 
-#     Returns:
-#         1d numpy array: lookup table
-#     """
-    
-    
-#     lookup_table = np.array([
-#         0.28947368421052,					               0,
-#         0.57894736842105,					0.28947368421052,
-#         0.59210526315789,					               0,
-#         0.86842105263157,					0.57894736842105,
-#         0.88157894736842,					0.28947368421052,
-#                        1,				                   0,
-#         1.15789473684211,					0.86842105263157,
-#         1.18421052631579,					0.59210526315789,
-#         1.28947368421053,					0.28947368421052,
-#         1.44736842105263,					1.15789473684211,
-#         1.47368421052632,					0.88157894736842,
-#         1.57894736842105,					0.57894736842105,
-#         1.73684210526316,					1.44736842105263,
-#         1.77631578947368,					1.18421052631579,
-#         1.86842105263158,					0.86842105263157,
-#                        2,					               1,
-#         2.02631578947368,					1.73684210526316,
-#         2.06578947368421,					1.47368421052632,
-#         2.15789473684211,					1.15789473684211,
-#         2.18421052631579,					1.18421052631579,
-#         2.28947368421053,					1.28947368421053,
-#         2.31578947368421,					2.02631578947368,
-#         2.36842105263158,					1.77631578947368,
-#         2.57894736842105,					1.57894736842105,
-#         2.59210526315789,					1.59210526315789,
-#         2.65789473684211,					2.06578947368421,
-#         2.86842105263158,					1.86842105263158
-#     ])
-    
-    
-#     return lookup_table
 
 
 def calc_num_parallel_after_failure(num_parallel):
@@ -64,50 +58,12 @@ def calc_num_parallel_after_failure(num_parallel):
         float: new value
     """        
     
-    assert num_parallel >= 0, ('Line removal for num_parallel={0:3f} not correct.'+
+    assert num_parallel >= 1e-8, ('Line removal for num_parallel=0 not correct.'+
                                ' Line was either already removed a wrong num_parallel was assigned. ')
 
-
-    # First column: num_parallel before failure
-    # Second column: num_parallel after failure
-    lookup_table = np.array([
-        [0.28947368, 0.        ],
-        [0.57894737, 0.28947368],
-        [0.59210526, 0.        ],
-        [0.86842105, 0.57894737],
-        [0.88157895, 0.28947368],
-        [1.        , 0.        ],
-        [1.15789474, 0.86842105],
-        [1.18421053, 0.59210526],
-        [1.28947368, 0.28947368],
-        [1.44736842, 1.15789474],
-        [1.47368421, 0.88157895],
-        [1.57894737, 0.57894737],
-        [1.59210526, 0.59210526],
-        [1.73684211, 1.44736842],
-        [1.77631579, 1.18421053],
-        [1.86842105, 0.86842105],
-        [2.        , 1.        ],
-        [2.02631579, 1.73684211],
-        [2.06578947, 1.47368421],
-        [2.15789474, 1.15789474],
-        [2.18421053, 1.18421053],
-        [2.28947368, 1.28947368],
-        [2.31578947, 2.02631579],
-        [2.36842105, 1.77631579],
-        [2.44736842, 1.44736842],
-        [2.57894737, 1.57894737],
-        [2.59210526, 1.59210526],
-        [2.65789474, 2.06578947],
-        [2.73684211, 1.73684211],
-        [2.77631579, 1.77631579],
-        [2.86842105, 1.86842105]
-       ])
-
-
     if 0<num_parallel<3:
-        num_parallel_case = np.argwhere(np.isclose(lookup_table[:,0], num_parallel))[0,0]
-        num_parallel_new = lookup_table[num_parallel_case,1]
+        num_parallel_case = np.argwhere(np.isclose(LOOKUP_TABLE_NP[:,0], num_parallel))[0,0]
+        num_parallel_new = LOOKUP_TABLE_NP[num_parallel_case,1]
     elif num_parallel>=3:
         num_parallel_new = num_parallel - 1
     else:
@@ -116,22 +72,22 @@ def calc_num_parallel_after_failure(num_parallel):
         
     return num_parallel_new
 
-def calc_possible_double_line_failures(num_parallels, bridge_idxs=None): 
-    """_summary_
+def calc_possible_double_line_failures(num_parallels, ignored_idxs=None): 
+    """Determine the set of possible double line failures.
 
     Args:
-        num_parallels (_type_): _description_
-        bridge_idxs (_type_, optional): _description_. Defaults to None.
+        num_parallels (list-like): Effective number of parallel lines per edge.
+        ignored_idxs (list-like, optional): Edges that should not fail. 
 
     Returns:
         list: List of lists, where each list contains two matrix indices of lines
     """
 
 
-    if not bridge_idxs:
+    if not ignored_idxs:
         edge_indices = range(len(num_parallels))
     else:
-        edge_indices = list(set(range(len(num_parallels))) - set(bridge_idxs))
+        edge_indices = list(set(range(len(num_parallels))) - set(ignored_idxs))
     
     # Add failures on two different lines
     possible_failures = list(map(list, itertools.combinations(edge_indices,2)))
@@ -148,21 +104,21 @@ def calc_possible_double_line_failures(num_parallels, bridge_idxs=None):
     return possible_failures
 
 
-def calc_possible_single_line_failures(num_parallels, bridge_idxs=None):
-    """_summary_
+def calc_possible_single_line_failures(num_parallels, ignored_idxs=None):
+    """Determine the set of possible single line failures.
 
     Args:
-        num_parallels (_type_): _description_
-        bridge_idxs (_type_, optional): _description_. Defaults to None.
+        num_parallels (list-like): Effective number of parallel lines per edge.
+        ignored_idxs (list-like, optional): Edges that should not fail.
 
     Returns:
         list: List of lists, where each list contains one matrix index of a line
     """
 
-    if not bridge_idxs:
+    if not ignored_idxs:
         possible_failures = list(range(len(num_parallels)))
     else:
-        possible_failures = list(set(range(len(num_parallels))) - set(bridge_idxs))
+        possible_failures = list(set(range(len(num_parallels))) - set(ignored_idxs))
 
     return [[failure] for failure in possible_failures]
 
@@ -183,7 +139,7 @@ def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, remove
 
     # Select num_parallel of removed link
     num_parallel = num_parallel_ls[del_idx]
-    assert num_parallel >= 0, ('Line removal for num_parallel={0:3f} not correct.'+
+    assert num_parallel >= 1e-8, ('Line removal for num_parallel=0 not correct.'+
                                ' Line was either already removed a wrong num_parallel was assigned. ')
     
     # Calculate new num_parallel after removal
@@ -216,11 +172,8 @@ def solve_lpf(P, B_d, I, L=None):
     if L==None:
         L = I.dot(B_d).dot(I.T)
     
-    try:
-        theta = sparse.linalg.spsolve(L, P)
-    except np.linalg.LinAlgError:
-        L_inv = np.linalg.pinv(L.todense())
-        theta = np.dot(L_inv, P)
+    theta = np.zeros(L.shape[0])
+    theta[1:] = sparse.linalg.spsolve(L[1:,1:], P[1:])
         
     flows = B_d.dot((I.T).dot(theta))
     
@@ -228,7 +181,7 @@ def solve_lpf(P, B_d, I, L=None):
 
 def simulate_cascade(II_in, B_d_in,
                      P0, line_limits_in, num_parallel_in, failure_lines,
-                     epsilon=1e-6, max_cascade_length=np.inf): 
+                     epsilon=1e-4, max_cascade_length=np.inf): 
     """Simulate a cascade with the given inital failure lines. 
 
     
@@ -236,7 +189,7 @@ def simulate_cascade(II_in, B_d_in,
         II_in (sparse matrix): Incidence matrix
         B_d_in (sparse matrix): Diagonal matrix with susecptance on diagonal.
         P0 (1d numpy array): power injections/extractions 
-        line_limits (1d numpy array): Limits of of power lines. 's_nom' in PyPSA
+        line_limits_in (1d numpy array): Limits of of power lines. 's_nom' in PyPSA
         num_parallel_in (1d numpy array): List with 'num_parrallel' that gives a effective number
         for each edge the line quantifying different and also multiple lines between two nodes.
         failure_lines (list): Collects the initial failure lines
@@ -252,10 +205,6 @@ def simulate_cascade(II_in, B_d_in,
     B_d = B_d_in.copy()
     num_parallel_ls = num_parallel_in.copy()
     line_limits = line_limits_in.copy()
-    
-    # Solve the inital case
-    # todo is this really the fastest to do the product???
-    #LL = II.dot(num_parallel * B_d).dot(II.T)
     
     # Remove inital failures
     for del_idx in failure_lines:

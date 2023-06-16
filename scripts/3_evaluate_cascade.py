@@ -1,88 +1,60 @@
 import pickle
 import sys
-
-import pypsa
-import pandas as pd
 from tqdm import tqdm
+import pandas as pd
+import numpy as np
+
 
 sys.path.append('./')
-from power_system_split import utils
+from utils import data_handling, subgraph_evaluation
 
 # Setup paths to solved PyPSA networks and results own scripts
-path_to_pypsa_network   = './data/European_networks_lopf/'
-path_to_cascade_results  = './results/lopf/cascade_results/'
+path_to_pypsa_network = './data/European_networks_sclopf/'
+path_to_cascade_results  = './results/sclopf/cascade_results/'
 save_path =  './results/sclopf/evaluation_results/'
 
-# Load co2 level
-co2l = 0.9# float(sys.argv[1])
-
-# Load PyPSA network
-network = pypsa.Network()
-network.import_from_netcdf(path_to_pypsa_network+f'elec_s_800_ec_lv1.0_Co2L{co2l}-3H.nc')
-#network.import_from_netcdf(path_to_pypsa_network+f'sclopf-elec_s_800_ec_lv1.0_Co2L{co2l}-3H.nc')
-
-# The following line is needed to remove the outage lines used for SCLOPF. When not removed, multiple edges 
-# are added to the network graph
-outage_lines = network.lines[network.lines.index.str[-6:]=='outage'].index
-network.mremove('Line', outage_lines)
-network.determine_network_topology()
-
-######
-#TODO: add function for this. Adding time stamps is necessary because they are missing in the pypsa networks
-network.snapshots = pd.date_range(start='2013', freq='3H', periods=len(network.snapshots))
-
-network.snapshot_weightings.index = pd.date_range(start='2013', freq='3H', periods=len(network.snapshots))
-
-for component in network.all_components:
-    pnl = network.pnl(component)
-    attrs = network.components[component]["attrs"]
-
-    for k,default in attrs.default[attrs.varying].iteritems():
-        pnl[k].index = pd.date_range(start='2013', freq='3H', periods=len(network.snapshots))
-######
-
-
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
-# Otherwise you can choose None or -1.
 # For our data set, "0" indicates the Continental European AC grid. 
 snet_index = 0
 
-# "Node" criterion means that only split components 
-# with at least 10 nodes are evaluated
-use_pnom  = True
-criterion = 'all'
+# Load arguments
+co2l = float(sys.argv[1]) 
+n_nodes = int(sys.argv[2])
+
+# Load PyPSA network, the graph of the subnetwork and its matrices
+network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
+nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
 
 # Load cascade results
 splitting_cascades = pickle.load(open(path_to_cascade_results+
-                                      f'system_splits_Co2L{co2l}.pickle' ,'rb'))
+                                      f'system_splits_Co2L{co2l}_n{n_nodes}.pickle' ,'rb'))
 
-solution_dict = {}
+# Initialize results
+component_props = pd.DataFrame(columns=['time_stamp', 'init_failure_0','init_failure_1',
+                                        'split_number','rot_energy', 'power_imbalance',
+                                        'load', 'rocof', 'load_share'],
+                               index=[], dtype=float)
+indicator_vectors = np.empty((0, nx_graph.number_of_nodes()), int)
 
-# Iterate over time stamps
-for key in tqdm(splitting_cascades.keys()):
-    timestamp = utils.solution_key_to_pandas_timestamp(key)
-    solution_dict[key] = []
-    splits = splitting_cascades[key]
+for timestamp, splits in tqdm(splitting_cascades.items()):
+    for i,(init_failure, cascade) in enumerate(splits.items()):
+
+        subgraphs = data_handling.get_subgraphs_from_edges(cascade,nx_graph)
+        
+        observables = subgraph_evaluation.evaluate_observables_for_subgraphs(subgraphs, network,
+                                                                             timestamp)
+        observables['init_failure_0'] = init_failure[0]
+        observables['init_failure_1'] = init_failure[1]
+        observables['split_number'] = i
+        component_props = component_props.append(observables, ignore_index=True)
+        
+        # Append properties and vectors such that component_props.iloc[i] refers to 
+        # indicator_vectors[i]
+        indicator_vec = subgraph_evaluation.get_indicator_vectors_of_subgraphs(subgraphs, nx_graph)
+        indicator_vectors = np.append(indicator_vectors, indicator_vec, axis=0)
+
     
-    # Iterate over splits occuring for that time stamp
-    for i,split in enumerate(splits):
-        results = utils.evaluate_split_observables(split,
-                                                   network,
-                                                   timestamp,
-                                                   use_pnom = use_pnom,
-                                                   criterion = criterion,
-                                                   snet_index= snet_index)
-        if results['inertia_proxy']:
-            # save the index of the split that was evaluated (i)
-            # and the results dict that contains the inertia proxy
-            # and the load imbalance for each split component that fulfills the criterion
-            # NOTE: to get the Rocof from load imbalance and the inertia proxy
-            # you need to multiply by a factor of 50Hz/(2*inertia_constant), where
-            # we typically set inertia_constant = 6s^{-1}
-            solution_dict[key].append(i)
-            solution_dict[key].append(results)
-
-with open(save_path + f'Europe_Co2L{co2l}_split_evaluation_' + criterion +f'_based_snet_{snet_index}_w_hvdc.pickle' ,
-          'wb') as handle:
-    pickle.dump(solution_dict, handle, protocol = pickle.HIGHEST_PROTOCOL)
+    np.save(save_path + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.npy', indicator_vectors)
+    component_props.to_hdf(save_path + f'component_properties_Co2L{co2l}_n{n_nodes}.h5',
+                           key='df', mode= 'w')
 

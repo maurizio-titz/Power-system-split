@@ -7,8 +7,7 @@ import networkx as nx
 
 root_path = './'
 sys.path.append(root_path)
-from power_system_split import utils
-from power_system_split import visualisation as vis 
+from . import visualization as vis 
 
 
 # Setup paths 
@@ -24,7 +23,7 @@ co2l_list = np.arange(0.0,0.99,0.05)
 # Load network
 network = pypsa.Network()
 network.import_from_netcdf(path_to_pypsa_network+'elec_s_800_ec_lv1.0_Co2L0.5-3H.nc') 
-G = utils.build_networkx_graph(network, snet_index = snet_index)
+G = build_networkx_graph(network, snet_index = snet_index)
 
 # Get number of split simulations
 bridges = list(nx.bridges(nx.Graph(G)))
@@ -66,7 +65,7 @@ for co2l in co2l_list:
                                                comp_props_level.inertia_proxy)
 
 
-    comp_props_new, inertia_placement_info = utils.inertia_placement(comp_props_level,
+    comp_props_new, inertia_placement_info = inertia_placement(comp_props_level,
                                                                      indicator_vectors_level,
                                                                      var_co2lref,
                                                                      additional_synthetic_inertia_per_step,

@@ -4,7 +4,7 @@
 import networkx as nx
 import numpy as np
 
-from power_system_split import utils
+from utils import utils
 
 
 def test_cascade_no_overloads():

@@ -4,7 +4,7 @@
 import networkx as nx
 import numpy as np
 
-from power_system_split import visualisation
+from utils import visualisation
 
 
 def test_likelihood_no_solution_dict():
