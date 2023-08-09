@@ -6,11 +6,12 @@ import networkx as nx
 import numpy as np
 from shapely.geometry import Point
 
-from utils import data_handling, subgraph_evaluation
+from utils import data_handling, subgraph_evaluation, config
+from utils.config import results_path, data_path
 
 # Setup paths 
-path_to_pypsa_network = './data/European_networks_sclopf/'
-save_path = './results/sclopf/pre_outage_data/'
+path_to_pypsa_network = data_path + 'European_networks_sclopf/'
+save_path = results_path + 'sclopf/pre_outage_data/'
 
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
 # For our data set, "0" indicates the Continental European AC grid. 
@@ -73,6 +74,7 @@ np.save(save_path + 'min_max_nodal_inertia_generation_all_co2ls.npy',
 pos = nx.get_node_attributes(nx_graph, 'pos')
 dipole_vector = np.zeros((len(co2l_list),2,len(network.snapshots)))
 mean_consumption_vector = np.zeros((len(co2l_list),nx_graph.number_of_nodes()))
+weighted_mean_consumption_vector = np.zeros((len(co2l_list),nx_graph.number_of_nodes()))
 graph_net_mismatch = np.zeros((len(co2l_list),len(network.snapshots)))
 
 for i,co2l in enumerate(co2l_list):
@@ -99,6 +101,7 @@ for i,co2l in enumerate(co2l_list):
     
     for nodecount,node in enumerate(nx_graph.nodes()):
         mean_consumption_vector[i,nodecount] = nodal_balance.mean(axis = 1).loc[node]
+        weighted_mean_consumption_vector[i,nodecount] = nodal_balance.mul(network.snapshot_weightings.generators, axis="columns").mean(axis = 1).loc[node]
         graph_net_mismatch[i] += nodal_balance.loc[node]
         dipole_vector[i] += np.outer(position_vector[nodecount],nodal_balance.loc[node].to_numpy())
         if np.any(np.isnan(dipole_vector)):
@@ -106,6 +109,7 @@ for i,co2l in enumerate(co2l_list):
     
 np.save(save_path + 'dipole_vector_time_series_all_co2ls.npy', dipole_vector)
 np.save(save_path + 'mean_nodal_consumption_all_co2ls.npy', mean_consumption_vector)
+np.save(save_path + 'weighted_mean_nodal_consumption_all_co2ls.npy', weighted_mean_consumption_vector)
 np.save(save_path + 'graph_net_power_mismatch_time_series_all_co2ls.npy', graph_net_mismatch)
 
 #### Calculate spatial power inhomogeneity ####

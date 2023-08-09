@@ -12,7 +12,9 @@ from utils import data_handling
 
 def calc_likelihood_failure(nx_graph,
                             splitting_cascades,
-                            number_of_simulations):
+                            number_of_simulations,
+                            snapshot_weightings,
+                            ):
     """Calculate the likelihood that a) a given edge causes a split
     if it fails (primary likelihood) and b) the likelihood that a
     given edge fails at some point during a cascade. 
@@ -30,17 +32,20 @@ def calc_likelihood_failure(nx_graph,
     likelihood_secondary = {(u, v): 0.0 for u, v in nx_graph.edges()}
 
     for timestamp, splits in tqdm(splitting_cascades.items()):
+        weight = snapshot_weightings[timestamp]
+
+        
         for init_failure, cascade in splits.items():
             
             cascade_edges = data_handling.matrix_indices_to_nx_edges(cascade, nx_graph)
             
             for failed_edge in cascade_edges:
                 
-                likelihood_secondary[failed_edge] += 1/number_of_simulations
+                likelihood_secondary[failed_edge] += weight/number_of_simulations
 
             init_edge1, init_edge2 = data_handling.matrix_indices_to_nx_edges(init_failure, nx_graph)
-            likelihood_primary[init_edge1] += 1/number_of_simulations
-            likelihood_primary[init_edge2] += 1/number_of_simulations
+            likelihood_primary[init_edge1] += weight/number_of_simulations
+            likelihood_primary[init_edge2] += weight/number_of_simulations
         
     return likelihood_primary, likelihood_secondary
 

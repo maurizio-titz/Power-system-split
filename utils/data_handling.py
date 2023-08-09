@@ -6,6 +6,7 @@ import pypsa
 import networkx as nx
 import numpy as np
 from scipy import sparse
+import os
 
 def build_networkx_graph(pypsa_network, snet_index = None):
     """Build a networkx graph from the pypsa networks"""
@@ -96,6 +97,7 @@ def load_pypsa_network(co2l, n_nodes, path_to_pypsa_network):
     
     # Load PyPSA network
     file_name = 'sclopf-elec_s_{}_ec_lv1.0_Co2L{:.1f}-2920SEG.nc'.format(n_nodes,co2l)
+    assert os.path.isfile(path_to_pypsa_network+ file_name) == True, 'File does not exist'
     network = pypsa.Network(path_to_pypsa_network+ file_name)
 
     # The following line is needed to remove the outage lines used for SCLOPF. For SCLOPF,
