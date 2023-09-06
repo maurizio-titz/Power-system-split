@@ -53,17 +53,19 @@ def construct_incidencematrix_from_orientation(Graph,return_np_array = True):
     B = sparse.lil_matrix((len(nodelist),len(edgelist)))
     orientations = nx.get_edge_attributes(Graph,'orientation')
 
-    for i,edge in enumerate(edgelist):
-        (u,v) = orientations[edge]
-        n1 = node_index[u]
-        B[n1,i] = 1.
-        n2 = node_index[v]
-        B[n2,i] = -1.
+    for ii, edge in enumerate(edgelist):
+        (uu, vv) = orientations[edge]
+        n1 = node_index[uu]
+        B[n1, ii] = 1.
+        n2 = node_index[vv]
+        B[n2, ii] = -1.
     if return_np_array:
         return_val = B.toarray()
     else:
         return_val = B.asformat("csr")
+        
     return return_val
+
 
 def get_effective_injections(network, snapshot, nx_graph):
     """Get effective nodal injections on nx_graph for certain snapshot from PyPSA network. 
@@ -96,9 +98,9 @@ def load_pypsa_network(co2l, n_nodes, path_to_pypsa_network):
     # For our data set, "0" indicates the Continental European AC grid. -> snet doc
     
     # Load PyPSA network
-    file_name = 'sclopf-elec_s_{}_ec_lv1.0_Co2L{:.1f}-2920SEG.nc'.format(n_nodes,co2l)
-    assert os.path.isfile(path_to_pypsa_network+ file_name) == True, 'File does not exist'
-    network = pypsa.Network(path_to_pypsa_network+ file_name)
+    file_name = 'sclopf-elec_s_{0}_ec_lv1.0_Co2L{1:.1f}-2920SEG.nc'.format(n_nodes, co2l)
+    assert os.path.isfile(path_to_pypsa_network + file_name) == True, 'File does not exist'
+    network = pypsa.Network(path_to_pypsa_network + file_name)
 
     # The following line is needed to remove the outage lines used for SCLOPF. For SCLOPF,
     # the Lines are split into 2, one that fails during N-1 stability test, except from

@@ -233,7 +233,7 @@ def simulate_cascade(II_in, B_d_in,
         flows = solve_lpf(P0, B_d, II, LL_r)
         
         # Check line limits
-        idxs_overloaded =  np.where(abs(flows) > line_limits*(1+epsilon))[0]
+        idxs_overloaded =  np.where(abs(flows) > line_limits*(1 + epsilon))[0]
         
         # Stop if no new lines where overloaded
         if len(idxs_overloaded) == 0:

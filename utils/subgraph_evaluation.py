@@ -130,8 +130,8 @@ def get_indicator_vectors_of_subgraphs(subgraphs, nx_graph):
 
 
 def evaluate_observables_for_subgraphs(subgraphs,
-                                    network,
-                                    timestamp, snet=0):
+                                       network,
+                                       timestamp, snet=0):
     """Evaluate power imbalance, rotational energy and load of subgraphs for a time stamp.
 
     Args:

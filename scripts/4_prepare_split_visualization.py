@@ -127,7 +127,10 @@ for co2l in co2l_list[::-1]:
                                       f'system_splits_Co2L{co2l}_n{n_nodes}.pickle' ,'rb'))
     
     # Calculate likelihood of edge to be primary or secondary failure
-    l_primary, l_secondary = vis.calc_likelihood_failure(nx_graph,splitting_cascades, number_of_simulations, network.snapshot_weightings.generators)
+    l_primary, l_secondary = vis.calc_likelihood_failure(nx_graph, 
+                                                         splitting_cascades, 
+                                                         number_of_simulations, 
+                                                         network.snapshot_weightings.generators)
     
     likelihoods_primary[co2l] = l_primary
     likelihoods_secondary[co2l] = l_secondary
@@ -135,6 +138,7 @@ for co2l in co2l_list[::-1]:
     
 with open(save_path + 'edge_likelihoods_primary_all_co2ls.pickle' , 'wb') as handle:
     pickle.dump(likelihoods_primary, handle, protocol = pickle.HIGHEST_PROTOCOL)
+    
 with open(save_path + 'edge_likelihoods_secondary_all_co2ls.pickle' , 'wb') as handle:
     pickle.dump(likelihoods_secondary, handle, protocol = pickle.HIGHEST_PROTOCOL)   
     
