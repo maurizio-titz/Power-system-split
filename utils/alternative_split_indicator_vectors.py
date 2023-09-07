@@ -227,8 +227,8 @@ def run_all_co2_lvl_edge_based(n_nodes: int):
     co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
     
     for co2_r in co2_lvl_ls:
-
-        find_active_edge_indicator_vector_for_cascade_results(co2_r, n_nodes,
+        if co2_r >= .2:
+            find_active_edge_indicator_vector_for_cascade_results(co2_r, n_nodes,
                                                               save_res=True,
                                                               verbose=True)
     
@@ -246,8 +246,8 @@ def run_all_co2_lvl_node_based(n_nodes: int):
     co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
     
     for co2_r in co2_lvl_ls:
-    
-        extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_r, n_nodes,
+        if co2_r >= .2:
+            extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_r, n_nodes,
                                                                      save_res=True,
                                                                      verbose=True)
     
