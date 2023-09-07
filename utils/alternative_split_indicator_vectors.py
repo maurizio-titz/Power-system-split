@@ -124,7 +124,9 @@ def extract_nodal_rocof_in_split_from_old_results(co2_lvl: float, n_nodes: int,
                 indicator_vector_rocof[idx_time + idx_split, idx_vec_in_split] = row_r.rocof
                 indicator_vector_load_share[idx_time + idx_split, idx_vec_in_split] = row_r.load_share
                 
-                
+        if idx_time > 10:
+            break
+        
     if save_res:
         
         with gzip.open(fpath_indi_vec_rocof_out, 'wb') as fh_rocof_out:
@@ -175,7 +177,8 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl, n_nodes, snet
             
             indicator_active_edges_arr[idx_time + idx_split, :] = failing_edges_in_split(edge_index_ls, failing_links)
             
-            
+        if idx_time > 10:
+            break 
     
     if save_res:
         fpath_out_edge_base = (fpath_out_root + "/indicator_vector_active_edges_Co2l" +
