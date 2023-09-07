@@ -14,6 +14,7 @@ import gzip
 import pickle
 
 from tqdm import tqdm
+from glob import glob
 
 from utils.data_handling import load_pypsa_network, build_networkx_graph
 
@@ -22,7 +23,7 @@ if not os.path.exists(fpath_out_root):
     os.mkdir(fpath_out_root)
 
 
-def failing_edges_in_split(idx_edges_array, list_failed_edges):
+def failing_edges_in_split(idx_edges_array: np.ndarray, list_failed_edges: list):
     """Return a binary vector for each split that collects 
     if the links are active (1) or if they have failed during the cascade (0)
 
@@ -43,11 +44,10 @@ def failing_edges_in_split(idx_edges_array, list_failed_edges):
     
     functioning_edge_indicator_vector[idx_failed_edges] = 0
     
-    
     return functioning_edge_indicator_vector
  
 
-def nodal_rocof_in_split(co2_lvl, n_nodes, save_res):
+def nodal_rocof_in_split(co2_lvl: float, n_nodes: int, save_res: bool = True):
     """Return the vector for each split that has an 
     entry for each node, which quantifies the rocof in its component."""
     
@@ -57,23 +57,45 @@ def nodal_rocof_in_split(co2_lvl, n_nodes, save_res):
     return
 
 
-def extract_nodal_rocof_in_split_from_old_results(co2_lvl: float, n_nodes: int,
-                                                          save_res: bool = True):
+def extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_lvl: float, n_nodes: int,
+                                                                 save_res: bool = True,
+                                                                 verbose: bool = True,
+                                                                 overwrite: bool = False):
     """Use the results from the old indicator vectors to arrive at the 
     vectors that give the rocof for every node's component"""
     
+    # Check before if the results already exists
+    if save_res:
+        fpath_indi_vec_rocof_out = (fpath_out_root + 
+                                    "/indicator_vector_rocof_Co2l" + 
+                                    "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
+        fpath_indi_vec_lshare_out = (fpath_out_root + 
+                                     "/indicator_vector_lshare_Co2l" + 
+                                     "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
+        
+        if ((os.path.exists(fpath_indi_vec_rocof_out) or os.path.exists(fpath_indi_vec_lshare_out)) 
+            and not overwrite):
+            raise IOError("Output was written previously. " +
+                          "Please move or delete the previous results, or chose 'overwrite=True'.")    
+    
+    if verbose:
+        print("Loading cascade results, indicator vectors and split component properties:",
+              flush=True)
     # Load component properties and indicator vector
-    path_to_cascade_results = "results/sclopf/cascade_results/system_splits_Co2L{0:.1f}_n{1}.pickle".format(co2_lvl, n_nodes)
+    path_to_cascade_results = ("results/sclopf/cascade_results/system_splits_Co2L" +
+                               "{0:.1f}_n{1}.pickle".format(co2_lvl, n_nodes))
     with open(path_to_cascade_results, 'rb') as fh_in_casc:
         cascade_dict = pickle.load(fh_in_casc)
         
-    path_to_indicator_vectors = "results/sclopf/indicator_vectors_Co2L{0:.1f}_n{1}.npy".format(co2_lvl, n_nodes)
-    with open(path_to_indicator_vectors, mode='r') as fh_in_vec:
-        indicator_vector_arr = np.load(fh_in_vec)  
+    path_to_indicator_vectors = ("results/sclopf/evaluation_results/" + 
+                                 "indicator_vectors_Co2L{0:.1f}_n{1}.npy".format(co2_lvl, n_nodes))
+    indicator_vector_arr = np.load(path_to_indicator_vectors)  
         
     df_comp_props = pd.read_hdf("results/sclopf/evaluation_results/" + 
                                 "component_properties_Co2L{0:.1f}_n{1}.h5".format(co2_lvl, n_nodes),
                                 key='df')
+    if verbose:
+        print("Finished loading data.\n")
         
     # Convert index to datetime
     df_comp_props.time_stamp = pd.to_datetime(df_comp_props.time_stamp)
@@ -85,27 +107,18 @@ def extract_nodal_rocof_in_split_from_old_results(co2_lvl: float, n_nodes: int,
     # iterate through each time
     unique_times = pd.unique(df_comp_props.time_stamp)
     total_nr_splits = sum(len(vv) for vv in cascade_dict.values())
-    
-    # Check before if the results already exists
-    if save_res:
-        fpath_indi_vec_rocof_out = (fpath_out_root + 
-                                    "/indicator_vector_rocof_Co2l" + 
-                                    "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
-        fpath_indi_vec_lshare_out = (fpath_out_root + 
-                                     "/indicator_vector_lshare_Co2l" + 
-                                     "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
         
-        if os.path.exists(fpath_indi_vec_rocof_out) or os.path.exists(fpath_indi_vec_lshare_out):
-            raise IOError("Output was written previously. " +
-                          "Please move or delete the previous results.")    
-        
-    indicator_vector_rocof = np.full((len(total_nr_splits), indicator_vector_arr.shape[1]), 
+    indicator_vector_rocof = np.full((total_nr_splits, indicator_vector_arr.shape[1]), 
                                      np.nan, dtype=float)
-    indicator_vector_load_share = np.full((len(total_nr_splits), indicator_vector_arr.shape[1]),
+    indicator_vector_load_share = np.full((total_nr_splits, indicator_vector_arr.shape[1]),
                                           np.nan, dtype=float)
     
+    if verbose:
+        print("Starting to extract rocof and load share indicator vectors:")
+    
     index_tuple_time_split = list()
-    for idx_time, time_stamp_r in enumerate(tqdm(unique_times)):
+    out_idx = 0
+    for idx_time, time_stamp_r in enumerate(tqdm(unique_times, disable=not verbose)):
         df_time_r = df_comp_props.loc[df_comp_props.time_stamp == time_stamp_r]
         
         # Find the number of unique tuples aka number of splits
@@ -119,35 +132,49 @@ def extract_nodal_rocof_in_split_from_old_results(co2_lvl: float, n_nodes: int,
             index_tuple_time_split.append((time_stamp_r, init_tuple_r, idx_split))
             for idx_in_split_r, row_r in df_event_r.iterrows():
                             
-    
                 idx_vec_in_split = np.where(indicator_vector_arr[idx_in_split_r] == 1)
-                indicator_vector_rocof[idx_time + idx_split, idx_vec_in_split] = row_r.rocof
-                indicator_vector_load_share[idx_time + idx_split, idx_vec_in_split] = row_r.load_share
-                
-        if idx_time > 10:
-            break
-        
+                indicator_vector_rocof[out_idx, idx_vec_in_split] = row_r.rocof
+                indicator_vector_load_share[out_idx, idx_vec_in_split] = row_r.load_share
+
+            out_idx += 1
+            
     if save_res:
         
         with gzip.open(fpath_indi_vec_rocof_out, 'wb') as fh_rocof_out:
             pickle.dump(indicator_vector_rocof, fh_rocof_out)
         
         
-        with gzip.open(indicator_vector_load_share) as fh_out_lshare:
+        with gzip.open(fpath_indi_vec_lshare_out, 'wb') as fh_out_lshare:
             pickle.dump(indicator_vector_load_share, fh_out_lshare)
                     
     
-    return indicator_vector_arr
+    return indicator_vector_rocof, indicator_vector_load_share
             
 
-def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl, n_nodes, snet_idx=0,
-                                                                      save_res: bool = True):
+def find_active_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_nodes: int,
+                                                          snet_idx: int = 0,
+                                                          save_res: bool = True,
+                                                          verbose: bool = True,
+                                                          overwrite: bool = False):
     """Find the indicator vectors that give the working edges and
     """
     
+    # Check if files already exisits
+    if save_res:
+        fpath_out_edge_base = (fpath_out_root + "/indicator_vector_active_edges_Co2l" +
+                               "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
+        if os.path.exists(fpath_out_edge_base) and not overwrite:
+            raise IOError("File already exists! Please remove or choose 'overwrite=True'.")
+    
+    
     # Load file
+    if verbose:
+        print("Loading cascade results and PyPSA output to generate graph:",
+              flush=True)
     ## Results path of cascade simulations
-    path_to_cascade_results = "results/sclopf/cascade_results/system_splits_Co2L{0:.1f}_n{1}.pickle".format(co2_lvl, n_nodes)
+    path_to_cascade_results = ("results/sclopf/cascade_results/" + 
+                               "system_splits_Co2L{0:.1f}_n{1}.pickle".format(co2_lvl, n_nodes))
+    
     with open(path_to_cascade_results, 'rb') as fh:
         cascade_dict = pickle.load(fh)
         
@@ -162,6 +189,9 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl, n_nodes, snet
     
     assert len(np.unique(edge_index_ls)) == len(edge_index_ls)
     
+    if verbose:
+        print("\nFinished loading data and building vector now:", flush=True)
+    
     #node_names_ls = list(graph_nx.nodes())
     
     nr_edges = len(edge_names_ls)    
@@ -171,30 +201,54 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl, n_nodes, snet
     
     # iterate through time and split
     index_tuple_splits = list()
-    for idx_time, [time_str, trigger_split_dict] in enumerate(cascade_dict.items()):
+    out_idx = 0
+    for idx_time, [time_str, trigger_split_dict] in enumerate(tqdm(cascade_dict.items(), disable=not verbose)):
         for idx_split, [trigger_tuple, failing_links] in enumerate(trigger_split_dict.items()):
             index_tuple_splits.append((time_str, trigger_tuple, idx_split))
             
-            indicator_active_edges_arr[idx_time + idx_split, :] = failing_edges_in_split(edge_index_ls, failing_links)
+            indicator_active_edges_arr[out_idx, :] = failing_edges_in_split(edge_index_ls, failing_links)
+            out_idx += 1
             
-        if idx_time > 10:
-            break 
-    
     if save_res:
-        fpath_out_edge_base = (fpath_out_root + "/indicator_vector_active_edges_Co2l" +
-                               "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
-        with gzip.open(fpath_out_edge_base) as fh_out_edges:
+        with gzip.open(fpath_out_edge_base, 'wb') as fh_out_edges:
             pickle.dump((edge_names_ls, edge_index_ls,
                          index_tuple_splits, indicator_active_edges_arr), fh_out_edges)
         
-        
-        
-    
     return edge_names_ls, edge_index_ls, index_tuple_splits, indicator_active_edges_arr
 
 
-def test_procedure():
+def run_all_co2_lvl_edge_based(n_nodes: int):
     
-    path_to_file = "Results/sclopf/cascade_results/system_splits_Co2L0.8_n400.pickle"
+    # Identify all input files
+    ## Cascade and PyPSA files need to exist
+    glob_pypsa_search_str = ("data/European_networks_sclopf/" +
+                             "sclopf-elec_s_{0}*.nc".format(n_nodes))    
+    pypsa_file_ls = glob(glob_pypsa_search_str)
+    co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
     
-    find_inerita_and_failed_edge_indicator_vector_for_cascade_results(path_to_file)
+    for co2_r in co2_lvl_ls:
+
+        find_active_edge_indicator_vector_for_cascade_results(co2_r, n_nodes,
+                                                              save_res=True,
+                                                              verbose=True)
+    
+    return
+
+
+def run_all_co2_lvl_node_based(n_nodes: int):
+    
+    
+    # Identify all input files
+    ## Cascade and PyPSA files need to exist
+    glob_pypsa_search_str = ("data/European_networks_sclopf/" +
+                             "sclopf-elec_s_{0}*.nc".format(n_nodes))    
+    pypsa_file_ls = glob(glob_pypsa_search_str)
+    co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
+    
+    for co2_r in co2_lvl_ls:
+    
+        extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_r, n_nodes,
+                                                                     save_res=True,
+                                                                     verbose=True)
+    
+    return
