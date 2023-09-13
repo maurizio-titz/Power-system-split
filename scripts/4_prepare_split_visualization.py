@@ -35,7 +35,7 @@ min_cluster_dist_nodes = 9
 n_nodes = int(sys.argv[1])
 
 # Setup co2 levels
-co2l_list = np.arange(0.0,0.81,0.1).round(1)
+co2l_list = np.arange(0.0, 0.81, 0.1).round(1)
 
 # Load PyPSA network and the graph of the subnetwork 
 network = data_handling.load_pypsa_network(0.0, n_nodes, path_to_pypsa_network)
@@ -116,14 +116,14 @@ bridge_idxs = data_handling.nx_edges_to_matrix_indices(nx.bridges(nx_graph),
 n_2_failures = cascade_simulation.calc_possible_double_line_failures(num_parallels,
                                                                      ignored_idxs=bridge_idxs)
 # incorporating the weighting of the snapshots
-number_of_simulations = len(n_2_failures)*network.snapshot_weightings.generators.sum()
+number_of_simulations = len(n_2_failures) * network.snapshot_weightings.generators.sum()
 
 for co2l in co2l_list[::-1]:
     
     print('Co2 level %.2f' % co2l)
     
     # Load results
-    splitting_cascades = pickle.load(open(path_to_cascade_results+
+    splitting_cascades = pickle.load(open(path_to_cascade_results + 
                                       f'system_splits_Co2L{co2l}_n{n_nodes}.pickle' ,'rb'))
     
     # Calculate likelihood of edge to be primary or secondary failure
@@ -136,7 +136,7 @@ for co2l in co2l_list[::-1]:
     likelihoods_secondary[co2l] = l_secondary
     
     
-with open(save_path + 'edge_likelihoods_primary_all_co2ls.pickle' , 'wb') as handle:
+with open(save_path + 'edge_likelihoods_primary_all_co2ls_n{}.pickle' , 'wb') as handle:
     pickle.dump(likelihoods_primary, handle, protocol = pickle.HIGHEST_PROTOCOL)
     
 with open(save_path + 'edge_likelihoods_secondary_all_co2ls.pickle' , 'wb') as handle:

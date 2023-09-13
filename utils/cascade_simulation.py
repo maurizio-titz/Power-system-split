@@ -45,7 +45,6 @@ LOOKUP_TABLE_NP = np.array([
 ])
 
 
-
 def calc_num_parallel_after_failure(num_parallel):
     """Calculate the new effective number of circuits on a line 
     after removing one circuit. The new value depends on the line type
@@ -58,19 +57,23 @@ def calc_num_parallel_after_failure(num_parallel):
         float: new value
     """        
     
-    assert num_parallel >= 1e-8, ('Line removal for num_parallel=0 not correct.'+
-                               ' Line was either already removed a wrong num_parallel was assigned. ')
+    assert num_parallel >= 1e-8, ('Line removal for num_parallel=0 not correct.' +
+                                  ' Line was either already removed a wrong num_parallel' +
+                                  ' was assigned.')
 
-    if 0<num_parallel<3:
-        num_parallel_case = np.argwhere(np.isclose(LOOKUP_TABLE_NP[:,0], num_parallel))[0,0]
-        num_parallel_new = LOOKUP_TABLE_NP[num_parallel_case,1]
-    elif num_parallel>=3:
+    if 0 < num_parallel < 3:
+        num_parallel_case = np.argwhere(np.isclose(LOOKUP_TABLE_NP[:, 0],
+                                                   num_parallel))[0, 0]
+        num_parallel_new = LOOKUP_TABLE_NP[num_parallel_case, 1]
+        
+    elif num_parallel >= 3:
         num_parallel_new = num_parallel - 1
+        
     else:
         raise ValueError('num_parallel does not have a valid value!')
 
-        
     return num_parallel_new
+
 
 def calc_possible_double_line_failures(num_parallels, ignored_idxs=None): 
     """Determine the set of possible double line failures.
@@ -123,8 +126,8 @@ def calc_possible_single_line_failures(num_parallels, ignored_idxs=None):
     return [[failure] for failure in possible_failures]
 
 
-
-def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, remove_all_circuits=False):
+def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx,
+                        remove_all_circuits=False):
     """Remove a line by changing the susceptances, the number of parallel lines and 
     the line limits.
 
@@ -156,6 +159,7 @@ def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx, remove
     
     return
 
+
 def solve_lpf(P, B_d, I, L=None):
     """Solve linear power flow.
 
@@ -178,6 +182,7 @@ def solve_lpf(P, B_d, I, L=None):
     flows = B_d.dot((I.T).dot(theta))
     
     return flows
+
 
 def simulate_cascade(II_in, B_d_in,
                      P0, line_limits_in, num_parallel_in, failure_lines,

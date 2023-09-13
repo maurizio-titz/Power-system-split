@@ -157,6 +157,7 @@ def evaluate_observables_for_subgraphs(subgraphs,
     if np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())>1e-1:
         print('Warning: Power imbalance for', timestamp, 'is non-zero:')
         print(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum()))
+        
     if np.abs(HVDC_transport.sum())>1e-1:
         print('Warning: HVDC transport for', timestamp, 'does not sum to zero:')
         print(np.abs(HVDC_transport.sum()))

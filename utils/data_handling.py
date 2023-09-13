@@ -118,7 +118,7 @@ def load_pypsa_network(co2l, n_nodes, path_to_pypsa_network):
     return network
 
 
-def get_subgraphs_from_edges(edge_indices,nx_graph):
+def get_subgraphs_from_edges(edge_indices, nx_graph):
     """Generate subgraphs that result from removing the edges. 
 
     Args:
@@ -137,6 +137,7 @@ def get_subgraphs_from_edges(edge_indices,nx_graph):
 
     return subgraphs
 
+
 def nx_edges_to_matrix_indices(nx_edges, nx_graph):
     """
     Transform edge names from networkx graph format to matrix format.
@@ -146,10 +147,12 @@ def nx_edges_to_matrix_indices(nx_edges, nx_graph):
 
     return matrix_indices
 
+
 def matrix_indices_to_nx_edges(indices, nx_graph):
     """
     Transform edge indices from matrix format to edge names in networkx graph.
     """
+    
     lookup_dict = dict(zip(range(nx_graph.number_of_edges()), nx_graph.edges()))
     edge_names = [lookup_dict[ind] for ind in indices]
 

@@ -13,26 +13,28 @@ from utils import data_handling
 def calc_likelihood_failure(nx_graph,
                             splitting_cascades,
                             number_of_simulations,
-                            snapshot_weightings,
+                            generator_snapshot_weightings,
                             ):
     """Calculate the likelihood that a) a given edge causes a split
     if it fails (primary likelihood) and b) the likelihood that a
-    given edge fails at some point during a cascade. 
+    given edge fails at some point during a cascade (secondary likelihood). 
 
     Args:
         nx_graph (networkx graph): Graph of power system 
         splitting_cascades (dict): Dictionary with cascade results
         number_of_simulations (int): Number of initial failures times the number of time steps.
+        generator_snapshot_weightings (pd.DataFrame): Number of hours for this snapshot.
 
     Returns:
-        tuple: primary likelihood, secondary likelihood
+        likelihood_primary, likelihood_secondary (dict, dict): Likelihood of primary and subsequent secondary
+        failures induced by the link that is defined in the key.
     """
 
     likelihood_primary = {(u, v): 0.0 for u, v in nx_graph.edges()}
     likelihood_secondary = {(u, v): 0.0 for u, v in nx_graph.edges()}
 
     for timestamp, splits in tqdm(splitting_cascades.items()):
-        weight = snapshot_weightings[timestamp]
+        weight = generator_snapshot_weightings[timestamp]
 
         
         for init_failure, cascade in splits.items():
