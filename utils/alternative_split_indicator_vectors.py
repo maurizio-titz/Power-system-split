@@ -16,7 +16,9 @@ import pickle
 from tqdm import tqdm
 from glob import glob
 
-from utils.data_handling import load_pypsa_network, build_networkx_graph
+from utils.data_handling import (load_pypsa_network,
+                                 build_networkx_graph,
+                                 nx_edges_to_matrix_indices)
 
 fpath_out_root = "results/sclopf/indicator_vectors_rocof_lshare_edges"
 if not os.path.exists(fpath_out_root):
@@ -186,8 +188,6 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
     graph_nx = build_networkx_graph(pypsa_net, snet_index=snet_idx)
     
     edge_names_ls = list(graph_nx.edges())
-    edge_index_ls = np.array([int(data['line_index'][0].split('_out')[0]) 
-                              for uu, vv, data in graph_nx.edges(data=True)])
     
     assert len(np.unique(edge_index_ls)) == len(edge_index_ls)
     
@@ -200,7 +200,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
     total_nr_splits = sum(len(vv) for vv in cascade_dict.values())
     
     indicator_failed_edges_arr = np.full((total_nr_splits, nr_edges),
-                                         np.nan, dtype=float)
+                                          False, dtype=bool)
     
     # iterate through time and split
     index_tuple_splits = list()
@@ -209,15 +209,15 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
         for idx_split, [trigger_tuple, failing_links] in enumerate(trigger_split_dict.items()):
             index_tuple_splits.append((time_str, trigger_tuple, idx_split))
             
-            indicator_failed_edges_arr[out_idx, :] = failing_edges_in_split(edge_index_ls, failing_links)
+            indicator_failed_edges_arr[out_idx, failing_links] = True
             out_idx += 1
             
     if save_res:
         with gzip.open(fpath_out_edge_base, 'wb') as fh_out_edges:
-            pickle.dump((edge_names_ls, edge_index_ls,
+            pickle.dump((edge_names_ls,
                          index_tuple_splits, indicator_failed_edges_arr), fh_out_edges)
         
-    return [edge_names_ls, edge_index_ls,
+    return [edge_names_ls,
             index_tuple_splits, indicator_failed_edges_arr]
 
 

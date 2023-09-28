@@ -255,9 +255,7 @@ def plot_histogram_number_failed_links(co2_lvl: float,
     
     # Find histogram
     
-    # Plot it
-    
-    
+    # Plot it    
     
     return
 
