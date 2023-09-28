@@ -188,8 +188,10 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
     graph_nx = build_networkx_graph(pypsa_net, snet_index=snet_idx)
     
     edge_names_ls = list(graph_nx.edges())
+    edge_pypsa_index_ls = np.array([int(data['line_index'][0].split('_out')[0]) 
+                              for uu, vv, data in graph_nx.edges(data=True)])
     
-    assert len(np.unique(edge_index_ls)) == len(edge_index_ls)
+    assert len(np.unique(edge_pypsa_index_ls)) == len(edge_pypsa_index_ls)
     
     if verbose:
         print("\nFinished loading data and building vector now:", flush=True)
@@ -214,10 +216,10 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
             
     if save_res:
         with gzip.open(fpath_out_edge_base, 'wb') as fh_out_edges:
-            pickle.dump((edge_names_ls,
+            pickle.dump((edge_names_ls, edge_pypsa_index_ls,
                          index_tuple_splits, indicator_failed_edges_arr), fh_out_edges)
         
-    return [edge_names_ls,
+    return [edge_names_ls, edge_pypsa_index_ls,
             index_tuple_splits, indicator_failed_edges_arr]
 
 
