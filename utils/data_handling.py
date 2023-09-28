@@ -99,7 +99,7 @@ def load_pypsa_network(co2l, n_nodes, path_to_pypsa_network):
     
     # Load PyPSA network
     file_name = 'sclopf-elec_s_{0}_ec_lv1.0_Co2L{1:.1f}-2920SEG.nc'.format(n_nodes, co2l)
-    assert os.path.isfile(path_to_pypsa_network + file_name) == True, 'File does not exist'
+    assert os.path.isfile(path_to_pypsa_network + file_name) == True, f'File "{path_to_pypsa_network + file_name}" does not exist'
     network = pypsa.Network(path_to_pypsa_network + file_name)
 
     # The following line is needed to remove the outage lines used for SCLOPF. For SCLOPF,

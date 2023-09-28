@@ -1,5 +1,12 @@
-import pickle
+#!usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
 import sys
+import pickle
+
+from glob import glob
+
 import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -35,7 +42,14 @@ min_cluster_dist_nodes = 9
 n_nodes = int(sys.argv[1])
 
 # Setup co2 levels
-co2l_list = np.arange(0.0, 0.81, 0.1).round(1)
+# TODO also include CO_2=0
+glob_pypsa_search_str = ("data/European_networks_sclopf/" +
+                         "sclopf-elec_s_{0}*.nc".format(n_nodes))    
+pypsa_file_ls = glob(glob_pypsa_search_str)
+co2l_list = [float(xx.split("Co2L")[-1].split("-")[0]) 
+             for xx in pypsa_file_ls if float(xx.split("Co2L")[-1].split("-")[0]) > 0]
+print("Available CO2 Levels:")
+print(sorted(co2l_list))
 
 # Load PyPSA network and the graph of the subnetwork 
 network = data_handling.load_pypsa_network(0.0, n_nodes, path_to_pypsa_network)
@@ -117,6 +131,7 @@ n_2_failures = cascade_simulation.calc_possible_double_line_failures(num_paralle
                                                                      ignored_idxs=bridge_idxs)
 # incorporating the weighting of the snapshots
 number_of_simulations = len(n_2_failures) * network.snapshot_weightings.generators.sum()
+print(number_of_simulations)
 
 for co2l in co2l_list[::-1]:
     
@@ -136,9 +151,9 @@ for co2l in co2l_list[::-1]:
     likelihoods_secondary[co2l] = l_secondary
     
     
-with open(save_path + 'edge_likelihoods_primary_all_co2ls_n{}.pickle' , 'wb') as handle:
+"""with open(save_path + f'edge_likelihoods_primary_all_co2ls_n{n_nodes}.pickle' , 'wb') as handle:
     pickle.dump(likelihoods_primary, handle, protocol = pickle.HIGHEST_PROTOCOL)
     
-with open(save_path + 'edge_likelihoods_secondary_all_co2ls.pickle' , 'wb') as handle:
-    pickle.dump(likelihoods_secondary, handle, protocol = pickle.HIGHEST_PROTOCOL)   
+with open(save_path + f'edge_likelihoods_secondary_all_co2ls_n{n_nodes}.pickle' , 'wb') as handle:
+    pickle.dump(likelihoods_secondary, handle, protocol = pickle.HIGHEST_PROTOCOL)   """
     

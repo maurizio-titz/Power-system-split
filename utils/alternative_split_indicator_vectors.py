@@ -40,14 +40,15 @@ def failing_edges_in_split(idx_edges_array: np.ndarray, list_failed_edges: list)
     
     functioning_edge_indicator_vector = np.zeros(len(idx_edges_array), dtype=int)
     
-    idx_failed_edges = np.where(np.isin(idx_edges_array, list_failed_edges))[0]
+    idx_failed_edges = np.where(np.isin(list_failed_edges, idx_edges_array))[0]
     
     functioning_edge_indicator_vector[idx_failed_edges] = 1
     
     return functioning_edge_indicator_vector
  
 
-def nodal_rocof_in_split(co2_lvl: float, n_nodes: int, save_res: bool = True):
+def nodal_rocof_in_split(co2_lvl: float, n_nodes: int,
+                         save_res: bool = True):
     """Return the vector for each split that has an 
     entry for each node, which quantifies the rocof in its component."""
     
@@ -62,7 +63,7 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_lvl: float,
                                                                  verbose: bool = True,
                                                                  overwrite: bool = False):
     """Use the results from the old indicator vectors to arrive at the 
-    vectors that give the rocof for every node's component"""
+    vectors that give the RoCoF for every node's component"""
     
     # Check before if the results already exists
     if save_res:
@@ -198,7 +199,8 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
     nr_edges = len(edge_names_ls)    
     total_nr_splits = sum(len(vv) for vv in cascade_dict.values())
     
-    indicator_failed_edges_arr = np.full((total_nr_splits, nr_edges), np.nan, dtype=float)
+    indicator_failed_edges_arr = np.full((total_nr_splits, nr_edges),
+                                         np.nan, dtype=float)
     
     # iterate through time and split
     index_tuple_splits = list()
@@ -219,7 +221,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
             index_tuple_splits, indicator_failed_edges_arr]
 
 
-def run_all_co2_lvl_edge_based(n_nodes: int):
+def run_all_co2_lvl_edge_based(n_nodes: int, overwrite: bool=False):
     
     # Identify all input files
     ## Cascade and PyPSA files need to exist
@@ -232,7 +234,8 @@ def run_all_co2_lvl_edge_based(n_nodes: int):
         if co2_r > 0.:
             find_failed_edge_indicator_vector_for_cascade_results(co2_r, n_nodes,
                                                                   save_res=True,
-                                                                  verbose=True)
+                                                                  verbose=True, 
+                                                                  overwrite=overwrite)
     
     return
 

@@ -6,7 +6,7 @@ import networkx as nx
 import numpy as np
 from shapely.geometry import Point
 
-from utils import data_handling, subgraph_evaluation, config
+from utils import data_handling, subgraph_evaluation
 from utils.config import results_path, data_path
 
 # Setup paths 
