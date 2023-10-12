@@ -21,7 +21,7 @@ def calc_likelihood_failure(nx_graph,
 
     Args:
         nx_graph (networkx graph): Graph of power system 
-        splitting_cascades (dict): Dictionary with cascade results
+        splitting_cascades (dict): Nested dictionary with cascade results
         number_of_simulations (int): Number of initial failures times the number of time steps.
         generator_snapshot_weightings (pd.DataFrame): Number of hours for this snapshot.
 
@@ -32,6 +32,9 @@ def calc_likelihood_failure(nx_graph,
 
     likelihood_primary = {(u, v): 0.0 for u, v in nx_graph.edges()}
     likelihood_secondary = {(u, v): 0.0 for u, v in nx_graph.edges()}
+    
+    #nr_edges = nx_graph.number_of_edges()
+    #total_nr_splits = sum(len(vv) for vv in splitting_cascades.values())
 
     for timestamp, splits in tqdm(splitting_cascades.items()):
         weight = generator_snapshot_weightings[timestamp]

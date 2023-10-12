@@ -150,10 +150,10 @@ for co2l in co2l_list[::-1]:
     likelihoods_primary[co2l] = l_primary
     likelihoods_secondary[co2l] = l_secondary
     
-    
-"""with open(save_path + f'edge_likelihoods_primary_all_co2ls_n{n_nodes}.pickle' , 'wb') as handle:
-    pickle.dump(likelihoods_primary, handle, protocol = pickle.HIGHEST_PROTOCOL)
+
+with open(save_path + f'edge_likelihoods_primary_all_co2ls_n{n_nodes}.pickle' , 'wb') as handle:
+    pickle.dump(likelihoods_primary, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
 with open(save_path + f'edge_likelihoods_secondary_all_co2ls_n{n_nodes}.pickle' , 'wb') as handle:
-    pickle.dump(likelihoods_secondary, handle, protocol = pickle.HIGHEST_PROTOCOL)   """
+    pickle.dump(likelihoods_secondary, handle, protocol=pickle.HIGHEST_PROTOCOL) 
     

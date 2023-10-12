@@ -25,7 +25,7 @@ if not os.path.exists(fpath_out_root):
     os.mkdir(fpath_out_root)
 
 
-def failing_edges_in_split(idx_edges_array: np.ndarray, list_failed_edges: list):
+def failing_edges_in_split(idx_edges_array: np.ndarray, list_failed_edges: list) -> np.ndarray:
     """Return a binary vector for each split that collects 
     if the links are active (0) or if they have failed during the cascade (1)
 
@@ -159,11 +159,11 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
                                                           snet_idx: int = 0,
                                                           save_res: bool = True,
                                                           verbose: bool = True,
-                                                          overwrite: bool = False):
+                                                          overwrite: bool = False) -> tuple:
     """Find the indicator vectors that give the working edges and
     """
     
-    # Check if files already exisits
+    # Check if files already exists
     if save_res:
         fpath_out_edge_base = (fpath_out_root + "/indicator_vector_failed_edges_Co2l" +
                                "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
@@ -175,6 +175,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
     if verbose:
         print("Loading cascade results and PyPSA output to generate graph:",
               flush=True)
+        
     ## Results path of cascade simulations
     path_to_cascade_results = ("results/sclopf/cascade_results/" + 
                                "system_splits_Co2L{0:.1f}_n{1}.pickle".format(co2_lvl, n_nodes))
@@ -219,11 +220,11 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
             pickle.dump((edge_names_ls, edge_pypsa_index_ls,
                          index_tuple_splits, indicator_failed_edges_arr), fh_out_edges)
         
-    return [edge_names_ls, edge_pypsa_index_ls,
-            index_tuple_splits, indicator_failed_edges_arr]
+    return (edge_names_ls, edge_pypsa_index_ls,
+            index_tuple_splits, indicator_failed_edges_arr)
 
 
-def run_all_co2_lvl_edge_based(n_nodes: int, overwrite: bool=False):
+def run_all_co2_lvl_edge_based(n_nodes: int, overwrite: bool=False) -> None:
     
     # Identify all input files
     ## Cascade and PyPSA files need to exist
@@ -242,7 +243,7 @@ def run_all_co2_lvl_edge_based(n_nodes: int, overwrite: bool=False):
     return
 
 
-def run_all_co2_lvl_node_based(n_nodes: int):
+def run_all_co2_lvl_node_based(n_nodes: int) -> None:
     
     
     # Identify all input files

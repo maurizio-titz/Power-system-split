@@ -92,7 +92,9 @@ def calc_likelihood_failure_alt_indicator(co2_lvl: float, n_nodes: int, save_it:
                               "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
     with gzip.open(fpath_indicator_vector) as fh_indi_in:
         [edge_names_ls, edge_index_ls, index_tuple_splits,
-         active_edges_arr] = pickle.load(fh_indi_in)
+         failed_edges_arr] = pickle.load(fh_indi_in)
+    
+    failed_edges_arr = np.array(failed_edges_arr, dtype=float)
     
     time_stamps = pd.to_datetime([xx[0] for xx in index_tuple_splits])
     unique_times = np.unique(time_stamps)
@@ -100,9 +102,9 @@ def calc_likelihood_failure_alt_indicator(co2_lvl: float, n_nodes: int, save_it:
     for uni_time_r in unique_times:
         snapshot_weight_r = snapshot_weights[uni_time_r]
         idxs_time = np.where(time_stamps == uni_time_r)[0]
-        active_edges_arr[idxs_time] *= snapshot_weight_r
+        failed_edges_arr[idxs_time] *= snapshot_weight_r
         
-    probabilities = active_edges_arr.sum(axis=0)
+    probabilities = failed_edges_arr.sum(axis=0)
     probabilities /= number_total_experiments
     #idx_nx_edges = nx_edges_to_matrix_indices(edge_names_ls, nx_graph)
     
@@ -115,12 +117,12 @@ def calc_likelihood_failure_alt_indicator(co2_lvl: float, n_nodes: int, save_it:
         
     if save_it:
         fpath_out = (out_data_path + 
-                     f"/indicator_vector_edge_likelihood_col{co2_lvl:.1f}_n{n_nodes}.pklz")
+                     f"/indicator_vector_edge_likelihood_co2l{co2_lvl:.1f}_n{n_nodes}.pklz")
         with gzip.open(fpath_out, 'wb') as fh_out:
             pickle.dump(likelihood_secondary, fh_out)
         
-      
     return likelihood_secondary
+
 
 def calc_all_secondary_likelihoods(n_nodes=400, verbose: bool = True):
     
@@ -181,12 +183,13 @@ def plot_probability_secondary_edge_failures(co2_lvl_list: tuple = (.8, .6, .4, 
         
         # load probability
         fpath_out = (out_data_path + 
-                     f"/indicator_vector_edge_likelihood_col{co2_lvl_r:.1f}_n400.pklz")
+                     f"/indicator_vector_edge_likelihood_co2l{co2_lvl_r:.1f}_n400.pklz")
         with gzip.open(fpath_out, 'rb') as fh_in:
             like_secondary = pickle.load(fh_in)
     
         # Draw networkx 
-        color_edges = [np.log10(like_secondary[edge_r]) if like_secondary[edge_r] > 1e-12 else -np.inf 
+        color_edges = [np.log10(like_secondary[edge_r]) 
+                       if like_secondary[edge_r] > 1e-12 else -np.inf 
                        for edge_r in nx_graph.edges()]
     
         nx.draw_networkx_edges(nx_graph, node_pos, width=2, edge_cmap=cmap,

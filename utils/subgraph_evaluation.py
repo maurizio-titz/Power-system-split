@@ -34,13 +34,13 @@ INERTIA_CONSTANTS = pd.Series({
 
 
 def get_power_imbalance_subgraph(subgraph,
-                                generators,
-                                current_generation,
-                                storages,
-                                current_storage,
-                                loads,
-                                current_load,
-                                HVDC_transport):
+                                 generators,
+                                 current_generation,
+                                 storages,
+                                 current_storage,
+                                 loads,
+                                 current_load,
+                                 HVDC_transport):
     """Calculate power imbalance due to subgraph"""
     
     # Get PyPSA components that are in subgraph
@@ -56,6 +56,7 @@ def get_power_imbalance_subgraph(subgraph,
     
     return power_imbalance
 
+
 def get_load_subgraph(subgraph,
                     loads,
                     current_load):
@@ -70,8 +71,8 @@ def get_load_subgraph(subgraph,
     return subgraph_load
 
 
-def get_inertia_gen_subgraph(subgraph,generators,current_generation,
-                             storages,current_storage,
+def get_inertia_gen_subgraph(subgraph, generators, current_generation,
+                             storages, current_storage,
                              participation_threshold = 0.05):
     """Calculate total rotational energy (in GWs) in the subgraph.
 
@@ -85,26 +86,26 @@ def get_inertia_gen_subgraph(subgraph,generators,current_generation,
         generator is considered to be online. Defaults to 0.05.
 
     Returns:
-        float: totational energy
+        float: rotational energy
     """
 
     # Calc nominal power of generators
     gens = generators.loc[:,['carrier', 'p_nom', 'p_max_pu']]
-    gens.loc[:,'nominal_power'] = gens.p_max_pu*gens.p_nom
+    gens.loc[:,'nominal_power'] = gens.p_max_pu * gens.p_nom
     
     # Get generators that are in subgraph and online in current timestamp
     in_subgraph = generators["bus"].isin(subgraph.nodes())
-    is_online = current_generation[gens.index]>participation_threshold*gens.nominal_power
-    gens = gens[in_subgraph&is_online]
+    is_online = current_generation[gens.index] > participation_threshold * gens.nominal_power
+    gens = gens[in_subgraph & is_online]
 
     # Calc nominal power of storage units
     stores = storages.loc[:,['carrier', 'p_nom', 'p_max_pu']]
-    stores.loc[:,'nominal_power'] = stores.p_max_pu*stores.p_nom
+    stores.loc[:,'nominal_power'] = stores.p_max_pu * stores.p_nom
     
     # Get storage units that are in subgraph and online in current timestamp
     in_subgraph = storages["bus"].isin(subgraph.nodes())
-    is_online = current_storage[stores.index]>participation_threshold*stores.nominal_power
-    stores = stores[in_subgraph&is_online]
+    is_online = current_storage[stores.index] > participation_threshold * stores.nominal_power
+    stores = stores[in_subgraph & is_online]
     
     # Calc rotational energy
     total_gens = gens.append(stores)
@@ -122,16 +123,16 @@ def get_indicator_vectors_of_subgraphs(subgraphs, nx_graph):
     list_of_nodes = list(nx_graph)
     indicator_vec = np.empty((len(subgraphs), nx_graph.number_of_nodes()), int)
     
-    for i, subgraph in enumerate(subgraphs):
+    for ii, subgraph in enumerate(subgraphs):
     
-        indicator_vec[i] = np.isin(list_of_nodes, list(subgraph))
+        indicator_vec[ii] = np.isin(list_of_nodes, list(subgraph))
 
     return indicator_vec
 
 
-def evaluate_observables_for_subgraphs(subgraphs,
+def evaluate_observables_for_subgraphs(subgraphs: list,
                                        network,
-                                       timestamp, snet=0):
+                                       timestamp: str, snet=0) -> pd.DataFrame:
     """Evaluate power imbalance, rotational energy and load of subgraphs for a time stamp.
 
     Args:
@@ -154,11 +155,11 @@ def evaluate_observables_for_subgraphs(subgraphs,
     total_current_load_subgraph = current_load[network.buses.sub_network.astype(int)==snet].sum()
     
     # Check if network is balanced
-    if np.abs(current_generation.sum()+current_storage.sum()-current_load.sum())>1e-1:
+    if np.abs(current_generation.sum() + current_storage.sum() - current_load.sum()) > 1e-1:
         print('Warning: Power imbalance for', timestamp, 'is non-zero:')
         print(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum()))
         
-    if np.abs(HVDC_transport.sum())>1e-1:
+    if np.abs(HVDC_transport.sum()) > 1e-1:
         print('Warning: HVDC transport for', timestamp, 'does not sum to zero:')
         print(np.abs(HVDC_transport.sum()))
         
@@ -168,19 +169,19 @@ def evaluate_observables_for_subgraphs(subgraphs,
                            index=range(len(subgraphs)), dtype=float)
 
     
-    for i,subgraph in enumerate(subgraphs):
+    for ii, subgraph in enumerate(subgraphs):
 
 
-        results.loc[i, 'load'] =  get_load_subgraph(subgraph, network.loads, current_load)
+        results.loc[ii, 'load'] =  get_load_subgraph(subgraph, network.loads, current_load)
         
 
-        results.loc[i, 'rot_energy'] = get_inertia_gen_subgraph(subgraph,
+        results.loc[ii, 'rot_energy'] = get_inertia_gen_subgraph(subgraph,
                                                         network.generators,
                                                         current_generation,
                                                         network.storage_units,
                                                         current_storage)
 
-        results.loc[i, 'power_imbalance'] = get_power_imbalance_subgraph(subgraph,
+        results.loc[ii, 'power_imbalance'] = get_power_imbalance_subgraph(subgraph,
                                                         network.generators,
                                                         current_generation,
                                                         network.storage_units,
@@ -190,9 +191,9 @@ def evaluate_observables_for_subgraphs(subgraphs,
                                                         HVDC_transport)
 
 
-        results.loc[i, 'load_share'] = results.loc[i, 'load'] / total_current_load_subgraph
-        results.loc[i, 'time_stamp'] = timestamp
-        results.loc[i, 'rocof'] = 50*results.loc[i, 'power_imbalance'] / ((results.loc[i, 'rot_energy']+1e-8)*2),
+        results.loc[ii, 'load_share'] = results.loc[ii, 'load'] / total_current_load_subgraph
+        results.loc[ii, 'time_stamp'] = timestamp
+        results.loc[ii, 'rocof'] = 50 * results.loc[ii, 'power_imbalance'] / ((results.loc[ii, 'rot_energy']+1e-8)*2),
         
 
 

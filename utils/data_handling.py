@@ -142,6 +142,7 @@ def nx_edges_to_matrix_indices(nx_edges, nx_graph):
     """
     Transform edge names from networkx graph format to matrix format.
     """
+    
     lookup_dict = dict(zip(nx_graph.edges(), range(nx_graph.number_of_edges())))
     matrix_indices = [lookup_dict[link_name] for link_name in nx_edges]
 

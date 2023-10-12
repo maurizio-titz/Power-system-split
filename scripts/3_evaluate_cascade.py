@@ -37,19 +37,20 @@ component_props = pd.DataFrame(columns=['time_stamp', 'init_failure_0','init_fai
 indicator_vectors = np.empty((0, nx_graph.number_of_nodes()), int)
 
 for timestamp, splits in tqdm(splitting_cascades.items()):
-    for i,(init_failure, cascade) in enumerate(splits.items()):
+    for ii, (init_failure, cascade) in enumerate(splits.items()):
 
-        subgraphs = data_handling.get_subgraphs_from_edges(cascade,nx_graph)
+        subgraphs = data_handling.get_subgraphs_from_edges(cascade,
+                                                           nx_graph)
         
         observables = subgraph_evaluation.evaluate_observables_for_subgraphs(subgraphs, network,
                                                                              timestamp)
         observables['init_failure_0'] = init_failure[0]
         observables['init_failure_1'] = init_failure[1]
-        observables['split_number'] = i
+        observables['split_number'] = ii
         component_props = component_props.append(observables, ignore_index=True)
         
-        # Append properties and vectors such that component_props.iloc[i] refers to 
-        # indicator_vectors[i]
+        # Append properties and vectors such that component_props.iloc[ii] refers to 
+        # indicator_vectors[ii]
         indicator_vec = subgraph_evaluation.get_indicator_vectors_of_subgraphs(subgraphs, nx_graph)
         indicator_vectors = np.append(indicator_vectors, indicator_vec, axis=0)
 
