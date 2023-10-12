@@ -136,7 +136,7 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_lvl: float,
             index_tuple_time_split.append((time_stamp_r, init_tuple_r, idx_split))
             for idx_in_split_r, row_r in df_event_r.iterrows():
                             
-                idx_vec_in_split = np.where(indicator_vector_arr[idx_in_split_r] == 1)
+                idx_vec_in_split = np.argwhere(indicator_vector_view[idx_in_split_r] == 1)
                 indicator_vector_rocof[out_idx, idx_vec_in_split] = row_r.rocof
                 indicator_vector_load_share[out_idx, idx_vec_in_split] = row_r.load_share
 
