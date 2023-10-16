@@ -19,6 +19,7 @@ from glob import glob
 import networkx as nx
 
 import multiprocessing as mp
+from functools import partial
 
 from utils.data_handling import (load_pypsa_network,
                                  build_networkx_graph,
@@ -349,6 +350,9 @@ def check_rocof_lshare_indicator_vectors(co2_lvl, nn_nodes=400, show_progress=Fa
     
     return co2_lvl, True
 
+def single_call(nn_nodes, co2_lvl_rr):
+        return check_rocof_lshare_indicator_vectors(co2_lvl_rr, nn_nodes=nn_nodes)
+
 
 def check_component_properties_indicatorvectors_all_co2lvl(nn_nodes=400,
                                                            nn_procs=4,
@@ -362,10 +366,9 @@ def check_component_properties_indicatorvectors_all_co2lvl(nn_nodes=400,
     
     glob_search_str = f"results/sclopf/indicator_vectors_rocof_lshare_edges/indicator_vector_rocof_*n{nn_nodes}.pklz"
     co2_levels = [float(xx.split("_n")[0].split('Co2l')[-1]) 
-                  for xx in glob.glob(glob_search_str)]
-    
-    funci = lambda xx: check_component_properties_indicatorvectors_all_co2lvl(xx,
-                                                                              nn_nodes=nn_nodes)
+                  for xx in glob(glob_search_str)]
+
+    funci = partial(single_call, nn_nodes)
     
     def dummy_callback():
         pbar.udpate()
