@@ -16,6 +16,10 @@ import pickle
 from tqdm import tqdm
 from glob import glob
 
+import networkx as nx
+
+import multiprocessing as mp
+
 from utils.data_handling import (load_pypsa_network,
                                  build_networkx_graph,
                                  nx_edges_to_matrix_indices)
@@ -160,7 +164,23 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
                                                           save_res: bool = True,
                                                           verbose: bool = True,
                                                           overwrite: bool = False) -> tuple:
-    """Find the indicator vectors that give the working edges and
+    """Find the indicator vectors that has an entry for every split that has a 'True'
+    if a link failed during the split.
+
+    Args:
+        co2_lvl (float): CO2 level of the considered PyPSA scenario
+        n_nodes (int): Number of nodes of the PyPSA network
+        snet_idx (int, optional): Subnet index of PyPSA with 0 indicating CE. Defaults to 0.
+        save_res (bool, optional): If 'True', save the results to a file. Defaults to True.
+        verbose (bool, optional): If 'True', print additional details. Defaults to True.
+        overwrite (bool, optional): If 'True', overwrite previous run. Defaults to False.
+
+    Raises:
+        IOError: _description_
+
+    Returns:
+        edge_names_ls, edge_pypsa_index_ls,
+        index_tuple_splits, indicator_failed_edges_arr: _description_
     """
     
     # Check if files already exists
@@ -260,3 +280,106 @@ def run_all_co2_lvl_node_based(n_nodes: int) -> None:
                                                                          verbose=True)
     
     return
+
+
+def check_rocof_lshare_indicator_vectors(co2_lvl, nn_nodes=400, show_progress=False):
+    """Check if the indicator that gives the rocof and load share gives 
+    consistent results with the previous results."""
+    
+    path_in = "results/sclopf/indicator_vectors_rocof_lshare_edges"
+    
+    ## Load Data
+    # Load indicator vector rocof
+    fpath_rocof_in = path_in + f"/indicator_vector_rocof_Co2l{co2_lvl:.1f}_n{nn_nodes}.pklz"
+    with gzip.open(fpath_rocof_in, 'rb') as fh_rocof_in:
+        indi_vec_rocof = pickle.load(fh_rocof_in)[-1]
+    
+    # Load indicator vector lshare
+    fpath_lshare_in = path_in + f"/indicator_vector_lshare_Co2l{co2_lvl:.1f}_n{nn_nodes}.pklz"
+    with gzip.open(fpath_lshare_in, 'rb') as fh_lshare_in:
+        indi_vec_lshare = pickle.load(fh_lshare_in)[-1]
+    
+    # Load indicator vector failed edges
+    fpath_failed_edges = path_in + f"/indicator_vector_failed_edges_Co2l{co2_lvl:.1f}_n{nn_nodes}.pklz"
+    with gzip.open(fpath_failed_edges) as fh_edges_in:
+        indi_vec_fedges = pickle.load(fh_edges_in)[-1]
+    
+    # PyPSA network + graph_nx
+    pypsa_net = load_pypsa_network(co2_lvl, nn_nodes,
+                                   'data/European_networks_sclopf/')
+    # translate to network for CE
+    graph_nx = build_networkx_graph(pypsa_net, snet_index=0)
+    
+    ## Separate graph according to failed edges 
+    # and check if same nodes in node based indicator vectors
+    list_nodes = list(graph_nx.nodes())
+    node_lookup_dict = {xx: idx for idx, xx in enumerate(list_nodes)}
+    
+    
+    list_edges = list(graph_nx.edges())
+    
+    for idx, row in enumerate(tqdm(indi_vec_fedges, disable=not show_progress)):
+        
+        row_rocof = indi_vec_rocof[idx]
+        graph_r = graph_nx.copy()
+        assert nx.is_connected(graph_r), "Graph should be connected but is not!"
+
+        idx_failed_edegs = np.argwhere(row)
+        list_tuple_fedges = [list_edges[int(xx)] for xx in idx_failed_edegs]
+        
+        graph_r.remove_edges_from(list_tuple_fedges)
+        
+        assert not nx.is_connected(graph_r), "Graph should be disconnected, since the failed edges, which lead to a system split, have been removed!"
+
+        # Check if other indicator vectors have same nodes
+        ## Start with only two components
+        counter_larger_components = 0
+        components = [set([node_lookup_dict[yy] for yy in xx])
+                      for xx in nx.connected_components(graph_r)]
+        
+        unique_rocof_row = np.unique(row_rocof)
+        for uni_rocof_r in unique_rocof_row:
+            nodes_idx_comp = set(np.argwhere(row_rocof == uni_rocof_r).flatten())
+            
+            # Is this a component of the disconnected graph
+            is_in_connected_comp = nodes_idx_comp in components
+            
+            if not is_in_connected_comp:
+                return co2_lvl, False    
+    
+    return co2_lvl, True
+
+
+def check_component_properties_indicatorvectors_all_co2lvl(nn_nodes=400,
+                                                           nn_procs=4,
+                                                           save_it: bool = True):
+    """Check if the component properties of all co2 vectors agree
+    with the failed edges vectors
+
+    Args:
+        nn_scan (int, optional): Number of nodes in PyPSA network. Defaults to 400.
+    """
+    
+    glob_search_str = f"results/sclopf/indicator_vectors_rocof_lshare_edges/indicator_vector_rocof_*n{nn_nodes}.pklz"
+    co2_levels = [float(xx.split("_n")[0].split('Co2l')[-1]) 
+                  for xx in glob.glob(glob_search_str)]
+    
+    funci = lambda xx: check_component_properties_indicatorvectors_all_co2lvl(xx,
+                                                                              nn_nodes=nn_nodes)
+    
+    def dummy_callback():
+        pbar.udpate()
+    
+    with mp.Pool(processes=nn_procs) as pool:
+        with tqdm(total=len(co2_levels)) as pbar:
+            async_results = [pool.apply_async(funci, args=(xx, ),
+                                             callback=dummy_callback) for xx in co2_levels]
+
+            results = [async_r.get() for async_r in async_results]
+            
+    if save_it:
+        fpath_out = fpath_out_root + f"/check_rocof_allCo2lvls_nn{nn_nodes}.pklz"
+        with gzip.open(fpath_out, 'wb') as fh_out:
+            pickle.dump(results, fh_out)
+            
+    return results
