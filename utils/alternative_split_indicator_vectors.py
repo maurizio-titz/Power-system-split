@@ -370,7 +370,7 @@ def check_component_properties_indicatorvectors_all_co2lvl(nn_nodes=400,
 
     funci = partial(single_call, nn_nodes)
     
-    def dummy_callback():
+    def dummy_callback(_):
         pbar.udpate()
     
     with mp.Pool(processes=nn_procs) as pool:
