@@ -350,6 +350,7 @@ def check_rocof_lshare_indicator_vectors(co2_lvl, nn_nodes=400, show_progress=Fa
     
     return co2_lvl, True
 
+
 def single_call(nn_nodes, co2_lvl_rr):
         return check_rocof_lshare_indicator_vectors(co2_lvl_rr, nn_nodes=nn_nodes)
 
@@ -371,7 +372,7 @@ def check_component_properties_indicatorvectors_all_co2lvl(nn_nodes=400,
     funci = partial(single_call, nn_nodes)
     
     def dummy_callback(_):
-        pbar.udpate()
+        pbar.update()
     
     with mp.Pool(processes=nn_procs) as pool:
         with tqdm(total=len(co2_levels)) as pbar:
