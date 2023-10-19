@@ -340,14 +340,15 @@ def check_rocof_lshare_indicator_vectors(co2_lvl, nn_nodes=400, show_progress=Fa
         
         unique_rocof_row = np.unique(row_rocof)
         for uni_rocof_r in unique_rocof_row:
-            nodes_idx_comp = set(np.argwhere(row_rocof == uni_rocof_r).flatten())
-            
-            # Is this a component of the disconnected graph
-            is_in_connected_comp = nodes_idx_comp in components
-            
-            if not is_in_connected_comp:
-                return co2_lvl, False    
-    
+            if uni_rocof_r != 0:
+                nodes_idx_comp = set(np.argwhere(row_rocof == uni_rocof_r).flatten())
+                
+                # Is this a component of the disconnected graph
+                is_in_connected_comp = nodes_idx_comp in components
+                
+                if not is_in_connected_comp:
+                    return co2_lvl, False    
+        
     return co2_lvl, True
 
 
