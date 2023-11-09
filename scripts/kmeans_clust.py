@@ -1,11 +1,13 @@
 import numpy as np
 from sklearn.cluster import KMeans
-from utils.config import path_to_indicator_vectors
 import pickle
 import gzip
-from utils.config import path_to_clustering_results
 from sklearn.metrics import silhouette_score
 from tqdm import tqdm
+import sys
+
+sys.path.append("./")
+from utils.config import path_to_clustering_results, path_to_indicator_vectors
 
 
 def cluster_kmeans(
@@ -127,8 +129,30 @@ types = [
 ]
 # n_clusters_list = [20,50,100,200]
 n_clusters_list = [4]
+
+co2l = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+for indicator_type in types:
+    print(indicator_type)
+    for n_nodes in [400]:
+        for transformation in ["sign", "tanh", None]:
+            print(transformation)
+            if indicator_type != "rocof" and transformation != None:
+                continue
+            for n_clusters in tqdm(n_clusters_list):
+                print(n_clusters)
+                cluster_kmeans(
+                    n_nodes,
+                    co2l,
+                    n_clusters,
+                    indicator_type,
+                    path_to_indicator_vectors,
+                    path_to_clustering_results,
+                    transformation=transformation,
+                    test=True,
+                )
+
+
 co2l_list = [
-    [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
     0.1,
     0.2,
     0.3,
