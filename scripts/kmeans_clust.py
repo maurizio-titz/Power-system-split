@@ -127,8 +127,7 @@ types = [
     "failed_edges",
     "lshare",
 ]
-# n_clusters_list = [20,50,100,200]
-n_clusters_list = [4]
+n_clusters_list = [10, 20, 30, 40, 50, 100, 200]
 
 co2l = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 for indicator_type in types:
@@ -148,7 +147,7 @@ for indicator_type in types:
                     path_to_indicator_vectors,
                     path_to_clustering_results,
                     transformation=transformation,
-                    test=True,
+                    test=False,
                 )
 
 
@@ -182,5 +181,5 @@ for indicator_type in types:
                         path_to_indicator_vectors,
                         path_to_clustering_results,
                         transformation=transformation,
-                        test=True,
+                        test=False,
                     )
