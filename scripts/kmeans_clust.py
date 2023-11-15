@@ -14,7 +14,7 @@ def cluster_kmeans(
     n_nodes,
     co2l,
     n_clusters,
-    type,
+    indicator_type,
     path_to_indicator_vectors,
     path_to_clustering_results,
     transformation=None,
@@ -26,19 +26,19 @@ def cluster_kmeans(
         n_nodes (int): number of nodes in the network
         co2l (float): co2 level
         n_clusters (int): number of clusters
-        type (string): which type of indicator vector to use
+        indicator_type (string): which type of indicator vector to use
         path_to_indicator_vectors (string or ): ....
         path_to_clustering_results (string): ....
     """
 
     results = []
     if isinstance(co2l, float):
-        file_name = f"indicator_vector_{type}_Co2l{co2l}_n{n_nodes}.pklz"
+        file_name = f"indicator_vector_{indicator_type}_Co2l{co2l}_n{n_nodes}.pklz"
         with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
             results = pickle.load(out)[-1]
     elif isinstance(co2l, list):
         for co2 in co2l:
-            file_name = f"indicator_vector_{type}_Co2l{co2}_n{n_nodes}.pklz"
+            file_name = f"indicator_vector_{indicator_type}_Co2l{co2}_n{n_nodes}.pklz"
             with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
                 results.append(pickle.load(out)[-1])
         results = np.concatenate(results)
@@ -54,6 +54,11 @@ def cluster_kmeans(
         indicator_vectors = np.sign(indicator_vectors)
     elif transformation == "tanh":
         indicator_vectors = np.tanh(indicator_vectors)
+    elif transformation == "clipped_tanh":
+        indicator_vectors = np.tanh(indicator_vectors)
+        indicator_vectors = np.clip(indicator_vectors, None, 0)
+    elif transformation == "clipped":
+        indicator_vectors = np.clip(indicator_vectors, None, 0)
 
     # create KMeans object
     kmeans = KMeans(n_clusters=n_clusters)
@@ -81,7 +86,7 @@ def cluster_kmeans(
         transformation_string = ""
 
     with gzip.open(
-        f"{path_to_clustering_results}/{type}{transformation_string}_Co2l{co2l}_n{n_nodes}_kmeans{n_clusters}.pkl",
+        f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2l{co2l}_n{n_nodes}_kmeans{n_clusters}.pkl",
         "wb",
     ) as fh_out:
         pickle.dump(
@@ -137,6 +142,8 @@ for indicator_type in types:
             print(transformation)
             if indicator_type != "rocof" and transformation != None:
                 continue
+            if not "clipped" in transformation:
+                continue
             for n_clusters in tqdm(n_clusters_list):
                 print(n_clusters)
                 cluster_kmeans(
@@ -170,6 +177,8 @@ for indicator_type in types:
             for transformation in ["sign", "tanh", None]:
                 print(transformation)
                 if indicator_type != "rocof" and transformation != None:
+                    continue
+                if transformation != "clipped_tanh":
                     continue
                 for n_clusters in tqdm(n_clusters_list):
                     print(n_clusters)
