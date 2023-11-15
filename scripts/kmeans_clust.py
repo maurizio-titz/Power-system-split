@@ -138,11 +138,11 @@ co2l = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 for indicator_type in types:
     print(indicator_type)
     for n_nodes in [400]:
-        for transformation in ["sign", "tanh", None]:
+        for transformation in ["sign", "tanh", None, "clipped_tanh", "clipped"]:
             print(transformation)
             if indicator_type != "rocof" and transformation != None:
                 continue
-            if not "clipped" in transformation:
+            if not "clipped" in str(transformation):
                 continue
             for n_clusters in tqdm(n_clusters_list):
                 print(n_clusters)
@@ -174,11 +174,11 @@ for indicator_type in types:
     for co2l in co2l_list:
         print(co2l)
         for n_nodes in [400]:
-            for transformation in ["sign", "tanh", None]:
+            for transformation in ["sign", "tanh", None, "clipped_tanh", "clipped"]:
                 print(transformation)
                 if indicator_type != "rocof" and transformation != None:
                     continue
-                if transformation != "clipped_tanh":
+                if not "clipped" in str(transformation):
                     continue
                 for n_clusters in tqdm(n_clusters_list):
                     print(n_clusters)
