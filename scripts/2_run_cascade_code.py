@@ -1,4 +1,5 @@
 import pickle
+import gzip
 import sys
 import networkx as nx
 from tqdm import tqdm
@@ -69,5 +70,5 @@ for snapshot in tqdm(network.snapshots):
     fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
     if save_all_cascades:
         fpath_out += "_allcascades" 
-    with open( fpath_out + ".pickle", 'wb') as handle:
+    with gzip.open( fpath_out + ".pklz", 'wb') as handle:
         pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
