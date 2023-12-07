@@ -17,6 +17,7 @@ snet_index = 0
 # Load arguments
 co2l = float(sys.argv[1]) 
 n_nodes = int(sys.argv[2])
+save_all_cascades = bool(sys.argv[3])
 
 # Load PyPSA network, the graph of the subnetwork and its matrices
 network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
@@ -58,8 +59,15 @@ for snapshot in tqdm(network.snapshots):
 
         failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
                                                                           num_parallels, initial_failure)
-        if system_split:
+        
+        if save_all_cascades:
+            splitting_cascades[snapshot.strftime('%Y-%m-%d %H:00')][tuple(initial_failure)] = failing_links
+        
+        elif system_split:
             splitting_cascades[snapshot.strftime('%Y-%m-%d %H:00')][tuple(initial_failure)] = failing_links 
-
-    with open(save_path + f'system_splits_Co2L{co2l}_n{n_nodes}.pickle' , 'wb') as handle:
+    
+    fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
+    if save_all_cascades:
+        fpath_out += "_allcascades" 
+    with open( fpath_out + ".pickle", 'wb') as handle:
         pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
