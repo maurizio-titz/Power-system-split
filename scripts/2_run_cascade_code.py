@@ -1,3 +1,6 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*
+
 import pickle
 import gzip
 import sys
@@ -18,7 +21,10 @@ snet_index = 0
 # Load arguments
 co2l = float(sys.argv[1]) 
 n_nodes = int(sys.argv[2])
-save_all_cascades = bool(sys.argv[3])
+if len(sys.argv) > 3: 
+    save_all_cascades = bool(sys.argv[3])
+else:
+    save_all_cascades = False
 
 # Load PyPSA network, the graph of the subnetwork and its matrices
 network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
