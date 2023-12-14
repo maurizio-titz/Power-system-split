@@ -174,20 +174,15 @@ def evaluate_observables_for_subgraphs(subgraphs: list,
     
     # results array with columns 
     # [rot_energy', 'power_imbalance', 'load', 'rocof', 'load_share']
-    results_arr = np.empty((len(subgraph), 5), dtype=float)
+    results_arr = np.empty((len(subgraphs), 5), dtype=float)
     
     for ii, subgraph in enumerate(subgraphs):
-
-
-        results_arr[ii, 2]=  get_load_subgraph(subgraph, network.loads, current_load)
-        
 
         results_arr[ii, 0] = get_inertia_gen_subgraph(subgraph,
                                                         network.generators,
                                                         current_generation,
                                                         network.storage_units,
                                                         current_storage)
-
         results_arr[ii, 1] = get_power_imbalance_subgraph(subgraph,
                                                         network.generators,
                                                         current_generation,
@@ -196,10 +191,12 @@ def evaluate_observables_for_subgraphs(subgraphs: list,
                                                         network.loads,
                                                         current_load,
                                                         HVDC_transport)
-
+        results_arr[ii, 2]=  get_load_subgraph(subgraph, network.loads, current_load)
+        
+        results_arr[ii, 3] = 50 * results_arr[ii, 1] / ((results_arr[ii, 0]+1e-8)*2)
 
         results_arr[ii, 4] = results_arr[ii, 2] / total_current_load_subgraph
-        results_arr[ii, 3] = 50 * results_arr[ii, 1] / ((results_arr[ii, 0]+1e-8)*2),
+        
         
     return results_arr
 

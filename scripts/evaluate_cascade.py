@@ -29,7 +29,7 @@ if 'profile' not in globals():
 def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
                      start_time_str=None, end_time_str=None, 
                      eval_indicator_vectors: bool = True, 
-                     verbose: bool = False):
+                     verbose: bool = False, show_progress: bool = True):
     """Find the properties of the splits (i.e., RoCoF or lost load) and 
     indicator vectors describing the network.
 
@@ -44,26 +44,30 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
     
     def check_format_time_str(time_str):
         
-        correct_len_str = len("xxxx/xx/xx xx:xx")
+        correct_len_str = len("xxxx-xx-xx xx:xx")
         has_correct_len = len(time_str) == correct_len_str
         
         rr = re.compile('\d{4}/\d{2}/\d{2} \d{2}:\d{2}')
         does_match = rr.match(time_str) is not None
         
-        return has_correct_len and does_match
+        return has_correct_len, does_match
 
     # Check if correct format of start or end time has been given
     if start_time_str is not None:
-        assert check_format_time_str(start_time_str), "Provided start time does not have correct format."
-        start_time_dt = dt.strptime(start_time_str, "%y-%m-%d %H:%M")
+        check_format_r = check_format_time_str(start_time_str)
+        assert check_format_r, "Provided start time does not have correct format. "
+        start_time_dt = dt.strptime(start_time_str, "%Y-%m-%d %H:%M")
         
     if end_time_str is not None:
-        assert check_format_time_str(end_time_str), "Provided end time does not have correct format."
-        end_time_dt = dt.strptime(end_time_str, "%y-%m-%d %H:%M")
+        check_format_r = check_format_time_str(end_time_str)
+        assert check_format_r, "Provided end time does not have correct format."
+        end_time_dt = dt.strptime(end_time_str, "%Y-%m-%d %H:%M")
         
     # Load PyPSA network, the graph of the subnetwork and its matrices
+    if verbose:
+        print("Loading PyPSA Network and converting it to NetworkX Graph.\n")
     network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
-    nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 
     # Load cascade results
     splitting_cascades = pickle.load(open(path_to_cascade_results+
@@ -79,21 +83,23 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
                                 index=[], dtype=float)'''
     indicator_vectors = np.empty((0, nx_graph.number_of_nodes()), int)
 
-    splitting_cascades_dtkeys = {dt.strptime(key, "%y-%m-%d %H:%M"): value 
+    splitting_cascades_dtkeys = {dt.strptime(key, "%Y-%m-%d %H:%M"): value 
                                  for key, value in splitting_cascades.items()}
     
+    if verbose:
+        print("Starting evaluation of System Splits.\n")
     did_cut_dict = False
     if start_time_str is not None or end_time_str is not None:
         if start_time_str is not None and end_time_str is not None:
-            splitting_cascades_cut = {key: value for key, value in splitting_cascades 
+            splitting_cascades_cut = {key: value for key, value in splitting_cascades_dtkeys.items() 
                                       if key >= start_time_dt and key <= end_time_dt}
             
         elif start_time_str is not None:
-            splitting_cascades_cut = {key: value for key, value in splitting_cascades 
+            splitting_cascades_cut = {key: value for key, value in splitting_cascades_dtkeys.items() 
                                       if key >= start_time_dt}
             
         elif end_time_str is not None:
-            splitting_cascades_cut = {key: value for key, value in splitting_cascades 
+            splitting_cascades_cut = {key: value for key, value in splitting_cascades_dtkeys.items() 
                                       if  key <= end_time_dt}
 
         splitting_cascades_dtkeys = splitting_cascades_cut
@@ -133,13 +139,16 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
         #component_props.to_hdf(save_path + f'component_properties_Co2L{co2l}_n{n_nodes}.h5',
         #                    key='df', mode= 'w')
 
-    # Convert dictionary to component props dataframe and save
+    # Convert dictionary to component props pdDataFrame and save
     component_props = pd.DataFrame.from_dict(component_props_dict, orient="index",
                                              columns=comp_cols)
     save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}_dict"
     if did_cut_dict:
-        cut_path_str = (f"_from{start_time_str.replace(' ', '_')}" + 
-                        "to{end_time_str.replace(' ', '_')}")
+        start_time_str_df = dt.strftime(min(component_props.time_stamp), "%Y-%m-%d_%H:%M")
+        end_time_str_df = dt.strftime(max(component_props.time_stamp), "%Y-%m-%d_%H:%M")
+        
+        cut_path_str = (f"_from{start_time_str_df}" + 
+                        f"to{end_time_str_df}")
         save_df_path += cut_path_str
         
     component_props.to_hdf(save_df_path + ".h5",
