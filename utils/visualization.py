@@ -138,7 +138,6 @@ def cluster_indicator_vectors_combined(indicator_vectors, min_cluster_distance=0
     all_c_labels[subset_indices] = subset_c_labels
     all_c_labels[remaining_indices] = remaining_c_labels
 
-
     return n_cluster, all_c_labels
 
 

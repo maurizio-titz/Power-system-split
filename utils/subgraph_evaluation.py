@@ -1,3 +1,6 @@
+#!usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """
 Evaluation of observables in subgraphs of PyPSA network 
 """
@@ -132,7 +135,7 @@ def get_indicator_vectors_of_subgraphs(subgraphs, nx_graph):
 
 def evaluate_observables_for_subgraphs(subgraphs: list,
                                        network,
-                                       timestamp: str, snet=0) -> pd.DataFrame:
+                                       timestamp: str, snet=0) -> dict:
     """Evaluate power imbalance, rotational energy and load of subgraphs for a time stamp.
 
     Args:
@@ -142,7 +145,8 @@ def evaluate_observables_for_subgraphs(subgraphs: list,
         snet (int, optional): Index of subnetwork under investigation. Defaults to 0.
 
     Returns:
-        pandas.DataFrame: observables
+        dict: Dictonary with split number as subnetwork nr as key and observables as element
+        with the order [rot_energy, power_imbalance, load, rocof, load_share]
     """
 
     # Extract current power injections    
@@ -157,31 +161,34 @@ def evaluate_observables_for_subgraphs(subgraphs: list,
     # Check if network is balanced
     if np.abs(current_generation.sum() + current_storage.sum() - current_load.sum()) > 1e-1:
         print('Warning: Power imbalance for', timestamp, 'is non-zero:')
-        print(np.abs(current_generation.sum()+current_storage.sum()-current_load.sum()))
+        print(np.abs(current_generation.sum() + current_storage.sum() - current_load.sum()))
         
     if np.abs(HVDC_transport.sum()) > 1e-1:
         print('Warning: HVDC transport for', timestamp, 'does not sum to zero:')
         print(np.abs(HVDC_transport.sum()))
         
     
-    results = pd.DataFrame(columns=['time_stamp', 'rot_energy', 'power_imbalance',
-                                    'load', 'rocof', 'load_share'],
-                           index=range(len(subgraphs)), dtype=float)
-
+    #results = pd.DataFrame(columns=['time_stamp', 'rot_energy', 'power_imbalance',
+    #                                'load', 'rocof', 'load_share'],
+    #                       index=range(len(subgraphs)), dtype=float)
+    
+    # results array with columns 
+    # [rot_energy', 'power_imbalance', 'load', 'rocof', 'load_share']
+    results_arr = np.empty((len(subgraph), 5), dtype=float)
     
     for ii, subgraph in enumerate(subgraphs):
 
 
-        results.loc[ii, 'load'] =  get_load_subgraph(subgraph, network.loads, current_load)
+        results_arr[ii, 2]=  get_load_subgraph(subgraph, network.loads, current_load)
         
 
-        results.loc[ii, 'rot_energy'] = get_inertia_gen_subgraph(subgraph,
+        results_arr[ii, 0] = get_inertia_gen_subgraph(subgraph,
                                                         network.generators,
                                                         current_generation,
                                                         network.storage_units,
                                                         current_storage)
 
-        results.loc[ii, 'power_imbalance'] = get_power_imbalance_subgraph(subgraph,
+        results_arr[ii, 1] = get_power_imbalance_subgraph(subgraph,
                                                         network.generators,
                                                         current_generation,
                                                         network.storage_units,
@@ -191,13 +198,10 @@ def evaluate_observables_for_subgraphs(subgraphs: list,
                                                         HVDC_transport)
 
 
-        results.loc[ii, 'load_share'] = results.loc[ii, 'load'] / total_current_load_subgraph
-        results.loc[ii, 'time_stamp'] = timestamp
-        results.loc[ii, 'rocof'] = 50 * results.loc[ii, 'power_imbalance'] / ((results.loc[ii, 'rot_energy']+1e-8)*2),
+        results_arr[ii, 4] = results_arr[ii, 2] / total_current_load_subgraph
+        results_arr[ii, 3] = 50 * results_arr[ii, 1] / ((results_arr[ii, 0]+1e-8)*2),
         
-
-
-    return results
+    return results_arr
 
 
 

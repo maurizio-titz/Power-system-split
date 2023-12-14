@@ -1,3 +1,6 @@
+#!usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """ 
 Preparation and conversion of data for system split simulation and evaluation  
 """

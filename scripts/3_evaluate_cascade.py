@@ -1,11 +1,18 @@
+#!usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""Evaluate the results of the cascade experiments to determine
+the properties of the system splits."""
+
 import pickle
 import sys
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
 
+from datetime import datetime as dt
+import re
 
-sys.path.append('./')
 from utils import data_handling, subgraph_evaluation
 
 # Setup paths to solved PyPSA networks and results own scripts
@@ -13,49 +20,138 @@ path_to_pypsa_network = './data/European_networks_sclopf/'
 path_to_cascade_results  = './results/sclopf/cascade_results/'
 save_path =  './results/sclopf/evaluation_results/'
 
-# Select a particular subnetwork for calculations (if the pypsa network has different ones).
-# For our data set, "0" indicates the Continental European AC grid. 
-snet_index = 0
+# Dummy decorator to not get stuck on @profile
+if 'profile' not in globals():
+    def profile(func):
+        return func
 
-# Load arguments
-co2l = float(sys.argv[1]) 
-n_nodes = int(sys.argv[2])
+@profile
+def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
+                     start_time_str=None, end_time_str=None, 
+                     eval_indicator_vectors: bool = True, 
+                     verbose: bool = False):
+    """Find the properties of the splits (i.e., RoCoF or lost load) and 
+    indicator vectors describing the network.
 
-# Load PyPSA network, the graph of the subnetwork and its matrices
-network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
-nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
-
-# Load cascade results
-splitting_cascades = pickle.load(open(path_to_cascade_results+
-                                      f'system_splits_Co2L{co2l}_n{n_nodes}.pickle' ,'rb'))
-
-# Initialize results
-component_props = pd.DataFrame(columns=['time_stamp', 'init_failure_0','init_failure_1',
-                                        'split_number','rot_energy', 'power_imbalance',
-                                        'load', 'rocof', 'load_share'],
-                               index=[], dtype=float)
-indicator_vectors = np.empty((0, nx_graph.number_of_nodes()), int)
-
-for timestamp, splits in tqdm(splitting_cascades.items()):
-    for ii, (init_failure, cascade) in enumerate(splits.items()):
-
-        subgraphs = data_handling.get_subgraphs_from_edges(cascade,
-                                                           nx_graph)
+    Args:
+        co2l (float): Target CO2 level in PyPSA Optimization.
+        n_nodes (int): Number of nodes in PyPSA network.
+        snet_index (int, optional): Select a particular subnetwork for calculations (if the pypsa network has different ones).
+                    For our data set, "0" indicates the Continental European AC grid. Defaults to 0.
+        start_time_str, end_time_str (str Format "YYYY-mm-dd HH:MM"): If either or both are not None, the evaluation will only be 
+                    done between start_time and end_time.
+    """
+    
+    def check_format_time_str(time_str):
         
-        observables = subgraph_evaluation.evaluate_observables_for_subgraphs(subgraphs, network,
-                                                                             timestamp)
-        observables['init_failure_0'] = init_failure[0]
-        observables['init_failure_1'] = init_failure[1]
-        observables['split_number'] = ii
-        component_props = component_props.append(observables, ignore_index=True)
+        correct_len_str = len("xxxx/xx/xx xx:xx")
+        has_correct_len = len(time_str) == correct_len_str
         
-        # Append properties and vectors such that component_props.iloc[ii] refers to 
-        # indicator_vectors[ii]
-        indicator_vec = subgraph_evaluation.get_indicator_vectors_of_subgraphs(subgraphs, nx_graph)
-        indicator_vectors = np.append(indicator_vectors, indicator_vec, axis=0)
+        rr = re.compile('\d{4}/\d{2}/\d{2} \d{2}:\d{2}')
+        does_match = rr.match(time_str) is not None
+        
+        return has_correct_len and does_match
+
+    # Check if correct format of start or end time has been given
+    if start_time_str is not None:
+        assert check_format_time_str(start_time_str), "Provided start time does not have correct format."
+        start_time_dt = dt.strptime(start_time_str, "%y-%m-%d %H:%M")
+        
+    if end_time_str is not None:
+        assert check_format_time_str(end_time_str), "Provided end time does not have correct format."
+        end_time_dt = dt.strptime(end_time_str, "%y-%m-%d %H:%M")
+        
+    # Load PyPSA network, the graph of the subnetwork and its matrices
+    network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
+
+    # Load cascade results
+    splitting_cascades = pickle.load(open(path_to_cascade_results+
+                                        f'system_splits_Co2L{co2l}_n{n_nodes}.pickle' ,'rb'))
+
+    # Initialize results
+    comp_cols = ['time_stamp', 'init_failure_0','init_failure_1',
+                 'split_number','rot_energy', 'power_imbalance',
+                 'load', 'rocof', 'load_share']
+    '''component_props = pd.DataFrame(columns=['time_stamp', 'init_failure_0','init_failure_1',
+                                            'split_number','rot_energy', 'power_imbalance',
+                                            'load', 'rocof', 'load_share'],
+                                index=[], dtype=float)'''
+    indicator_vectors = np.empty((0, nx_graph.number_of_nodes()), int)
+
+    splitting_cascades_dtkeys = {dt.strptime(key, "%y-%m-%d %H:%M"): value 
+                                 for key, value in splitting_cascades.items()}
+    
+    did_cut_dict = False
+    if start_time_str is not None or end_time_str is not None:
+        if start_time_str is not None and end_time_str is not None:
+            splitting_cascades_cut = {key: value for key, value in splitting_cascades 
+                                      if key >= start_time_dt and key <= end_time_dt}
+            
+        elif start_time_str is not None:
+            splitting_cascades_cut = {key: value for key, value in splitting_cascades 
+                                      if key >= start_time_dt}
+            
+        elif end_time_str is not None:
+            splitting_cascades_cut = {key: value for key, value in splitting_cascades 
+                                      if  key <= end_time_dt}
+
+        splitting_cascades_dtkeys = splitting_cascades_cut
+        did_cut_dict = True
+        
+    component_props_dict = dict()
+    out_dict_key = 0   
+    for timestamp, splits in tqdm(splitting_cascades_dtkeys.items()):
+        
+        for ii, (init_failure, cascade) in enumerate(tqdm(splits.items(), leave=False)):
+
+            subgraphs = data_handling.get_subgraphs_from_edges(cascade,
+                                                               nx_graph)
+            
+            observables_arr = subgraph_evaluation.evaluate_observables_for_subgraphs(subgraphs, network,
+                                                                                 timestamp)
+            #observables['init_failure_0'] = init_failure[0]
+            #observables['init_failure_1'] = init_failure[1]
+            #observables['split_number'] = ii
+            
+            for row in observables_arr:
+                dict_out_ele = [timestamp, init_failure[0], init_failure[1],
+                                ii, *row]
+                component_props_dict[out_dict_key] = dict_out_ele
+                out_dict_key += 1
+                
+            #component_props = component_props.append(observables, ignore_index=True)
+            
+            # Append properties and vectors such that component_props.iloc[ii] refers to 
+            # indicator_vectors[ii]
+            if eval_indicator_vectors:
+                indicator_vec = subgraph_evaluation.get_indicator_vectors_of_subgraphs(subgraphs, nx_graph)
+                indicator_vectors = np.append(indicator_vectors, indicator_vec, axis=0)
+
+        if eval_indicator_vectors:
+            np.save(save_path + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.npy', indicator_vectors)
+        #component_props.to_hdf(save_path + f'component_properties_Co2L{co2l}_n{n_nodes}.h5',
+        #                    key='df', mode= 'w')
+
+    # Convert dictionary to component props dataframe and save
+    component_props = pd.DataFrame.from_dict(component_props_dict, orient="index",
+                                             columns=comp_cols)
+    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}_dict"
+    if did_cut_dict:
+        cut_path_str = (f"_from{start_time_str.replace(' ', '_')}" + 
+                        "to{end_time_str.replace(' ', '_')}")
+        save_df_path += cut_path_str
+        
+    component_props.to_hdf(save_df_path + ".h5",
+                           key='df', mode= 'w')
+    
+    return component_props
 
     
-    np.save(save_path + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.npy', indicator_vectors)
-    component_props.to_hdf(save_path + f'component_properties_Co2L{co2l}_n{n_nodes}.h5',
-                           key='df', mode= 'w')
-
+if __name__ == "__main__":
+    
+    # Load arguments
+    co2l_in = float(sys.argv[1]) 
+    n_nodes_in = int(sys.argv[2])
+    
+    evaluate_cascade(co2l_in, n_nodes_in)
