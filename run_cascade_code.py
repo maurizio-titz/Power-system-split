@@ -74,13 +74,13 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
 
     ### Simulation of N-2 failures ###
     print('\n#### N-2 failures: Co2 level', co2l, ' | #Nodes:', n_nodes, ' ####')
-    for snapshot in tqdm(network.snapshots):
-        
+    for idx_snap, snapshot in enumerate(tqdm(network.snapshots)):
+        key_now = snapshot.strftime('%Y-%m-%d %H:00')
         splitting_cascades[snapshot.strftime('%Y-%m-%d %H:00')] = {}
 
         P_0 = data_handling.get_effective_injections(network, snapshot, nx_graph)
 
-        for initial_failure in n_2_failures:
+        for initial_failure in tqdm(n_2_failures, leave=False):
 
             failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
                                                                               num_parallels, initial_failure)
@@ -92,10 +92,12 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
                 splitting_cascades[snapshot.strftime('%Y-%m-%d %H:00')][tuple(initial_failure)] = failing_links 
         
         fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
-        if save_all_cascades:
-            fpath_out += "_allcascades" 
-        with gzip.open( fpath_out + ".pklz", 'wb') as handle:
-            pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
+    
+    if save_all_cascades:
+            fpath_out += "_allcascades"
+            
+    with gzip.open( fpath_out + ".pklz", 'wb') as handle:
+        pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == '__main__':
@@ -109,4 +111,5 @@ if __name__ == '__main__':
         save_all_cascades_in = False
         
     run_cascade_dual_line_failures(co2l_in, n_nodes_in,
-                                   save_all_cascades=save_all_cascades_in)
+                                   save_all_cascades=save_all_cascades_in,
+                                   check_n1_security=False)

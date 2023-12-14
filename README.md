@@ -21,8 +21,8 @@ The `scripts` folder contains scripts to reproduce the paper results. The `noteb
 The `scripts` contain our workflow with five stages:
 
 - `1_calc_pre_outage_data.py`: Calculate inertia and other properties from the (solved) PyPSA networks.
-- `2_run_cascade_code.py` : Run the cascade algorithm on the PyPSA networks.
-- `3_evaluate_cascade.py`: Evaluating the cascade results, e.g., inertia and load imbalance for each split.
+- `run_cascade_code.py` : Run the cascade algorithm on the PyPSA networks.
+- `evaluate_cascade.py`: Evaluating the cascade results, e.g., inertia and load imbalance for each split.
 - `4_prepare_split_visualization.py`: Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits.
 - `5_calc_inertia_placement.py` : Determine optimal inertia placement to mitigate the impact of system splits. 
 
