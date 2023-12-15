@@ -115,7 +115,7 @@ if __name__ == '__main__':
         save_all_cascades_in = bool(sys.argv[3])
     else:
         save_all_cascades_in = False
-        
+    print("Starting dual line failures")
     run_cascade_dual_line_failures(co2l_in, n_nodes_in,
                                    save_all_cascades=save_all_cascades_in,
                                    check_n1_security=False)

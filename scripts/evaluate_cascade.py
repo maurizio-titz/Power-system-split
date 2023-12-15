@@ -13,6 +13,7 @@ import numpy as np
 from datetime import datetime as dt
 import re
 
+sys.path.append('./') 
 from utils import data_handling, subgraph_evaluation
 
 # Setup paths to solved PyPSA networks and results own scripts
@@ -107,9 +108,9 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
         
     component_props_dict = dict()
     out_dict_key = 0   
-    for timestamp, splits in tqdm(splitting_cascades_dtkeys.items()):
+    for timestamp, splits in tqdm(splitting_cascades_dtkeys.items(), disable=not show_progress):
         
-        for ii, (init_failure, cascade) in enumerate(tqdm(splits.items(), leave=False)):
+        for ii, (init_failure, cascade) in enumerate(tqdm(splits.items(), leave=False, disable=not show_progress)):
 
             subgraphs = data_handling.get_subgraphs_from_edges(cascade,
                                                                nx_graph)
