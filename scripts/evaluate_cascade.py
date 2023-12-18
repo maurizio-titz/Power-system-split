@@ -4,11 +4,14 @@
 """Evaluate the results of the cascade experiments to determine
 the properties of the system splits."""
 
-import pickle
 import sys
+
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+
+import gzip
+import pickle
 
 from datetime import datetime as dt
 import re
@@ -71,7 +74,7 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 
     # Load cascade results
-    splitting_cascades = pickle.load(open(path_to_cascade_results+
+    splitting_cascades = pickle.load(open(path_to_cascade_results + 
                                         f'system_splits_Co2L{co2l}_n{n_nodes}.pickle' ,'rb'))
 
     # Initialize results
@@ -82,7 +85,6 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
                                             'split_number','rot_energy', 'power_imbalance',
                                             'load', 'rocof', 'load_share'],
                                 index=[], dtype=float)'''
-    indicator_vectors = np.empty((0, nx_graph.number_of_nodes()), int)
 
     splitting_cascades_dtkeys = {dt.strptime(key, "%Y-%m-%d %H:%M"): value 
                                  for key, value in splitting_cascades.items()}
@@ -105,7 +107,11 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
 
         splitting_cascades_dtkeys = splitting_cascades_cut
         did_cut_dict = True
-        
+    
+    total_nr_splits = sum(len(vv) for vv in splitting_cascades_dtkeys.values())
+    if eval_indicator_vectors:
+        indicator_vectors = np.empty((total_nr_splits, nx_graph.number_of_nodes()), int)
+    
     component_props_dict = dict()
     out_dict_key = 0   
     for timestamp, splits in tqdm(splitting_cascades_dtkeys.items(), disable=not show_progress):
@@ -132,15 +138,19 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
             # Append properties and vectors such that component_props.iloc[ii] refers to 
             # indicator_vectors[ii]
             if eval_indicator_vectors:
-                indicator_vec = subgraph_evaluation.get_indicator_vectors_of_subgraphs(subgraphs, nx_graph)
-                indicator_vectors = np.append(indicator_vectors, indicator_vec, axis=0)
+                indicator_vectors[ii, :] = subgraph_evaluation.get_indicator_vectors_of_subgraphs(subgraphs, nx_graph)
 
-        if eval_indicator_vectors:
-            np.save(save_path + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.npy', indicator_vectors)
+    
         #component_props.to_hdf(save_path + f'component_properties_Co2L{co2l}_n{n_nodes}.h5',
         #                    key='df', mode= 'w')
 
     # Convert dictionary to component props pdDataFrame and save
+    
+    if eval_indicator_vectors:
+            indi_vec_save_path = save_path + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz'
+            with gzip.open(indi_vec_save_path) as fh_vec_out:
+                pickle.dump(indicator_vectors, fh_vec_out)
+    
     component_props = pd.DataFrame.from_dict(component_props_dict, orient="index",
                                              columns=comp_cols)
     save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}_dict"

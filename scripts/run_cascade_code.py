@@ -23,11 +23,49 @@ if 'profile' not in globals():
         return func
     
     
-def run_cascade_single_line_failures():
+def run_cascade_single_line_failures(co2l: float, n_nodes: int,
+                                     save_all_cascades: bool = False, snet_index: int = 0):
     
-    raise NotImplementedError
+    # Load PyPSA network, the graph of the subnetwork and its matrices
+    network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
+    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph)
+    
+    # Calculate possible N-1 failures (using non-bridges)
+    bridge_idxs = data_handling.nx_edges_to_matrix_indices(nx.bridges(nx_graph),
+                                                           nx_graph)
+    n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
+    
+    splitting_cascades = dict()
+    
+    for snapshot in tqdm(network.snaptshots):
+        key_now = snapshot.strftime('%Y-%m-%d %H:00')
+        P_0 = data_handling.get_effective_injections(network, snapshot, nx_graph)
 
+        for initial_failure in n_1_failures:
+            res_dict = dict()
+            failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
+                                                                            num_parallels, initial_failure,
+                                                                            max_cascade_length=1)
+            if len(failing_links) > 1:
+                raise(RuntimeError('PyPSA networks are not N-1 stable!'))
+            
+            if save_all_cascades:
+                res_dict[initial_failure] = failing_links, system_split
+                
+            elif system_split:
+                res_dict[initial_failure] = failing_links
+            
+    fpath_out = save_path + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}"
+    
+    if save_all_cascades:
+            fpath_out += "_allcascades"
+            
+    with gzip.open( fpath_out + ".pklz", 'wb') as handle:
+        pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
+    
     return
+    
     
 @profile    
 def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
