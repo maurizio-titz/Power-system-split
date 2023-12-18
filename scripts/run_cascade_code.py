@@ -38,7 +38,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
     
     splitting_cascades = dict()
     
-    for snapshot in tqdm(network.snaptshots):
+    for ii_snap, snapshot in enumerate(tqdm(network.snapshots)):
         key_now = snapshot.strftime('%Y-%m-%d %H:00')
         P_0 = data_handling.get_effective_injections(network, snapshot, nx_graph)
 
@@ -55,6 +55,12 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
                 
             elif system_split:
                 res_dict[initial_failure] = failing_links
+                
+                
+        splitting_cascades[key_now] = res_dict
+        
+        if ii_snap > 2:
+            break
             
     fpath_out = save_path + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}"
     
