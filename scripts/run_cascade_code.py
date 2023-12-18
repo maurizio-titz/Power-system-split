@@ -58,9 +58,6 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
                 
                 
         splitting_cascades[key_now] = res_dict
-        
-        if ii_snap > 2:
-            break
             
     fpath_out = save_path + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}"
     
