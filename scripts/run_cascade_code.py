@@ -33,7 +33,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
     if use_sclopf:
         path_to_pypsa_network = path_to_pypsa_network_sclopf
     else:
-        path_to_pypsa_network_lopf
+        path_to_pypsa_network = path_to_pypsa_network_lopf
         
     network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
     nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
@@ -103,7 +103,7 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
     if use_sclopf:
         path_to_pypsa_network = path_to_pypsa_network_sclopf
     else:
-        path_to_pypsa_network_lopf
+        path_to_pypsa_network = path_to_pypsa_network_lopf
         
     # Load PyPSA network, the graph of the subnetwork and its matrices
     network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
