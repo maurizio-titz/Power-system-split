@@ -14,8 +14,10 @@ sys.path.append('./')
 from utils import cascade_simulation, data_handling
 
 # Setup paths to solved PyPSA networks and results of this script
-path_to_pypsa_network = './data/European_networks_sclopf/'
-save_path =  './results/sclopf/cascade_results/'
+path_to_pypsa_network_lopf = './data/European_networks_lopf/'
+path_to_pypsa_network_sclopf = './data/European_networks_sclopf/'
+save_path_sclopf =  './results/sclopf/cascade_results/'
+save_path_lopf =  './results/lopf/cascade_results/'
 
 # Dummy decorator to not get stuck on @profile
 if 'profile' not in globals():
@@ -24,9 +26,15 @@ if 'profile' not in globals():
     
     
 def run_cascade_single_line_failures(co2l: float, n_nodes: int,
-                                     save_all_cascades: bool = False, snet_index: int = 0):
+                                     save_all_cascades: bool = False, snet_index: int = 0,
+                                     use_sclopf: bool = False):
     
     # Load PyPSA network, the graph of the subnetwork and its matrices
+    if use_sclopf:
+        path_to_pypsa_network = path_to_pypsa_network_sclopf
+    else:
+        path_to_pypsa_network_lopf
+        
     network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
     nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph)
@@ -61,6 +69,14 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
             
     fpath_out = save_path + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}"
     
+    if use_sclopf:
+        save_path = save_path_sclopf
+    else:
+        save_path = save_path_lopf
+    
+    if not use_sclopf:
+        fpath_out += "_lopf"
+    
     if save_all_cascades:
             fpath_out += "_allcascades"
             
@@ -73,7 +89,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
 @profile    
 def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
                 save_all_cascades: bool = False, snet_index: int = 0,
-                check_n1_security: bool = True):
+                check_n1_security: bool = True, use_sclopf: bool = False):
     """Run cascade experiments by introducing dual line failures.
 
     Args:
@@ -84,6 +100,11 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
                 For our data set, "0" indicates the Continental European AC grid. . Defaults to 0.
     """
     
+    if use_sclopf:
+        path_to_pypsa_network = path_to_pypsa_network_sclopf
+    else:
+        path_to_pypsa_network_lopf
+        
     # Load PyPSA network, the graph of the subnetwork and its matrices
     network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
     nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
@@ -137,6 +158,14 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
                 res_dict[tuple(initial_failure)] = failing_links
                 
         splitting_cascades[key_now] = res_dict
+        
+    if use_sclopf:
+        save_path = save_path_sclopf
+    else:
+        save_path = save_path_lopf
+    
+    if not use_sclopf:
+        fpath_out += "_lopf"
         
     fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
     
