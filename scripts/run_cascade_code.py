@@ -37,7 +37,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
         path_to_pypsa_network = path_to_pypsa_network_lopf
         full_path_to_file = path_to_pypsa_network + f'elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.2f}-3H.nc'
         
-    network = data_handling.load_pypsa_network(path_to_pypsa_network, use_sclopf)
+    network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph)
     
@@ -69,13 +69,13 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
                 
                 
         splitting_cascades[key_now] = res_dict
-            
-    fpath_out = save_path + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}"
-    
+        
     if use_sclopf:
         save_path = save_path_sclopf
     else:
         save_path = save_path_lopf
+            
+    fpath_out = save_path + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}"
     
     if not use_sclopf:
         fpath_out += "_lopf"
