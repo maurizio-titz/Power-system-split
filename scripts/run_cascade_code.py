@@ -47,12 +47,12 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
     n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
     
     splitting_cascades = dict()
-    res_dict = dict()
+    
     for ii_snap, snapshot in enumerate(tqdm(network.snapshots)):
         key_now = snapshot.strftime('%Y-%m-%d %H:00')
         P_0 = data_handling.get_effective_injections(network, snapshot, nx_graph)
         
-        
+        res_dict = dict()
         for initial_failure in n_1_failures:
             
             failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
@@ -62,10 +62,10 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
                 raise(RuntimeError('PyPSA networks are not N-1 stable!'))
             
             if save_all_cascades:
-                res_dict[initial_failure] = failing_links, system_split
+                res_dict[tuple(initial_failure)] = failing_links, system_split
                 
             elif system_split:
-                res_dict[initial_failure] = failing_links
+                res_dict[tuple(initial_failure)] = failing_links
                 
                 
         splitting_cascades[key_now] = res_dict
