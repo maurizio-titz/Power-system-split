@@ -35,7 +35,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
         full_path_to_file = path_to_pypsa_network + f'sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.1f}-2920SEG.nc'
     else:
         path_to_pypsa_network = path_to_pypsa_network_lopf
-        full_path_to_file = path_to_pypsa_network + f'elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.2f}-3H.nc'
+        full_path_to_file = path_to_pypsa_network + f'elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-3H.nc'
         
     network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
