@@ -45,13 +45,14 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
     n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
     
     splitting_cascades = dict()
-    
+    res_dict = dict()
     for ii_snap, snapshot in enumerate(tqdm(network.snapshots)):
         key_now = snapshot.strftime('%Y-%m-%d %H:00')
         P_0 = data_handling.get_effective_injections(network, snapshot, nx_graph)
-
+        
+        
         for initial_failure in n_1_failures:
-            res_dict = dict()
+            
             failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
                                                                             num_parallels, initial_failure,
                                                                             max_cascade_length=1)
@@ -116,7 +117,7 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
     n_2_failures = cascade_simulation.calc_possible_double_line_failures(num_parallels, ignored_idxs=bridge_idxs)
     n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
 
-    splitting_cascades = {}
+    
 
     if check_n1_security:
     ### Check N-1 stability ###
@@ -136,17 +137,18 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
 
     ### Simulation of N-2 failures ###
     print('\n#### N-2 failures: Co2 level', co2l, ' | #Nodes:', n_nodes, ' ####')
+    splitting_cascades = dict()
     for idx_snap, snapshot in enumerate(tqdm(network.snapshots)):
         key_now = snapshot.strftime('%Y-%m-%d %H:00')
         #splitting_cascades[snapshot.strftime('%Y-%m-%d %H:00')] = {}
 
         P_0 = data_handling.get_effective_injections(network, snapshot, nx_graph)
 
+        res_dict = dict()
         for initial_failure in tqdm(n_2_failures, leave=False):
-            res_dict = dict()
+            
             failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
                                                                               num_parallels, initial_failure)
-            
             
             
             if save_all_cascades:
