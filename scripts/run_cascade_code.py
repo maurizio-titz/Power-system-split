@@ -190,4 +190,5 @@ if __name__ == '__main__':
     print("Starting dual line failures")
     run_cascade_dual_line_failures(co2l_in, n_nodes_in,
                                    save_all_cascades=save_all_cascades_in,
+                                   use_sclopf=True,
                                    check_n1_security=False)
