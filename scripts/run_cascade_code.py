@@ -32,11 +32,13 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
     # Load PyPSA network, the graph of the subnetwork and its matrices
     if use_sclopf:
         path_to_pypsa_network = path_to_pypsa_network_sclopf
+        full_path_to_file = path_to_pypsa_network + f'sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.1f}-2920SEG.nc'
     else:
         path_to_pypsa_network = path_to_pypsa_network_lopf
+        full_path_to_file = path_to_pypsa_network + f'elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.2f}-3H.nc'
         
-    network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
-    nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
+    network = data_handling.load_pypsa_network(path_to_pypsa_network, use_sclopf)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph)
     
     # Calculate possible N-1 failures (using non-bridges)
@@ -103,12 +105,14 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
     
     if use_sclopf:
         path_to_pypsa_network = path_to_pypsa_network_sclopf
+        full_path_to_file = path_to_pypsa_network + f'sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.1f}-2920SEG.nc'
     else:
         path_to_pypsa_network = path_to_pypsa_network_lopf
+        full_path_to_file = path_to_pypsa_network + f'elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.2f}-3H.nc'
         
     # Load PyPSA network, the graph of the subnetwork and its matrices
-    network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
-    nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
+    network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph)
 
     # Calculate possible N-1 and N-2 failures (using non-bridges)

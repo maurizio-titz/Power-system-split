@@ -92,29 +92,38 @@ def get_effective_injections(network, snapshot, nx_graph):
     return P0
 
 
-def load_pypsa_network(co2l, n_nodes, path_to_pypsa_network):
-    """
-    Load PyPSA network from path with certain Co2 constraint and aggregation level of n_nodes.
+def load_pypsa_network(path_to_pypsa_network: str, use_sclopf: bool):
+    """Load PyPSA network from path with certain Co2 constraint and aggregation level of n_nodes.
+
+    Args:
+        path_to_pypsa_network (str): path to PyPSA network as ".nc" file.
+        use_sclopf (bool): If 'True' the network is used was evaluated using security constrained lopf and 
+            the outage lines are removed beforehand.
+
+    Returns:
+        network (PyPSA network): _description_
     """
 
     # Select a particular subnetwork for calculations (if the pypsa network has different ones).
     # For our data set, "0" indicates the Continental European AC grid. -> snet doc
     
     # Load PyPSA network
-    file_name = 'sclopf-elec_s_{0}_ec_lv1.0_Co2L{1:.1f}-2920SEG.nc'.format(n_nodes, co2l)
-    assert os.path.isfile(path_to_pypsa_network + file_name) == True, f'File "{path_to_pypsa_network + file_name}" does not exist'
-    network = pypsa.Network(path_to_pypsa_network + file_name)
+
+    assert os.path.isfile(path_to_pypsa_network) == True, f'File "{path_to_pypsa_network}" does not exist'
+    network = pypsa.Network(path_to_pypsa_network)
 
     # The following line is needed to remove the outage lines used for SCLOPF. For SCLOPF,
     # the Lines are split into 2, one that fails during N-1 stability test, except from
     # those lines that only have one circuit. We have to add these line up again to obtain a simple graph 
-    duplicated_lines = network.lines[network.lines.index.str[-6:]!='outage'].index
-    network.lines.loc[duplicated_lines + '_outage', 'num_parallel'] +=  network.lines.loc[duplicated_lines, 'num_parallel'].values
-    network.lines.loc[duplicated_lines + '_outage', 's_nom'] +=  network.lines.loc[duplicated_lines, 's_nom'].values
-    network.lines_t.p0.loc[:, duplicated_lines + '_outage'] += network.lines_t.p0.loc[:, duplicated_lines].values
-    network.lines_t.p1.loc[:, duplicated_lines + '_outage'] += network.lines_t.p1.loc[:, duplicated_lines].values
+    if use_sclopf:
+        duplicated_lines = network.lines[network.lines.index.str[-6:]!='outage'].index
+        network.lines.loc[duplicated_lines + '_outage', 'num_parallel'] +=  network.lines.loc[duplicated_lines, 'num_parallel'].values
+        network.lines.loc[duplicated_lines + '_outage', 's_nom'] +=  network.lines.loc[duplicated_lines, 's_nom'].values
+        network.lines_t.p0.loc[:, duplicated_lines + '_outage'] += network.lines_t.p0.loc[:, duplicated_lines].values
+        network.lines_t.p1.loc[:, duplicated_lines + '_outage'] += network.lines_t.p1.loc[:, duplicated_lines].values
 
-    network.mremove('Line', duplicated_lines)
+        network.mremove('Line', duplicated_lines)
+        
     network.determine_network_topology()
     network.calculate_dependent_values()
 
