@@ -12,6 +12,10 @@ conda env create -f environment.yml
 conda activate system_split
 ```
 
+### Config
+To post message to mattermost, please set the incoming 'mattermost_url' in [utils/config.py](utils/config.py).
+
+
 ## Content
 
 The `scripts` folder contains scripts to reproduce the paper results. The `notebook` folder contains a notebook to produce the paper figures from the results. The `utils` folder contains the relevant utilities for cascade simulation and evaluation, as well as functions for visualisation and data handling. 
