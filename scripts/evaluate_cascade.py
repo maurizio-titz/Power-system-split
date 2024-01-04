@@ -19,6 +19,10 @@ import re
 sys.path.append('./') 
 from utils import data_handling, subgraph_evaluation
 
+# Post messages to mattermost
+import utils.config as cfg
+from utils import send_mattermost_messages
+
 # Setup paths to solved PyPSA networks and results own scripts
 path_to_pypsa_network = './data/European_networks_sclopf/'
 path_to_cascade_results  = './results/sclopf/cascade_results/'
@@ -164,6 +168,10 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
         
     component_props.to_hdf(save_df_path + ".h5",
                            key='df', mode= 'w')
+    
+    if cfg.mattermost_url is not None:
+        message_text = f"Evaluation of N={n_nodes}, C02_lvl={co2l} finished and results saved"
+        send_mattermost_messages.post_message(message_text, cfg.mattermost_url)
     
     return component_props
 

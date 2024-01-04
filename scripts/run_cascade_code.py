@@ -13,6 +13,10 @@ from tqdm import tqdm
 sys.path.append('./') 
 from utils import cascade_simulation, data_handling
 
+# Send messages to mattermost
+import utils.config as cfg
+from utils import send_mattermost_messages
+
 # Setup paths to solved PyPSA networks and results of this script
 path_to_pypsa_network_lopf = './data/European_networks_lopf/'
 path_to_pypsa_network_sclopf = './data/European_networks_sclopf/'
@@ -85,6 +89,10 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
             
     with gzip.open( fpath_out + ".pklz", 'wb') as handle:
         pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
+        
+    if cfg.mattermost_url is not None:
+        message_text = f"Cascade for single line failures simulations with N={n_nodes}, C02_lvl={co2l} finished and results saved in '" + fpath_out + "'."
+        send_mattermost_messages.post_message(message_text, cfg.mattermost_url)
     
     return
     
@@ -180,6 +188,12 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
             
     with gzip.open( fpath_out + ".pklz", 'wb') as handle:
         pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
+
+    if cfg.mattermost_url is not None:
+        message_text = f"Cascade for single line failures simulations with N={n_nodes}, C02_lvl={co2l} finished and results saved in '" + fpath_out + "'."
+        send_mattermost_messages.post_message(message_text, cfg.mattermost_url)
+        
+    return
 
 
 if __name__ == '__main__':
