@@ -10,6 +10,11 @@ import itertools
 
 # First column: num_parallel before failure
 # Second column: num_parallel after failure
+## Not in original data and exsit due to reduction from num_parallel > 3
+## 0.59210526, 0.88157895, 1.18421053, 1.47368421, 1.59210526,
+#  1.77631579, 2.06578947, 2.15789474, 2.18421053, 2.31578947, 2.36842105,
+#  2.44736842, 2.57894737, 2.59210526, 2.73684211, 2.77631579
+# 0.59210526 provides path to zero
 LOOKUP_TABLE_NP = np.array([
     [0.28947368, 0.        ],
     [0.57894737, 0.28947368],
@@ -44,27 +49,72 @@ LOOKUP_TABLE_NP = np.array([
     [2.86842105, 1.86842105]
 ])
 
+# The smallest cable seems to be 0.3351.. here instewad of 0.2894.. as for sclopy
+## Decision to reduce 2.34 by 1 and not be 0.3351...
+LOOKUP_TABLE_NP_non_sclopf = np.array([
+    [0.33518006, 0.],
+    [0.67036011, 0.33518006],
+    [0.67590027, 0.],
+    [1., 0.],
+    [1.00554017, 0.67036011],
+    [1.01108033, 0.67590027],
+    [1.33518006, 1.],
+    [1.34072022, 1.00554017],
+    [1.34626039, 1.01108033],
+    [1.67036011, 1.33518006],
+    [1.67590028, 1.34072022],
+    [1.68144040, 1.34626039],
+    [2., 1.],
+    [2.00554017, 1.00554017],
+    [2.01108033, 1.67590028],
+    [2.01662050, 1.68144040],
+    [2.33518006, 1.33518006],
+    [2.34072022, 1.34072022],
+    [2.34626039, 2.01108033],
+    [2.67036011, 1.67036011],
+    [2.67590028, 1.67590028],
+    [2.68144044, 2.34626039]
+])
 
-def calc_num_parallel_after_failure(num_parallel):
+# have to be added due to >3 being reduced by one. This are only the >2 ones
+#add = [2.00554017, 2.01108033, 2.0166205, 2.33518006, 2.34072022, 2.34626039,
+#       2.67036011, 2.67590028, 2.68144044] and 1.68144040, 0.67590027 is new smallest line
+# not appearing in PyPSA network
+
+
+
+def calc_num_parallel_after_failure(num_parallel: float,
+                                    use_sclopf: bool = True):
     """Calculate the new effective number of circuits on a line 
     after removing one circuit. The new value depends on the line type
     and is indicated in a lookup table.  
 
     Args:
         num_parallel (float): Old value of effective number of circuits
+        use_sclopf (bool): Decides which look up table to use, since sclopf and lopf PyPSA
+        networks have different num_parallel value giving an effective line value.
 
     Returns:
         float: new value
     """        
+    
+    if use_sclopf:
+        look_up_table = LOOKUP_TABLE_NP
+    else:
+        look_up_table = LOOKUP_TABLE_NP_non_sclopf
     
     assert num_parallel >= 1e-8, ('Line removal for num_parallel=0 not correct.' +
                                   ' Line was either already removed a wrong num_parallel' +
                                   ' was assigned.')
 
     if 0 < num_parallel < 3:
-        num_parallel_case = np.argwhere(np.isclose(LOOKUP_TABLE_NP[:, 0],
+        #try:
+        num_parallel_case = np.argwhere(np.isclose(look_up_table[:, 0],
                                                    num_parallel))[0, 0]
-        num_parallel_new = LOOKUP_TABLE_NP[num_parallel_case, 1]
+        num_parallel_new = look_up_table[num_parallel_case, 1]
+            
+        #except IndexError:            
+        #    raise LookupError(f"Num_parallel before failure '{num_parallel}' is not in Lookup table.")
         
     elif num_parallel >= 3:
         num_parallel_new = num_parallel - 1
@@ -75,12 +125,14 @@ def calc_num_parallel_after_failure(num_parallel):
     return num_parallel_new
 
 
-def calc_possible_double_line_failures(num_parallels, ignored_idxs=None): 
+def calc_possible_double_line_failures(num_parallels, ignored_idxs=None,
+                                       use_sclopf: bool = True): 
     """Determine the set of possible double line failures.
 
     Args:
         num_parallels (list-like): Effective number of parallel lines per edge.
         ignored_idxs (list-like, optional): Edges that should not fail. 
+        use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network.
 
     Returns:
         list: List of lists, where each list contains two matrix indices of lines
@@ -97,7 +149,8 @@ def calc_possible_double_line_failures(num_parallels, ignored_idxs=None):
     
     # Add common mode failures (two circuits failing in one line)
     for i in edge_indices:
-        num_parallel_one_fail = calc_num_parallel_after_failure(num_parallels[i])
+        num_parallel_one_fail = calc_num_parallel_after_failure(num_parallels[i],
+                                                                use_sclopf=use_sclopf)
         
         # Only add common mode failure if more than one circuit is present
         # (i.e., first failure did not remove all circuits)
@@ -127,7 +180,7 @@ def calc_possible_single_line_failures(num_parallels, ignored_idxs=None):
 
 
 def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx,
-                        remove_all_circuits=False):
+                        remove_all_circuits=False, use_sclopf: bool = True):
     """Remove a line by changing the susceptances, the number of parallel lines and 
     the line limits.
 
@@ -138,6 +191,7 @@ def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx,
         del_idx (idx of ): idx of edge in graph that will be modified due to overloaded power line
         remove_all_circuits (bool): If False, remove only one circuit from the line. 
         If True, remove the whole line with all circuits.  
+        use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network.
     """
 
     # Select num_parallel of removed link
@@ -149,7 +203,7 @@ def remove_line_from_Bd(B_d_in, num_parallel_ls, line_limits_ls, del_idx,
     if remove_all_circuits:
         num_parallel_new = 0 
     else:
-        num_parallel_new = calc_num_parallel_after_failure(num_parallel)
+        num_parallel_new = calc_num_parallel_after_failure(num_parallel, use_sclopf=use_sclopf)
         
     # Adapt network parameters accordingly
     num_par_factor = (num_parallel_new /num_parallel)
@@ -186,7 +240,8 @@ def solve_lpf(P, B_d, I, L=None):
 
 def simulate_cascade(II_in, B_d_in,
                      P0, line_limits_in, num_parallel_in, failure_lines,
-                     epsilon=1e-4, max_cascade_length=np.inf): 
+                     epsilon=1e-4, max_cascade_length=np.inf,
+                     use_sclopf: bool = True): 
     """Simulate a cascade with the given inital failure lines. 
 
     
@@ -201,6 +256,7 @@ def simulate_cascade(II_in, B_d_in,
         epsilon (float): Margin above capacity that has to be exceeded for a link to fail. 
         The margin should be given as a share of the capacity (between 0 and 1).
         max_cascade_length (int): Maximum number of secondary failures to investigate.
+        use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network.
 
     Returns:
         failure_cascade, did_system_split: Lines involved in the cascade and boolean if the system did split.
@@ -214,7 +270,8 @@ def simulate_cascade(II_in, B_d_in,
     # Remove inital failures
     for del_idx in failure_lines:
         remove_line_from_Bd(B_d, num_parallel_ls,
-                            line_limits, del_idx)
+                            line_limits, del_idx,
+                            use_sclopf=use_sclopf)
         
     did_system_split = False
     still_going = True
@@ -251,7 +308,8 @@ def simulate_cascade(II_in, B_d_in,
             for idx_r in idxs_overloaded:
                 remove_line_from_Bd(B_d, num_parallel_ls,
                                     line_limits, idx_r,
-                                    remove_all_circuits=True)
+                                    remove_all_circuits=True,
+                                    use_sclopf=use_sclopf)
                 
         # Stop if max length of cascade simulation is reached
         cascade_length+=1

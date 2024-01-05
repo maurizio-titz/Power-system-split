@@ -32,6 +32,15 @@ if 'profile' not in globals():
 def run_cascade_single_line_failures(co2l: float, n_nodes: int,
                                      save_all_cascades: bool = False, snet_index: int = 0,
                                      use_sclopf: bool = False):
+    """_summary_
+
+    Args:
+        co2l (float): _description_
+        n_nodes (int): _description_
+        save_all_cascades (bool, optional): _description_. Defaults to False.
+        snet_index (int, optional): _description_. Defaults to 0.
+        use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to False.
+    """
     
     # Load PyPSA network, the graph of the subnetwork and its matrices
     if use_sclopf:
@@ -61,8 +70,8 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
             
             failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
                                                                             num_parallels, initial_failure,
-                                                                            max_cascade_length=1)
-            if len(failing_links) > 1:
+                                                                            max_cascade_length=1, use_sclopf=use_sclopf)
+            if use_sclopf and len(failing_links) > 1:
                 raise(RuntimeError('PyPSA networks are not N-1 stable!'))
             
             if save_all_cascades:
@@ -100,7 +109,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
 @profile    
 def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
                 save_all_cascades: bool = False, snet_index: int = 0,
-                check_n1_security: bool = True, use_sclopf: bool = False):
+                check_n1_security: bool = True, use_sclopf: bool = True):
     """Run cascade experiments by introducing dual line failures.
 
     Args:
@@ -108,7 +117,8 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         n_nodes (int): Number of nodes in PyPSA network.
         save_all_cascades (bool, optional): _description_. Defaults to False.
         snet_index (int, optional): Select a particular subnetwork for calculations (if the pypsa network has different ones). 
-                For our data set, "0" indicates the Continental European AC grid. . Defaults to 0.
+                For our data set, "0" indicates the Continental European AC grid. Defaults to 0.
+        use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to True.
     """
     
     if use_sclopf:
@@ -126,7 +136,8 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
     # Calculate possible N-1 and N-2 failures (using non-bridges)
     bridge_idxs = data_handling.nx_edges_to_matrix_indices(nx.bridges(nx_graph),
                                                             nx_graph)
-    n_2_failures = cascade_simulation.calc_possible_double_line_failures(num_parallels, ignored_idxs=bridge_idxs)
+    n_2_failures = cascade_simulation.calc_possible_double_line_failures(num_parallels, ignored_idxs=bridge_idxs,
+                                                                         use_sclopf=use_sclopf)
     n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
 
     
@@ -142,7 +153,7 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
 
                 failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
                                                                                 num_parallels, initial_failure,
-                                                                                max_cascade_length=1)
+                                                                                max_cascade_length=1, use_sclopf=use_sclopf)
                 if len(failing_links) > 1:
                     raise(RuntimeError('PyPSA networks are not N-1 stable!'))
 
@@ -160,7 +171,8 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         for initial_failure in tqdm(n_2_failures, leave=False):
             
             failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
-                                                                              num_parallels, initial_failure)
+                                                                              num_parallels, initial_failure,
+                                                                              use_sclopf=use_sclopf)
             
             
             if save_all_cascades:
