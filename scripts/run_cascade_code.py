@@ -69,8 +69,8 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
         for initial_failure in n_1_failures:
             
             failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
-                                                                            num_parallels, initial_failure,
-                                                                            max_cascade_length=1, use_sclopf=use_sclopf)
+                                                                              num_parallels, initial_failure,
+                                                                              use_sclopf=use_sclopf)
             if use_sclopf and len(failing_links) > 1:
                 raise(RuntimeError('PyPSA networks are not N-1 stable!'))
             
