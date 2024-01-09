@@ -1,6 +1,6 @@
 import os
 os.chdir("..")
-from utils.config import path_to_cascade_results, path_to_pypsa_network, path_to_statistics
+# from utils.config import path_to_cascade_results, path_to_pypsa_network, path_to_statistics
 from utils import data_handling
 from utils import cascade_simulation
 import pypsa
@@ -10,9 +10,6 @@ import importlib
 import networkx as nx
 from matplotlib import pyplot as plt
 import pandas as pd
-%load_ext autoreload
-%autoreload 2
-
 
 import sys
 import pickle
@@ -29,7 +26,6 @@ import seaborn as sns
 import matplotlib.lines as mlines
 from sklearn.cluster import KMeans
 from utils.config import path_to_evaluation_results
-from config import *
 
 import cartopy.crs as ccrs
 import cartopy
@@ -44,7 +40,7 @@ from utils import data_handling, cascade_simulation
 from matplotlib import colors
 from utils.config import path_to_evaluation_results
 
-def plot_clusters(indicator_name, co2l, samples_per_centroid, centroids, failed_edges=None, save_dir=None, cmap="seismic", n_subplots=16):
+def plot_clusters(nx_graph, pos, indicator_name, co2l, samples_per_centroid, centroids, failed_edges=None, save_dir=None, cmap="seismic", n_subplots=16):
     
     if co2l == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
         co2l_string = "all"
@@ -67,7 +63,9 @@ def plot_clusters(indicator_name, co2l, samples_per_centroid, centroids, failed_
     elif "tanh" in indicator_name or "sign"in indicator_name:
         vmax = 1.0
         vmin = -1.0
-    
+    if "share" in indicator_name:
+        vmax = 1
+        vmin = 0
     
 
     n_subplots = min(n_subplots, len(centroids))
@@ -108,7 +106,6 @@ def plot_clusters(indicator_name, co2l, samples_per_centroid, centroids, failed_
         controid,samples_in_centriod = centroids[ind],samples_per_centroid[ind]
 
         ax = fig.add_subplot(gs_iter)
-        level = np.round(co2l, 2)
     
     # Load likelihoods as dictionary and transform into array
     # c_H_p = [edge_likelihoods_primary[level][(u, v)] for u, v in nx_graph.edges()]
@@ -143,7 +140,7 @@ def plot_clusters(indicator_name, co2l, samples_per_centroid, centroids, failed_
         # ax.set_ylabel(f"{round(samples_in_centriod/10**6, ndigits=1)}mio splits", ha="left")
 
         ax.axis('off')
-        ax.set_title(f"{round(samples_in_centriod/10**6, ndigits=2)}mio splits", y=0.9)
+        ax.set_title(f"{sci_notation(samples_in_centriod, sig_fig=1)} splits", y=0.9)
 
 
     cbar_ax = fig.add_axes([0.95, 0.375, 0.005, 0.25]) # fig.add_axes([0.89, 0.35, 0.005, 0.45])
@@ -217,7 +214,7 @@ def map_components_to_original(values, original_ind_to_components_ind):
     components_ind_to_original_ind = get_components_ind_to_original_ind(original_ind_to_components_ind[masks])
     return values[components_ind_to_original_ind]
 
-def plot_clusters_lost_load(indicator_name, co2l, samples_per_centroid, centroids, labels, failed_edges=None, save_dir=None, cmap="seismic", n_subplots=16, total_lost_load_share=None, centroid_mean_distance=None, edge_cmap="inferno", original_ind_to_components_ind=None, cbar_label=None):
+def plot_clusters_lost_load(nx_graph, pos, indicator_name, co2l, samples_per_centroid, centroids, labels, failed_edges=None, save_dir=None, cmap="seismic", n_subplots=16, total_lost_load_share=None, centroid_mean_distance=None, edge_cmap="inferno", original_ind_to_components_ind=None, cbar_label=None):
     
     # edge_cmap = mpl.cm.get_cmap(edge_cmap)
     if co2l == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
@@ -423,5 +420,3 @@ def sci_notation(number, sig_fig=2):
         return "10^" + str(b)
     else:
         return a + " * 10^{" + str(b) + "}"
-
-sci_notation(0.001, sig_fig=5)
