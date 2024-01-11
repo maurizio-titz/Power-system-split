@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """
 Purely matrix-based simulation of cascading failures in power grids
 """

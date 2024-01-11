@@ -199,10 +199,11 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
             fpath_out += "_allcascades"
             
     with gzip.open( fpath_out + ".pklz", 'wb') as handle:
-        pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
+        pickle.dump(splitting_cascades, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     if cfg.mattermost_url is not None:
-        message_text = f"Cascade for single line failures simulations with N={n_nodes}, C02_lvl={co2l} finished and results saved in '" + fpath_out + "'."
+        message_text = (f"Cascade for single line failures simulations with " + 
+                        "N={n_nodes}, C02_lvl={co2l} finished and results saved in '" + fpath_out + "'.")
         send_mattermost_messages.post_message(message_text, cfg.mattermost_url)
         
     return
