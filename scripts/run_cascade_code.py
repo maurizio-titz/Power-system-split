@@ -31,7 +31,8 @@ if 'profile' not in globals():
     
 def run_cascade_single_line_failures(co2l: float, n_nodes: int,
                                      save_all_cascades: bool = False, snet_index: int = 0,
-                                     use_sclopf: bool = False):
+                                     use_sclopf: bool = False,
+                                     initial_remove_all: bool = False):
     """_summary_
 
     Args:
@@ -40,6 +41,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
         save_all_cascades (bool, optional): _description_. Defaults to False.
         snet_index (int, optional): _description_. Defaults to 0.
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to False.
+        initial_remove_all (bool): If 'True' remove all initial circuits and not use look_up_table.
     """
     
     # Load PyPSA network, the graph of the subnetwork and its matrices
@@ -57,7 +59,8 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
     # Calculate possible N-1 failures (using non-bridges)
     bridge_idxs = data_handling.nx_edges_to_matrix_indices(nx.bridges(nx_graph),
                                                            nx_graph)
-    n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
+    n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels,
+                                                                         ignored_idxs=bridge_idxs)
     
     splitting_cascades = dict()
     
@@ -70,7 +73,8 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
             
             failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
                                                                               num_parallels, initial_failure,
-                                                                              use_sclopf=use_sclopf)
+                                                                              use_sclopf=use_sclopf,
+                                                                              initial_remove_all=initial_remove_all)
             if use_sclopf and len(failing_links) > 1:
                 raise(RuntimeError('PyPSA networks are not N-1 stable!'))
             
@@ -95,6 +99,9 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
     
     if save_all_cascades:
             fpath_out += "_allcascades"
+            
+    if initial_remove_all:
+        fpath_out += "_allinitialcircuits"
             
     with gzip.open( fpath_out + ".pklz", 'wb') as handle:
         pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
