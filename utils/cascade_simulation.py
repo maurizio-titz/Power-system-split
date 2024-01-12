@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*
 
 """
 Purely matrix-based simulation of cascading failures in power grids

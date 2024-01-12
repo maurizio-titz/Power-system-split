@@ -7,8 +7,7 @@ import networkx as nx
 
 root_path = './'
 sys.path.append(root_path)
-from . import visualization as vis 
-
+from utils import visualization as vis, data_handling
 
 # Setup paths 
 path_to_pypsa_network   = root_path + 'data/European_networks/'
@@ -24,7 +23,7 @@ co2l_list = np.arange(0.0,0.99,0.05)
 network = pypsa.Network()
 network.import_from_netcdf(path_to_pypsa_network + 
                            'elec_s_800_ec_lv1.0_Co2L0.5-3H.nc') 
-G = build_networkx_graph(network, snet_index = snet_index)
+G = data_handling.build_networkx_graph(network, snet_index = snet_index)
 
 # Get number of split simulations
 bridges = list(nx.bridges(nx.Graph(G)))
