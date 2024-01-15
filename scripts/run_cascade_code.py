@@ -218,7 +218,7 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
     if line_mitigation_dict is not None:
         fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4f}"
             
-    with gzip.open( fpath_out + ".pklz", 'wb') as handle:
+    with gzip.open(fpath_out + ".pklz", 'wb') as handle:
         if line_mitigation_dict is None:
             pickle.dump(splitting_cascades, handle, protocol=pickle.HIGHEST_PROTOCOL)
         else:
