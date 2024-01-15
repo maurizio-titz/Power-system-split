@@ -11,7 +11,7 @@ import networkx as nx
 from tqdm import tqdm
 
 sys.path.append('./') 
-from utils import cascade_simulation, data_handling
+from utils import cascade_simulation, data_handling, extend_transmission_capacity
 
 # Send messages to mattermost
 import utils.config as cfg
@@ -32,12 +32,12 @@ if 'profile' not in globals():
 def run_cascade_single_line_failures(co2l: float, n_nodes: int,
                                      save_all_cascades: bool = False, snet_index: int = 0,
                                      use_sclopf: bool = False):
-    """_summary_
+    """Run the cascade simulation for single line failures.
 
     Args:
-        co2l (float): _description_
-        n_nodes (int): _description_
-        save_all_cascades (bool, optional): _description_. Defaults to False.
+        co2l (float): CO2 level of the previously simulated PyPSA networks.
+        n_nodes (int): Number of nodes fo the PyPSA networks.
+        save_all_cascades (bool, optional): If ''. Defaults to False.
         snet_index (int, optional): _description_. Defaults to 0.
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to False.
     """
@@ -109,7 +109,8 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int,
 @profile    
 def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
                 save_all_cascades: bool = False, snet_index: int = 0,
-                check_n1_security: bool = True, use_sclopf: bool = True):
+                check_n1_security: bool = True, use_sclopf: bool = True,
+                line_mitigation_dict: dict = None):
     """Run cascade experiments by introducing dual line failures.
 
     Args:
@@ -121,12 +122,23 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to True.
     """
     
+    
     if use_sclopf:
         path_to_pypsa_network = path_to_pypsa_network_sclopf
         full_path_to_file = path_to_pypsa_network + f'sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.1f}-2920SEG.nc'
     else:
         path_to_pypsa_network = path_to_pypsa_network_lopf
         full_path_to_file = path_to_pypsa_network + f'elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-3H.nc'
+        
+    if use_sclopf:
+        save_path = save_path_sclopf
+    else:
+        save_path = save_path_lopf
+    
+    fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
+    
+    if not use_sclopf:
+        fpath_out += "_lopf"
         
     # Load PyPSA network, the graph of the subnetwork and its matrices
     network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
@@ -139,9 +151,23 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
     n_2_failures = cascade_simulation.calc_possible_double_line_failures(num_parallels, ignored_idxs=bridge_idxs,
                                                                          use_sclopf=use_sclopf)
     n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
+    
+    # Check if line extension mitigation is supposed to be run and has details it need.
+    # Networkx Graph is being modified
+    if line_mitigation_dict is not None:
+        nn_links_extended = line_mitigation_dict['nn_links']
+        delta_num_parallel = line_mitigation_dict['delta_num_parallel']
+        
+        # Load previously generated cascade results
+        with gzip.open(fpath_out, 'rb') as fh_in:
+            casc_dict = pickle.load(fpath_out + ".pklz")
+        print('\n## Running for line extension: Loading previously simulated case!')
+        nx_graph_mod, vulnerable_edge_ls = extend_transmission_capacity.increase_capacity_most_likely_primary_links(network, nx_graph, casc_dict, 
+                                                                             nn_links, delta_num_parallel)   
+        assert all([nx_graph_mod.edges[xx] - nx_graph.edges[xx] < 1e-8 for xx in vulnerable_edge_ls])
+        nx_graph = nx_graph_mod
 
     
-
     if check_n1_security:
     ### Check N-1 stability ###
         print('\n#### N-1 failures: Co2 level', co2l, ' | #Nodes:', n_nodes,' ####')
@@ -185,21 +211,18 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
                 
         splitting_cascades[key_now] = res_dict
         
-    if use_sclopf:
-        save_path = save_path_sclopf
-    else:
-        save_path = save_path_lopf
-    
-    if not use_sclopf:
-        fpath_out += "_lopf"
         
-    fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
-    
     if save_all_cascades:
             fpath_out += "_allcascades"
             
+    if line_mitigation_dict is not None:
+        fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4f}"
+            
     with gzip.open( fpath_out + ".pklz", 'wb') as handle:
-        pickle.dump(splitting_cascades, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        if line_mitigation_dict is None:
+            pickle.dump(splitting_cascades, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            pickle.dump((vulnerable_edge_ls, splitting_cascades), handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     if cfg.mattermost_url is not None:
         message_text = (f"Cascade for single line failures simulations with " + 

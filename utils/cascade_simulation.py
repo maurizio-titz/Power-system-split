@@ -315,8 +315,8 @@ def simulate_cascade(II_in, B_d_in,
                                     use_sclopf=use_sclopf)
                 
         # Stop if max length of cascade simulation is reached
-        cascade_length+=1
-        if cascade_length==max_cascade_length:
+        cascade_length += 1
+        if cascade_length == max_cascade_length:
             break
 
             
