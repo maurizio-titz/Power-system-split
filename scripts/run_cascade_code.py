@@ -159,8 +159,9 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         delta_num_parallel = line_mitigation_dict['delta_num_parallel']
         
         # Load previously generated cascade results
-        with gzip.open(fpath_out, 'rb') as fh_in:
-            casc_dict = pickle.load(fpath_out + ".pklz")
+        # TODO use new cascade results
+        with gzip.open(fpath_out + ".pickle", 'rb') as fh_in:
+            casc_dict = pickle.load(fh_in)
             
         print('\n## Running for line extension: Loading previously simulated case!')
         nx_graph_mod, vulnerable_edge_ls = extend_transmission_capacity.increase_capacity_most_likely_primary_links(network, nx_graph, casc_dict, 
