@@ -196,11 +196,11 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         save_path = save_path_sclopf
     else:
         save_path = save_path_lopf
+        
+    fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
     
     if not use_sclopf:
         fpath_out += "_lopf"
-        
-    fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
     
     if save_all_cascades:
             fpath_out += "_allcascades"
