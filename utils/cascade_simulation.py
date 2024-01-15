@@ -13,7 +13,7 @@ import itertools
 
 # First column: num_parallel before failure
 # Second column: num_parallel after failure
-## Not in original data and exsit due to reduction from num_parallel > 3
+## Not in original data and exists due to reduction from num_parallel > 3
 ## 0.59210526, 0.88157895, 1.18421053, 1.47368421, 1.59210526,
 #  1.77631579, 2.06578947, 2.15789474, 2.18421053, 2.31578947, 2.36842105,
 #  2.44736842, 2.57894737, 2.59210526, 2.73684211, 2.77631579
@@ -52,7 +52,7 @@ LOOKUP_TABLE_NP = np.array([
     [2.86842105, 1.86842105]
 ])
 
-# The smallest cable seems to be 0.3351.. here instewad of 0.2894.. as for sclopy
+# The smallest cable seems to be 0.3351.. here instead of 0.2894.. as for sclopf
 ## Decision to reduce 2.34 by 1 and not be 0.3351...
 LOOKUP_TABLE_NP_non_sclopf = np.array([
     [0.33518006, 0.],
@@ -244,37 +244,39 @@ def solve_lpf(P, B_d, I, L=None):
 def simulate_cascade(II_in, B_d_in,
                      P0, line_limits_in, num_parallel_in, failure_lines,
                      epsilon=1e-4, max_cascade_length=np.inf,
-                     use_sclopf: bool = True): 
-    """Simulate a cascade with the given inital failure lines. 
+                     use_sclopf: bool = True,
+                     initial_remove_all: bool = False): 
+    """Simulate a cascade with the given initial failure lines. 
 
     
     Args:
         II_in (sparse matrix): Incidence matrix
-        B_d_in (sparse matrix): Diagonal matrix with susecptance on diagonal.
+        B_d_in (sparse matrix): Diagonal matrix with susceptance on diagonal.
         P0 (1d numpy array): power injections/extractions 
         line_limits_in (1d numpy array): Limits of of power lines. 's_nom' in PyPSA
-        num_parallel_in (1d numpy array): List with 'num_parrallel' that gives a effective number
-        for each edge the line quantifying different and also multiple lines between two nodes.
+        num_parallel_in (1d numpy array): List with 'num_parallel' that gives a effective number
+            for each edge the line quantifying different and also multiple lines between two nodes.
         failure_lines (list): Collects the initial failure lines
         epsilon (float): Margin above capacity that has to be exceeded for a link to fail. 
-        The margin should be given as a share of the capacity (between 0 and 1).
+            he margin should be given as a share of the capacity (between 0 and 1).
         max_cascade_length (int): Maximum number of secondary failures to investigate.
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network.
 
     Returns:
         failure_cascade, did_system_split: Lines involved in the cascade and boolean if the system did split.
-        The cascade list only includes lines where all circuits have failed. 
+            The cascade list only includes lines where all circuits have failed. 
     """
     II = II_in.copy()
     B_d = B_d_in.copy()
     num_parallel_ls = num_parallel_in.copy()
     line_limits = line_limits_in.copy()
     
-    # Remove inital failures
+    # Remove initial failures
     for del_idx in failure_lines:
         remove_line_from_Bd(B_d, num_parallel_ls,
                             line_limits, del_idx,
-                            use_sclopf=use_sclopf)
+                            use_sclopf=use_sclopf,
+                            remove_all_circuits=initial_remove_all)
         
     did_system_split = False
     still_going = True

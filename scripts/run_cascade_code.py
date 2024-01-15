@@ -168,6 +168,7 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         nx_graph = nx_graph_mod
 
     
+
     if check_n1_security:
     ### Check N-1 stability ###
         print('\n#### N-1 failures: Co2 level', co2l, ' | #Nodes:', n_nodes,' ####')
