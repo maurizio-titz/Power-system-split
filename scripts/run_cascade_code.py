@@ -161,9 +161,10 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         # Load previously generated cascade results
         with gzip.open(fpath_out, 'rb') as fh_in:
             casc_dict = pickle.load(fpath_out + ".pklz")
+            
         print('\n## Running for line extension: Loading previously simulated case!')
         nx_graph_mod, vulnerable_edge_ls = extend_transmission_capacity.increase_capacity_most_likely_primary_links(network, nx_graph, casc_dict, 
-                                                                             nn_links, delta_num_parallel)   
+                                                                             nn_links_extended, delta_num_parallel)   
         assert all([nx_graph_mod.edges[xx] - nx_graph.edges[xx] < 1e-8 for xx in vulnerable_edge_ls])
         nx_graph = nx_graph_mod
 
