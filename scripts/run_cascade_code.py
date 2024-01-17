@@ -75,7 +75,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int, epsilon: float =
             
             failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
                                                                               num_parallels, initial_failure,
-                                                                              use_sclopf=use_sclopf, epsilon=epsilon
+                                                                              use_sclopf=use_sclopf, epsilon=epsilon,
                                                                               initial_remove_all=initial_remove_all)
             if use_sclopf and len(failing_links) > 1:
                 raise(RuntimeError('PyPSA networks are not N-1 stable!'))
@@ -105,6 +105,9 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int, epsilon: float =
     
     if save_all_cascades:
             fpath_out += "_allcascades"
+            
+    if initial_remove_all:
+        fpath_out += "_allinitialcircuits"
             
     with gzip.open( fpath_out + ".pklz", 'wb') as handle:
         pickle.dump(splitting_cascades, handle, protocol = pickle.HIGHEST_PROTOCOL)
