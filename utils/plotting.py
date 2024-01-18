@@ -162,6 +162,79 @@ def plot_clusters(nx_graph, pos, indicator_name, co2l, samples_per_centroid, cen
     if save_dir != None:
         fig.savefig(save_dir + f"clusters_{indicator_name}_co2l{co2l_string}_k{len(centroids)}.pdf", bbox_inches='tight')
         
+def plot_indicator_vectors(nx_graph, pos, indicator_name, co2l, indicator_vectors, save_dir=None, cmap="seismic", n_subplots=16, shuffle=False):
+    
+    if co2l == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+        co2l_string = "all"
+    else:
+        co2l_string = co2l
+    
+    vmax = 1
+    vmin =  0
+    
+    if "clipped_tanh" in indicator_name:
+        vmax = 0
+        vmin = -1.0
+    elif "clipped" in indicator_name:
+        vmax = 0
+        vmin = vmin
+    elif "tanh" in indicator_name or "sign"in indicator_name:
+        vmax = 1.0
+        vmin = -1.0
+    if "share" in indicator_name:
+        vmax = 1
+        vmin = 0
+    
+
+    n_subplots = min(n_subplots, len(indicator_vectors))
+    if shuffle:
+        rand_inds = np.random.choice(np.arange(len(indicator_vectors)), size=n_subplots, replace=False)
+    ncols = 8
+    n_rows = int(np.ceil(n_subplots/ncols))
+    fig = plt.figure(figsize=(ncols*3, n_rows*3))
+    gs = GridSpec(n_rows, ncols, figure=fig)
+    fig.subplots_adjust(hspace=-0.1, wspace=0.0)
+    plt.rc('text', usetex=False)
+
+    plot_count = 0
+    for ind, gs_iter in enumerate(gs):
+        if plot_count == n_subplots:
+            break
+        plot_count += 1
+        
+        if shuffle:
+            ind = rand_inds[ind]
+        indicator_vector = indicator_vectors[ind]
+
+        ax = fig.add_subplot(gs_iter)
+
+
+        nodes = nx.draw_networkx_nodes(nx_graph,
+                                pos=pos,
+                                ax=ax,
+                                node_color=indicator_vector,
+                                cmap=cmap,
+                                vmax=vmax,
+                                vmin=vmin,
+                                node_size=7)
+        nodes.set_edgecolor('black')
+        nodes.set_linewidth(0.2)
+
+        edges = nx.draw_networkx_edges(nx_graph,
+                        pos=pos,
+                        ax=ax,
+                        edge_color="black",
+                        width=0.5,
+                        edge_cmap=cmap,
+                        # edge_color=failed_edges_prob,
+                        # edge_vmin=np.log10(vmin),
+                        # edge_vmax=np.log10(vmax)
+                        )
+        
+    fig.subplots_adjust(hspace=-0.05, wspace=-0.05)
+    if save_dir != None:
+        fig.savefig(save_dir + f"split_plots_{indicator_name}_co2l{co2l_string}.pdf", bbox_inches='tight')
+
 
 def load_lost_load_share():
     

@@ -25,7 +25,6 @@ def cluster_kmeans(
     transformation=None,
     test=False,
     mask=None,
-    weights=None
 ):
     """generates clusters with k-means algorithm and saves the results
 
@@ -38,24 +37,12 @@ def cluster_kmeans(
         path_to_clustering_results (string): ....
     """
 
-    results = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights=weights)
-    print("after load_indicator_vectors")
-    print(type(results))
-    
-    if weights is not None:
-        weights = results[1]
-        results = results[0]
-        
-    print(type(weights))
-    for arr in weights:
-        print(arr.shape)
-            
+    results = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask)
+
     indicator_vectors = results
     if test:
         indicator_vectors = indicator_vectors[:100]
-    print("indicator_vectors:")
-    print(type(indicator_vectors))
-    print(indicator_vectors.shape)
+        
 
     # transform indicator vector
     if transformation == "sign":
@@ -85,12 +72,8 @@ def cluster_kmeans(
     # create KMeans object
     kmeans = KMeans(n_clusters=n_clusters)
 
-
-    for arr in weights:
-        print(arr.shape)
-        
     # fit KMeans object to dataset
-    kmeans.fit(indicator_vectors, sample_weight=weights)
+    kmeans.fit(indicator_vectors)
 
     labels = kmeans.labels_
     centroids = kmeans.cluster_centers_
@@ -155,64 +138,101 @@ def mean_distance_to_centroid(indicator_vectors, centroids, i_centroid, cluster_
 
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
-    import networkx as nx
-    from utils import data_handling
-    from utils.config import path_to_pypsa_network
     # create_component_indicator_vectors(400, 0.1, "lshare", path_to_indicator_vectors, mask)
     types = [
-        # "rocof_component",
+        "rocof_component",
         # "failed_edges",
-        "lshare",
+        # "lshare",
     ]
-    transformations = ["main_comp_most_frequent_lshare",
-                    #    "sign", "tanh", None, "clipped_tanh", "clipped"
-                       ]
+    indicator_type = "rocof_components"
     n_clusters_list = [10, 15, 20, 35, 50]
     n_nodes = 400
     n_nodes_split, lost_load_share = 5, 0.005
 
-    # co2l_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-    co2l_list = [0.1, 0.2]
+    co2l = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 
     # get masks
-    print("loading masks")
-    split_properties_all = []
-    for co2l in co2l_list:
-        split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_significance_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
-        split_properties_df['co2l'] = co2l
-        split_properties_all.append(split_properties_df)
-    split_properties_df = pd.concat(split_properties_all)
-    masks = [split_mask(split_properties_df[split_properties_df.co2l==co2l], n_nodes, lost_load_share) for co2l in co2l_list]
-    # path = path_to_evaluation_results + f"/masks_all_n{n_nodes}.pklz"
-    # with gzip.open(path, 'rb') as out:
-    #     masks = pickle.load(out)
-
-
-    snet_index = 0
-    network = data_handling.load_pypsa_network(0.5, n_nodes, path_to_pypsa_network)
-    nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
-    # pos = nx.get_node_attributes(nx_graph, 'pos')
-    snapshot_weights = network.snapshot_weightings.objective
+    path = path_to_evaluation_results + f"/masks_all_n{n_nodes}.pklz"
+    with gzip.open(path, 'rb') as out:
+        masks = pickle.load(out)
     
-    print("performing clustering")
-    for indicator_type in types:
-        print(indicator_type)
-        for n_nodes in [400]:
-            for transformation in transformations:
-                print(transformation)
-                for n_clusters in tqdm(n_clusters_list):
-                    print(n_clusters)
-                    #split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_significance_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
-                    #mask = split_mask(split_properties_df, n_nodes, lost_load_share)
-                    cluster_kmeans(
-                        n_nodes,
-                        co2l_list,
-                        n_clusters,
-                        indicator_type,
-                        path_to_indicator_vectors,
-                        path_to_clustering_results,
-                        transformation=transformation,
-                        test=False,
-                        mask = masks,
-                        weights=snapshot_weights
-                    )
+    component_masks = []
+    
+    print("creating component masks")
+    for co2,mask in zip(co2l,masks):
+        #  get rocof indicator vectors
+        # get rocof component indicator vectors
+        file_name = f"indicator_vector_{indicator_type}_Co2l{co2}_n{n_nodes}.pklz"
+        with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
+            split_ind_to_component_ind, component_rocof_vectors = pickle.load(out)
+        n_component_vectors = len(component_rocof_vectors)
+        # all_inds = [
+        #     x
+        #     for xs in split_ind_to_component_ind
+        #     for x in xs
+        # ]
+        # print(np.min(all_inds))
+        # print(np.max(all_inds))
+        # print(split_ind_to_component_ind[0], split_ind_to_component_ind[-1])
+        # print(n_component_vectors)
+        a = np.array(component_rocof_vectors != 0, dtype=int)
+        a = a.sum(axis=1)
+        plt.hist(a, bins=200)
+        plt.savefig(f"hist_{co2}.png")
+        plt.close()
+        print("saved fig")
+        
+        print(len(split_ind_to_component_ind))
+        # load_indicator_vectors(n_nodes, co2, indicator_type, path_to_indicator_vectors, mask=None)
+        split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_significance_Co2L{co2}_n{n_nodes}.csv', index_col=0)
+        component_mask = split_mask_component_vectors(mask, split_ind_to_component_ind, n_component_vectors)
+        component_masks.append(component_mask)
+
+    path = path_to_evaluation_results + f"/components_masks_all_n{n_nodes}.pklz"
+    with gzip.open(path, 'wb') as out:
+        pickle.dump(component_masks, out)
+        
+    # for indicator_type in types:
+    #     print(indicator_type)
+    #     for n_nodes in [400]:
+    #         for transformation in ["sign", "tanh", None, "clipped_tanh", "clipped"]:
+    #             print(transformation)
+    #             if indicator_type != "rocof" and transformation != None:
+    #                 continue
+    #             if indicator_type == "rocof" and transformation == None:
+    #                 continue
+    #             for n_clusters in tqdm(n_clusters_list):
+    #                 print(n_clusters)
+    #                 #split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_significance_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
+    #                 #mask = split_mask(split_properties_df, n_nodes, lost_load_share)
+    #                 cluster_kmeans(
+    #                     n_nodes,
+    #                     co2l,
+    #                     n_clusters,
+    #                     indicator_type,
+    #                     path_to_indicator_vectors,
+    #                     path_to_clustering_results,
+    #                     transformation=transformation,
+    #                     test=False,
+    #                     mask = masks,
+    #                 )
+
+    n_nodes = 400
+    # indicator_type = "lshare"
+    transformations = ["tanh", "not_zero"]
+    
+    print("start clustering")
+    for transformation in transformations:
+        for n_clusters in tqdm(n_clusters_list):
+                        print(n_clusters)
+                        cluster_kmeans(
+                            n_nodes,
+                            co2l,
+                            n_clusters,
+                            indicator_type,
+                            path_to_indicator_vectors,
+                            path_to_clustering_results,
+                            transformation=transformation,
+                            test=False,
+                            mask = component_masks,
+                        )

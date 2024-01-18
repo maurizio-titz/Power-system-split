@@ -6,7 +6,14 @@ import numpy as np
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.neighbors import RadiusNeighborsClassifier
 from tqdm import tqdm
+import pickle
+import networkx as nx
+import sys
+import os
 
+sys.path.append("./")
+from utils.config import path_to_clustering_results, path_to_pypsa_network
+from utils.plotting import plot_clusters
 from utils import data_handling
 
 
@@ -56,7 +63,7 @@ def calc_likelihood_failure(nx_graph,
 
 
 def cluster_indicator_vectors_agglomerative(indicator_vectors, n_cluster=None, min_cluster_distance=0.1,
-                                            cluster_distance_type='single'):
+                                            cluster_distance_type='single', affinity="hamming"):
     """Cluster indicator vectors of graph components into similar groups with agglomerative clustering.
 
     The distance between vectors is quantified by the hamming distance,
@@ -79,7 +86,7 @@ def cluster_indicator_vectors_agglomerative(indicator_vectors, n_cluster=None, m
         raise ValueError(
             'If n_cluster is not None, min_cluster_distance has to be None')
 
-    agg_cluster = AgglomerativeClustering(affinity='hamming',
+    agg_cluster = AgglomerativeClustering(affinity=affinity,
                                           n_clusters=n_cluster,
                                           distance_threshold=min_cluster_distance,
                                           linkage=cluster_distance_type,
@@ -89,8 +96,8 @@ def cluster_indicator_vectors_agglomerative(indicator_vectors, n_cluster=None, m
     return agg_cluster.n_clusters_, agg_cluster.labels_
 
 
-def cluster_indicator_vectors_combined(indicator_vectors, min_cluster_distance=0.1, subset_ratio=0.01,
-                                       n_jobs=20):
+def cluster_indicator_vectors_combined(indicator_vectors, indicator_type, min_cluster_distance=0.1, subset=0.05,
+                                       n_jobs=20, affinity="hamming", save_dir=path_to_clustering_results+"agglom/"):
     """Cluster indicator vectors of graph components into similar groups with Agglomerative clustering and 
     Nearest-Neighbor classification combined.
 
@@ -105,18 +112,31 @@ def cluster_indicator_vectors_combined(indicator_vectors, min_cluster_distance=0
         indicator_vectors (ndarray): Indicators of split components with shape n_vectors x n_nodes
         min_cluster_distance (float): The minimum hamming distance between two clusters (number between 0 and 1).
         Below this distance, two clusters will be merged during Agglomerative clustering. 
-        subset_ratio (float):  Ratio of indicator vectors used in Agglomerative clustering. 
+        subset (float or int):  If <1 ratio of indicator vectors, if int number of samples used in Agglomerative clustering.
         n_jobs (int): Number of jobs.
 
     Returns:
         tuple: number of cluster and array of cluster labels for each indicator vector
     """
 
+    os.makedirs(save_dir, exist_ok=True)
+    ### load graph for plotting
+    snet_index = 0
+    n_nodes = 400
+    # data_path = "/media/data/system_split/data/European_networks_sclopf/"
+    # path_to_pypsa_network = data_path + 'European_networks_sclopf/'
+    network = data_handling.load_pypsa_network(0.5, n_nodes, path_to_pypsa_network)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
+    pos = nx.get_node_attributes(nx_graph, 'pos')
+
     # Select subset of indicator vectors
     indices_all_components = np.arange(indicator_vectors.shape[0])
-    np.random.shuffle(indices_all_components)
-    subset_indices = indices_all_components[:int(subset_ratio*indicator_vectors.shape[0])]
-    remaining_indices = indices_all_components[int(subset_ratio*indicator_vectors.shape[0]):]
+    np.random.seed(0)
+    np.random.shuffle(indices_all_components, )
+    if subset < 1:
+        subset = int(subset*indicator_vectors.shape[0])
+    subset_indices = indices_all_components[:subset]
+    remaining_indices = indices_all_components[subset:]
     
     print('\n',subset_indices.size, 'components will be used during agglomerative clustering.')
     print(remaining_indices.size, 'components will be assigned via NN classification.')
@@ -125,13 +145,35 @@ def cluster_indicator_vectors_combined(indicator_vectors, min_cluster_distance=0
     print('Agglomerative clustering of subset...')
     n_cluster, subset_c_labels = cluster_indicator_vectors_agglomerative(indicator_vectors[subset_indices], 
                                                                          min_cluster_distance = min_cluster_distance,
-                                                                         cluster_distance_type = 'average')
+                                                                         cluster_distance_type = 'average',
+                                                                         affinity=affinity)
     print('There are ',n_cluster, 'unique split cluster.')
+    with open(save_dir + f'cluster_labels_subset_{affinity}_minDist{min_cluster_distance}.pklz', 'wb') as outfile:
+        pickle.dump((subset_indices, subset_c_labels), outfile)
+        
+    with open(save_dir + f'cluster_labels_subset_{affinity}_minDist{min_cluster_distance}.pklz', 'rb') as outfile:
+        (subset_indices, subset_c_labels) = pickle.load(outfile)
     
+    centroids = []
+    for cluster_label in np.unique(subset_c_labels):
+        current_indices = (subset_c_labels==cluster_label)
+        n_inCluster = current_indices.sum()
+        # print('Cluster', cluster_label, 'has', n_inCluster, 'elements.')
+        centroids.append((indicator_vectors[subset_indices][current_indices]).mean(axis=0))
+    samples_per_centroid = np.unique(subset_c_labels, return_counts=True)[1]
+    cmap="viridis"
+    if "rocof" in indicator_type:
+        cmap="coolwarm"
+    plot_clusters(nx_graph, pos, f"{indicator_type}_{affinity}_minDist{min_cluster_distance}", "all", samples_per_centroid, centroids, failed_edges=None, save_dir=save_dir, cmap=cmap, n_subplots=len(centroids))
+    
+    return None, None
+
     # Assign cluster labels to remaining vectors
     print('NN classification of remaining instances...')
     rnc = RadiusNeighborsClassifier(radius= min_cluster_distance, metric='hamming', outlier_label=-1, n_jobs=n_jobs)
+    print('Fitting RadiusNeighborsClassifier...')
     rnc.fit(indicator_vectors[subset_indices], subset_c_labels)
+    print('Predicting cluster labels...')
     remaining_c_labels = rnc.predict(indicator_vectors[remaining_indices])
     
     all_c_labels = np.zeros(indicator_vectors.shape[0])
