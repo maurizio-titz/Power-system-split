@@ -114,7 +114,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int, epsilon: float =
         
     if cfg.mattermost_url is not None:
         message_text = (f"Cascade for single line failures simulations (details in filename)" +
-                        "with N={n_nodes}, C02_lvl={co2l} finished and results saved in '" + fpath_out + "'.")
+                        f"with N={n_nodes}, C02_lvl={co2l} finished and results saved in '" + fpath_out + "'.")
         send_mattermost_messages.post_message(message_text, cfg.mattermost_url)
     
     return
@@ -249,7 +249,7 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
 
     if cfg.mattermost_url is not None:
         message_text = (f"Cascade for dual line failures simulations (details in filename) with " + 
-                        "N={n_nodes}, C02_lvl={co2l} finished and results saved in '" + fpath_out + "'.")
+                        f"N={n_nodes}, C02_lvl={co2l} finished and results saved in '" + fpath_out + "'.")
         send_mattermost_messages.post_message(message_text, cfg.mattermost_url)
         
     return

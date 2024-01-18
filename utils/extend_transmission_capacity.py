@@ -32,7 +32,7 @@ def get_keys_of_largest_items_dict(dict_in: dict, nn: int) -> list:
     """
     
     res = sorted(dict_in.items(), key = lambda x: x[1],
-                      reverse = True)[:nn]
+                 reverse = True)[:nn]
 
     return res
 
