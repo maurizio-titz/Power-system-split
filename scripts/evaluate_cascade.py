@@ -149,22 +149,24 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
         #                    key='df', mode= 'w')
 
     # Convert dictionary to component props pdDataFrame and save
-    
-    if eval_indicator_vectors:
-            indi_vec_save_path = save_path + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz'
-            with gzip.open(indi_vec_save_path) as fh_vec_out:
-                pickle.dump(indicator_vectors, fh_vec_out)
-    
-    component_props = pd.DataFrame.from_dict(component_props_dict, orient="index",
-                                             columns=comp_cols)
-    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}_dict"
+    cut_path_str = ""
     if did_cut_dict:
         start_time_str_df = dt.strftime(min(component_props.time_stamp), "%Y-%m-%d_%H:%M")
         end_time_str_df = dt.strftime(max(component_props.time_stamp), "%Y-%m-%d_%H:%M")
         
         cut_path_str = (f"_from{start_time_str_df}" + 
                         f"to{end_time_str_df}")
-        save_df_path += cut_path_str
+        
+    
+    if eval_indicator_vectors:
+            indi_vec_save_path = save_path + f'indicator_vectors_Co2L{co2l}_n{n_nodes}{cut_path_str}.pklz'
+            with gzip.open(indi_vec_save_path) as fh_vec_out:
+                pickle.dump(indicator_vectors, fh_vec_out)
+    
+    component_props = pd.DataFrame.from_dict(component_props_dict, orient="index",
+                                             columns=comp_cols)
+    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}_dict"
+    save_df_path += cut_path_str
         
     component_props.to_hdf(save_df_path + ".h5",
                            key='df', mode= 'w')

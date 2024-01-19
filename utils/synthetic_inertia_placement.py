@@ -166,7 +166,7 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
             inertia_placed_loss_mitigated_ls)
 
 
-def run_specific_level_n_size(co2_lvl: float, nn_nodes: int = 800, 
+def run_specific_level_n_size(co2_lvl: float, nn_nodes: int = 400, 
                               delta_rot_energy: float = 100, max_iter: int=10000,
                               rocof_threshold_Hz_s: float = -1., lshare_threshold: float = 0., 
                               save_it: bool = True):
