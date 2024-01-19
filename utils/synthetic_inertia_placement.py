@@ -129,7 +129,6 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
         # If no change was detected, more synthetic rot. energy is added 
         if (proposed_load_loss_change == 0).all():
             delta_rot_energy_factor += 1.
-            print("hey")
             
         else:
             max_change = np.max(proposed_load_loss_change)
