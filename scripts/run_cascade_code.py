@@ -8,6 +8,7 @@ import pickle
 import gzip
 import sys
 
+from datetime import datetime as dt
 import pandas as pd
 import networkx as nx
 from tqdm import tqdm
@@ -124,7 +125,7 @@ def run_cascade_single_line_failures(co2l: float, n_nodes: int, epsilon: float =
 def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
                 save_all_cascades: bool = False, snet_index: int = 0,
                 check_n1_security: bool = True, use_sclopf: bool = True,
-                line_mitigation_dict: dict = None):
+                line_mitigation_dict: dict = None, stop_timestamp_str: str= None):
     """Run cascade experiments by introducing dual line failures.
 
     Args:
@@ -231,15 +232,19 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
                 res_dict[tuple(initial_failure)] = failing_links
                 
         splitting_cascades[key_now] = res_dict
-        if idx_snap > 3:
-            break
         
+        if stop_timestamp_str is not None and dt.strptime(stop_timestamp_str, '%Y-%m-%d %H:00') <= snapshot:
+            break
+
         
     if save_all_cascades:
         fpath_out += "_allcascades"
             
     if line_mitigation_dict is not None:
         fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4f}"
+        
+    if stop_timestamp_str is not None:
+        fpath_out += f"_stoped_{stop_timestamp_str}"
             
     with gzip.open(fpath_out + ".pklz", 'wb') as handle:
         if line_mitigation_dict is None:
