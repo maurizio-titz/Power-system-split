@@ -244,7 +244,7 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4f}"
         
     if stop_timestamp_str is not None:
-        fpath_out += f"_stoped_{stop_timestamp_str}"
+        fpath_out += f"_stopped_{stop_timestamp_str}"
             
     with gzip.open(fpath_out + ".pklz", 'wb') as handle:
         if line_mitigation_dict is None:
