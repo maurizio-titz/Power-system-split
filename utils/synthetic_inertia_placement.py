@@ -111,7 +111,7 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
                                  load_share_threshold: float = 0,
                                  show_progress: bool = True,
                                  resolve_equal_randomly: bool = False, 
-                                 atol=1e-8, verbose: bool = False):
+                                 atol=1e-8):
     """Run inertia placement to reduce the amount of lost load, which is defined as the 
     load in a component that suffers a rocof small er as 'rocof_threshold_Hz_s'."""
     
@@ -173,8 +173,6 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
             # Check if a decision has to be made due to two nodes being equal
             resolve_equality_counter += 1
             if len(idx_node) > 1:
-                #if verbose:
-                print("Decision has to be made between nodes!!!")
                 
                 if resolve_equal_randomly:
                     idx_node = np.random.choice(idx_node)
