@@ -297,7 +297,7 @@ def run_specific_co2lvl_n_size(co2_lvl: float, nn_nodes: int = 400,
 def single_call(nn_nodes, co2_lvl, max_iter, delta_rot_e):
     
     run_specific_co2lvl_n_size(co2_lvl, nn_nodes=nn_nodes, delta_rot_energy=delta_rot_e,
-                               show_progress=True, save_it=True, max_iter=max_iter)
+                               show_progress=False, save_it=True, max_iter=max_iter)
     
     return
 
