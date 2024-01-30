@@ -42,14 +42,45 @@ def build_idx_to_node_idx_list_n_reverse(indicator_vec_arr: np.ndarray):
     return split_node_idx_ls, node_split_idx_ls
 
 
+def get_lost_load_in_member_compontents(node_arr: np.ndarray, 
+                                        component_props_arr: np.ndarray,
+                                        snapshot_weightings_arr: np.ndarray,
+                                        node_to_split_idx_ls: list, change_rot_energy: float,
+                                        rocof_neg_threshold: float, freq_ref: float = 50.) -> np.ndarray:
+    """Get how much load there is in all components that have the nodes in 'node_list'
+    as members."""
+    
+    lost_load_member_comps = np.zeros(len(node_arr))
+    
+    for idx_ele, node_idx in enumerate(node_arr):
+        # Find idxs of splits where node_r is a member
+        idx_node_in_split = node_to_split_idx_ls[node_idx]
+        
+        cut_snapshow_weighting = snapshot_weightings_arr[idx_node_in_split]
+        
+        node_cut_comp_arr = component_props_arr[idx_node_in_split, :].copy()
+        
+        # Place inertia and evaluate rocof new
+        node_cut_comp_arr[:, 0] += change_rot_energy
+        new_rocof = (freq_ref * 
+                     (node_cut_comp_arr[:, 1]/(2*node_cut_comp_arr[:, 0])))
+        node_cut_comp_arr[:, 2] = new_rocof
+        
+        # See where rocof exceeds threshold and how much load is therefore lost
+        lost_idx = node_cut_comp_arr[:, 2] < rocof_neg_threshold
+        lost_load_member_comps[idx_ele] = (node_cut_comp_arr[lost_idx, 3] *
+                                           cut_snapshow_weighting[lost_idx]).sum()
+    
+    return lost_load_member_comps
+
+
 def greedy_inertia_placement_step(component_props_arr: np.ndarray,
                                   indicator_vectors: np.ndarray,
                                   snapshot_weightings_arr: np.ndarray,
                                   split_to_node_list: list, delta_rot_energy: float,
                                   rocof_neg_threshold: float,
                                   load_share_threshold: float,
-                                  freq_ref: float = 50.,
-                                  verbose: bool = False):
+                                  freq_ref: float = 50.):
     """Place inertia according to the highest amount of mitigated load."""
     
     
@@ -78,7 +109,9 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
                                  max_iter: int = 10000,
                                  freq_ref: float = 50,
                                  load_share_threshold: float = 0,
-                                 show_progress: bool = True):
+                                 show_progress: bool = True,
+                                 resolve_equal_randomly: bool = False, 
+                                 atol=1e-8, verbose: bool = False):
     """Run inertia placement to reduce the amount of lost load, which is defined as the 
     load in a component that suffers a rocof small er as 'rocof_threshold_Hz_s'."""
     
@@ -108,7 +141,10 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
     split_to_node_idx_ls, node_to_split_idx_ls = build_idx_to_node_idx_list_n_reverse(indicator_vec_arr_cut)
     
     # step, place_added, multi_added
+    resolve_equality_counter = 0
+    still_used_random_node_choice = 0
     delta_rot_energy_factor = 1.
+    
     
     pbar = tqdm(range(max_iter), disable=not show_progress)
     for idx_step in pbar:
@@ -131,10 +167,32 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
             delta_rot_energy_factor += 1.
             
         else:
-            max_change = np.max(proposed_load_loss_change)
-            idx_node = np.where(proposed_load_loss_change == max_change)[0]
+            max_change = proposed_load_loss_change.max()
+            idx_node = np.where(abs(proposed_load_loss_change - max_change) < atol)[0]
+            
+            # Check if a decision has to be made due to two nodes being equal
+            resolve_equality_counter += 1
             if len(idx_node) > 1:
-                idx_node = np.random.choice(idx_node)
+                #if verbose:
+                print("Decision has to be made between nodes!!!")
+                
+                if resolve_equal_randomly:
+                    idx_node = np.random.choice(idx_node)
+                else:
+                    # Check for which node placed, the lost load in its components is higher
+                    # resolve conflict again randomly
+                    list_lost_load_of_member_components = get_lost_load_in_member_compontents(idx_node, modified_comp_arr,
+                                                                                              snapshot_weightings_arr_cut, node_to_split_idx_ls,
+                                                                                              ch_rot_energy_r, rocof_threshold_Hz_s,
+                                                                                              freq_ref=freq_ref)
+                    
+                    max_val_lost = list_lost_load_of_member_components.max()
+                    idxs_max_lost_load = np.where(abs(list_lost_load_of_member_components - max_val_lost) < 1e-8)[0]
+                    if len(idxs_max_lost_load) > 1:
+                        idx_node = np.random.choice(idxs_max_lost_load)
+                        still_used_random_node_choice += 1
+                    else:
+                        idx_node = idxs_max_lost_load[0]
             else:
                 idx_node = idx_node[0]
             
@@ -162,12 +220,14 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
             break
             
     return (modified_comp_index, modified_comp_arr,
-            inertia_placed_loss_mitigated_ls)
+            inertia_placed_loss_mitigated_ls, 
+            resolve_equality_counter, still_used_random_node_choice)
 
 
-def run_specific_level_n_size(co2_lvl: float, nn_nodes: int = 400, 
+def run_specific_co2lvl_n_size(co2_lvl: float, nn_nodes: int = 400, 
                               delta_rot_energy: float = 100, max_iter: int=10000,
                               rocof_threshold_Hz_s: float = -1., lshare_threshold: float = 0., 
+                              use_random_resolve: bool = False,
                               save_it: bool = True):
     """Run the inertia placement for an optimized power system that was analyzed by 
     running cascade experiments. 
@@ -177,12 +237,19 @@ def run_specific_level_n_size(co2_lvl: float, nn_nodes: int = 400,
         nn_nodes (int, optional): Number of nodes of PyPSA network. Defaults to 800.
         delta_rot_energy (float, optional): Change in rotational energy per step. Defaults to 100.
         max_iter (int, optional): Maximum number of iterations. Defaults to 10000.
-        rocof_threshold_Hz_s (float, optional): _description_. Defaults to -1..
-        lshare_threshold (float, optional): _description_. Defaults to 0..
-        save_it (bool, optional): _description_. Defaults to True.
+        rocof_threshold_Hz_s (float, optional): Threshold after which a component is counted as 
+            experiencing a black out aka the load is counted as lost. Defaults to -1..
+        lshare_threshold (float, optional): Amount of load share of components that are being considered
+            in the greedy mitigation procedure. Defaults to 0, which corresponds to all components
+            being considered.
+        use_random_resolve (bool, optional): If 'True', nodes that would lead to the same
+            lost load mitigation would lead to a random node being picked. Otherwise the node
+            that remains in the components with the highest lost load is picked in a subsequent step.
+            If this does not resolve the choice, a random choice is taken again.
+        save_it (bool, optional): If 'True', the results are being pickled and saved. Defaults to True.
 
     Returns:
-        res_tuple: _description_
+        res_tuple: see output of run_greedy_inertia_placement
     """
     
     assert rocof_threshold_Hz_s < 0
@@ -201,13 +268,25 @@ def run_specific_level_n_size(co2_lvl: float, nn_nodes: int = 400,
     
     res_tuple = run_greedy_inertia_placement(component_df, indicator_vec_arr, snapshot_weightings_generators,
                                              delta_rot_energy, rocof_threshold_Hz_s=rocof_threshold_Hz_s,
-                                             max_iter=max_iter, load_share_threshold=lshare_threshold)
+                                             max_iter=max_iter, load_share_threshold=lshare_threshold,
+                                             resolve_equal_randomly=use_random_resolve)
     
     if save_it:
         fpath_out = (results_path_mitigation + f"/synthetic_inertia_placement_Co2{co2_lvl:.2f}_N{nn_nodes}" + 
                      f"_deltarotE{delta_rot_energy:.2f}_rocofthres{rocof_threshold_Hz_s:.2f}" + 
-                     f"_lshare{lshare_threshold:.2f}_maxiter{max_iter}.pklz")
-        with gzip.open(fpath_out, 'wb') as fh_out:
+                     f"_lshare{lshare_threshold:.2f}_maxiter{max_iter}")
+        if use_random_resolve:
+            fpath_out += "_randomresolve"
+        with gzip.open(fpath_out + ".pklz", 'wb') as fh_out:
             pickle.dump(res_tuple, fh_out)
     
     return res_tuple
+
+
+def run_different_parameters_for_co2lvl(co2_lvl):
+    """Run the function 'run_specific_co2lvl_n_size' for the parameters
+    giving delta_rot_energy."""
+    
+    # Parallelize it please
+    
+    return
