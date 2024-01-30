@@ -15,6 +15,9 @@ import pickle
 
 from tqdm import tqdm
 
+import multiprocessing
+from functools import partial
+
 from utils.data_handling import load_pypsa_network
 
 # Send messages to mattermost
@@ -230,7 +233,7 @@ def run_specific_co2lvl_n_size(co2_lvl: float, nn_nodes: int = 400,
                               delta_rot_energy: float = 100, max_iter: int=10000,
                               rocof_threshold_Hz_s: float = -1., lshare_threshold: float = 0., 
                               use_random_resolve: bool = False,
-                              save_it: bool = True):
+                              save_it: bool = True, show_progress: bool = True):
     """Run the inertia placement for an optimized power system that was analyzed by 
     running cascade experiments. 
 
@@ -271,7 +274,8 @@ def run_specific_co2lvl_n_size(co2_lvl: float, nn_nodes: int = 400,
     res_tuple = run_greedy_inertia_placement(component_df, indicator_vec_arr, snapshot_weightings_generators,
                                              delta_rot_energy, rocof_threshold_Hz_s=rocof_threshold_Hz_s,
                                              max_iter=max_iter, load_share_threshold=lshare_threshold,
-                                             resolve_equal_randomly=use_random_resolve)
+                                             resolve_equal_randomly=use_random_resolve,
+                                             show_progress=show_progress)
     
     if save_it:
         fpath_out = (results_path_mitigation + f"/synthetic_inertia_placement_Co2{co2_lvl:.2f}_N{nn_nodes}" + 
@@ -290,11 +294,25 @@ def run_specific_co2lvl_n_size(co2_lvl: float, nn_nodes: int = 400,
     
     return res_tuple
 
+def single_call(nn_nodes, co2_lvl, max_iter, delta_rot_e):
+    
+    run_specific_co2lvl_n_size(co2_lvl, nn_nodes=nn_nodes, delta_rot_energy=delta_rot_e,
+                               show_progress=True, save_it=True, max_iter=max_iter)
+    
+    return
 
-def run_different_parameters_for_co2lvl(co2_lvl):
+
+def run_different_parameters_for_co2lvl(co2_lvl: float, nn_nodes: int, delta_rot_ls: list,
+                                        max_iter=10000, nr_processes: int = 5):
     """Run the function 'run_specific_co2lvl_n_size' for the parameters
     giving delta_rot_energy."""
     
     # Parallelize it please
+    
+    with multiprocessing.Pool(processes=nr_processes) as pool:
+        partial_func = partial(single_call, nn_nodes, co2_lvl, max_iter)
+        
+        [xx for xx in tqdm(pool.imap(partial_func, delta_rot_ls), total=len(delta_rot_ls))]
+        
     
     return
