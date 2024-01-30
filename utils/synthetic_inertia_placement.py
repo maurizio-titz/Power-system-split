@@ -17,6 +17,10 @@ from tqdm import tqdm
 
 from utils.data_handling import load_pypsa_network
 
+# Send messages to mattermost
+import utils.config as cfg
+from utils import send_mattermost_messages
+
 results_path_mitigation = "results/sclopf/syn_inertia_mitigation"
 if not os.path.exists(results_path_mitigation):
     os.mkdir(results_path_mitigation)
@@ -277,6 +281,11 @@ def run_specific_co2lvl_n_size(co2_lvl: float, nn_nodes: int = 400,
             fpath_out += "_randomresolve"
         with gzip.open(fpath_out + ".pklz", 'wb') as fh_out:
             pickle.dump(res_tuple, fh_out)
+        
+        if cfg.mattermost_url is not None:
+            message_text = (f"Finished synthetic inertia placement for  " + 
+                        f"N={nn_nodes}, C02_lvl={co2_lvl} and saved results in '" + fpath_out + "'.")
+            send_mattermost_messages.post_message(message_text, cfg.mattermost_url)
     
     return res_tuple
 
