@@ -115,7 +115,7 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
                                  load_share_threshold: float = 0,
                                  show_progress: bool = True,
                                  resolve_equal_randomly: bool = False, 
-                                 atol=1e-8):
+                                 atol: float = 1e-8):
     """Run inertia placement to reduce the amount of lost load, which is defined as the 
     load in a component that suffers a rocof small er as 'rocof_threshold_Hz_s'."""
     
@@ -137,7 +137,7 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
                                                      'power_imbalance',
                                                      'rocof', 'load', 'load_share']].copy()
     modified_comp_arr = np.array(modified_component_df.values)
-    #return modified_comp_arr
+    
     modified_comp_index = modified_component_df.index.values
     
     inertia_placed_loss_mitigated_ls = list()
@@ -279,6 +279,7 @@ def run_specific_co2lvl_n_size(co2_lvl: float, nn_nodes: int = 400,
                      f"_lshare{lshare_threshold:.2f}_maxiter{max_iter}")
         if use_random_resolve:
             fpath_out += "_randomresolve"
+            
         with gzip.open(fpath_out + ".pklz", 'wb') as fh_out:
             pickle.dump(res_tuple, fh_out)
         
