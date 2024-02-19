@@ -309,7 +309,7 @@ def run_different_parameters_for_co2lvl(co2_lvl: float, nn_nodes: int, delta_rot
     
     # Parallelize it please
     
-    with multiprocessing.Pool(processes=nr_processes) as pool:
+    with multiprocessing.get_context("spawn").Pool(processes=nr_processes) as pool:
         partial_func = partial(single_call, nn_nodes, co2_lvl, max_iter)
         
         [xx for xx in tqdm(pool.imap(partial_func, delta_rot_ls), total=len(delta_rot_ls))]
