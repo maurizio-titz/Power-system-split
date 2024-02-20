@@ -49,7 +49,7 @@ def build_idx_to_node_idx_list_n_reverse(indicator_vec_arr: np.ndarray):
     return split_node_idx_ls, node_split_idx_ls
 
 
-def get_lost_load_in_member_compontents(node_arr: np.ndarray, 
+def get_lost_load_in_member_components(node_arr: np.ndarray, 
                                         component_props_arr: np.ndarray,
                                         snapshot_weightings_arr: np.ndarray,
                                         node_to_split_idx_ls: list, change_rot_energy: float,
@@ -178,18 +178,17 @@ def run_greedy_inertia_placement(component_df: pd.DataFrame,
             idx_node = np.where(abs(proposed_load_loss_change - max_change) < atol)[0]
             
             # Check if a decision has to be made due to two nodes being equal
-            resolve_equality_counter += 1
             if len(idx_node) > 1:
-                
+                resolve_equality_counter += 1    
                 if resolve_equal_randomly:
                     idx_node = np.random.choice(idx_node)
                 else:
                     # Check for which node placed, the lost load in its components is higher
                     # resolve conflict again randomly
-                    list_lost_load_of_member_components = get_lost_load_in_member_compontents(idx_node, modified_comp_arr,
-                                                                                              snapshot_weightings_arr_cut, node_to_split_idx_ls,
-                                                                                              ch_rot_energy_r, rocof_threshold_Hz_s,
-                                                                                              freq_ref=freq_ref)
+                    list_lost_load_of_member_components = get_lost_load_in_member_components(idx_node, modified_comp_arr,
+                                                                                             snapshot_weightings_arr_cut, node_to_split_idx_ls,
+                                                                                             ch_rot_energy_r, rocof_threshold_Hz_s,
+                                                                                             freq_ref=freq_ref)
                     
                     max_val_lost = list_lost_load_of_member_components.max()
                     idxs_max_lost_load = np.where(abs(list_lost_load_of_member_components - max_val_lost) < 1e-8)[0]

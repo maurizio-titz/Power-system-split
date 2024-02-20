@@ -7,6 +7,7 @@ lines that are likely to trigger a system split.
 
 import os
 
+import pandas as pd
 import networkx
 import pypsa
 
@@ -58,32 +59,37 @@ def get_most_likely_primary_links(pypsa_net: pypsa.Network, nx_graph: networkx.g
     
     return likelihood_primary_failures, likelihood_secondary_failures, list_names_vulnerable_links
 
+
 def calc_impactful_primary_links(co2lvl=None, split_significance_df=None):
     """calculate lost load caused by each trigger/primary failure."""
 
     assert co2lvl is not None or split_significance_df is not None, "Either co2lvl or split_significance must be provided"
     
     if split_significance_df is None:
-        split_significance_df = pd.read_csv(path_to_evaluation_results+f"split_significance_Co2L{co2lvl}_n400.csv", index_col=0)
+        split_significance_df = pd.read_csv(path_to_evaluation_results + 
+                                            f"split_significance_Co2L{co2lvl}_n400.csv", index_col=0)
     lost_load_total_shares = split_significance_df.lost_load_total_share.values
     
     cumulative_lost_load_share_by_initial_failure = defaultdict(float)
     init_failures_0 = split_significance_df.init_failures_0.values
     init_failures_1 = split_significance_df.init_failures_1.values
     
-    for i in range(split_significance_df.shape[0]):
-        lost_load_share_split = lost_load_total_shares[i]
-        cumulative_lost_load_share_by_initial_failure[init_failures_0[i]] += lost_load_share_split
-        cumulative_lost_load_share_by_initial_failure[init_failures_1[i]] += lost_load_share_split
+    for ii in range(split_significance_df.shape[0]):
+        lost_load_share_split = lost_load_total_shares[ii]
+        cumulative_lost_load_share_by_initial_failure[init_failures_0[ii]] += lost_load_share_split
+        cumulative_lost_load_share_by_initial_failure[init_failures_1[ii]] += lost_load_share_split
     
     return cumulative_lost_load_share_by_initial_failure
 
+
 def get_most_impactful_primary_links(pypsa_net: pypsa.Network, nx_graph: networkx.graph, 
-                                  casc_dict: dict, number_simulations: int, 
-                                  nn_links: int):
+                                     casc_dict: dict, number_simulations: int, 
+                                     nn_links: int):
     """Get a list with nn_links links that most likely trigger a cascade 
     leading to a system split, i.e., primary failures."""
         
+    raise NotImplementedError
+
     cumulative_lost_load_share_by_initial_failure = calc_impactful_primary_links(nx_graph, casc_dict,
                                                              number_simulations,
                                                              pypsa_net.snapshot_weightings.generators)
@@ -101,8 +107,7 @@ def increase_capacity_most_likely_primary_links(pypsa_net: pypsa.Network,
                                                 nx_graph_in: networkx.Graph,
                                                 casc_dict: dict,
                                                 nn_links: int,
-                                                delta_num_parallel: float,
-                                                rerun_likelihood_calc: bool = False):
+                                                delta_num_parallel: float):
     """Increase the transmission capacity of the nn_links links that are most likely trigger a cascade
     leading to a system split. 
     Args:
@@ -127,18 +132,8 @@ def increase_capacity_most_likely_primary_links(pypsa_net: pypsa.Network,
     number_simulations = len(nr_failures) * pypsa_net.snapshot_weightings.generators.sum()
     
     # List with edges to extend
-    fpath_likelihood_res = 'results/sclopf/line_extension_mitigation/primary_n_secondary_link_failure_prob.pklz'
-    
-    if not os.path.exists(fpath_likelihood_res) or rerun_likelihood_calc:
-        likeli_prim, likeli_sec, vulnerable_edges = get_most_likely_primary_links(pypsa_net, nx_graph, casc_dict, 
-                                                                                  number_simulations, nn_links)
-
-        with gzip.open(fpath_likelihood_res, 'wb') as fh_out:
-            pickle.dump((likeli_prim, likeli_sec, vulnerable_edges), fh_out)
-        
-    else:
-        with gzip.open(fpath_likelihood_res, 'rb') as fh_in:
-            _, _, vulnerable_edges = pickle.load(fh_in)
+    likeli_prim, likeli_sec, vulnerable_edges = get_most_likely_primary_links(pypsa_net, nx_graph, casc_dict, 
+                                                                              number_simulations, nn_links)
     
     for edge_r in vulnerable_edges:
         nx_graph.edges[edge_r]['num_parallel'] += delta_num_parallel

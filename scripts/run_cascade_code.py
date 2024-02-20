@@ -26,7 +26,7 @@ path_to_pypsa_network_sclopf = './data/European_networks_sclopf/'
 save_path_sclopf =  './results/sclopf/cascade_results/'
 save_path_lopf =  './results/lopf/cascade_results/'
 
-# Dummy decorator to not get stuck on @profile
+# Dummy decorator to not get stuck on @profile if not using profiling
 if 'profile' not in globals():
     def profile(func):
         return func
@@ -132,9 +132,12 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         co2l (float): co2 level as float
         n_nodes (int): Number of nodes in PyPSA network.
         save_all_cascades (bool, optional): _description_. Defaults to False.
+        check_n1_security (bool, optional): If 'True', check if the networks are n-1 secure before starting the dual line failure experiments.
         snet_index (int, optional): Select a particular subnetwork for calculations (if the pypsa network has different ones). 
                 For our data set, "0" indicates the Continental European AC grid. Defaults to 0.
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to True.
+        line_mitigation_dict (dict): Either 'None', which does not extend lines, or a dictionary that has information on how many lines to extend
+        to mitigate the effect of dangerous system splits. Defaults to 'None'.
     """
     
     
@@ -158,23 +161,27 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
     # Load PyPSA network, the graph of the subnetwork and its matrices
     network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
-    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph)
-
-    # Calculate possible N-1 and N-2 failures (using non-bridges)
-    bridge_idxs = data_handling.nx_edges_to_matrix_indices(nx.bridges(nx_graph),
-                                                            nx_graph)
-    n_2_failures = cascade_simulation.calc_possible_double_line_failures(num_parallels, ignored_idxs=bridge_idxs,
-                                                                         use_sclopf=use_sclopf)
-    n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
     
-    # Check if line extension mitigation is supposed to be run and has details it need.
-    # Networkx Graph is being modified
-    if line_mitigation_dict is not None:
+    
+    # Check if line extension mitigation is supposed to be run.
+    # Networkx Graph is being modified, if line extension needs to be considered.
+    if line_mitigation_dict is None:
+        I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph)
+
+        # Calculate possible N-1 and N-2 failures (using non-bridges)
+        bridge_idxs = data_handling.nx_edges_to_matrix_indices(nx.bridges(nx_graph),
+                                                                nx_graph)
+        n_2_failures = cascade_simulation.calc_possible_double_line_failures(num_parallels, ignored_idxs=bridge_idxs,
+                                                                            use_sclopf=use_sclopf)
+        n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
+        
+    else:
+        # Cascade simulation with extended lines
         nn_links_extended = line_mitigation_dict['nn_links']
         delta_num_parallel = line_mitigation_dict['delta_num_parallel']
         
         # Load previously generated cascade results
-        # TODO use new cascade results
+        # TODO use cascade results saved as .pklz
         with open(fpath_out + ".pickle", 'rb') as fh_in:
             casc_dict = pickle.load(fh_in)
             
@@ -184,12 +191,28 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         
         print("\n## Running for line extension: Loading previously found cascade dictionary!\n" +
               " First, likelihoods of primary and secondary failures are being evaluated:")
-        nx_graph_mod, vulnerable_edge_ls = extend_transmission_capacity.increase_capacity_most_likely_primary_links(network, nx_graph, casc_dict, 
-                                                                             nn_links_extended, delta_num_parallel)   
+        nx_graph_mod, vulnerable_edge_ls = extend_transmission_capacity.increase_capacity_most_likely_primary_links(network, co2l, n_nodes, 
+                                                                                                                    nx_graph, casc_dict, 
+                                                                                                                    nn_links_extended, delta_num_parallel)
+        
         # Check if the lines have been correctly extend
+        assert len(vulnerable_edge_ls) == nn_links_extended
         assert all([abs((nx_graph_mod.edges[xx]['num_parallel'] - nx_graph.edges[xx]['num_parallel']) - delta_num_parallel) < 1e-8
                     for xx in vulnerable_edge_ls])
+        assert all([abs(nx_graph_mod.edges[xx]['num_parallel'] - nx_graph.edges[xx]['num_parallel']) < 1e-8
+                    for xx in nx_graph.edges if xx not in vulnerable_edge_ls])
+        
+        # Overwrite graph with modified graph
+        I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph_mod)
         nx_graph = nx_graph_mod
+        
+        # Calculate possible N-1 and N-2 failures (using non-bridges)
+        bridge_idxs = data_handling.nx_edges_to_matrix_indices(nx.bridges(nx_graph),
+                                                                nx_graph)
+        n_2_failures = cascade_simulation.calc_possible_double_line_failures(num_parallels, ignored_idxs=bridge_idxs,
+                                                                            use_sclopf=use_sclopf)
+        n_1_failures = cascade_simulation.calc_possible_single_line_failures(num_parallels, ignored_idxs=bridge_idxs)
+        
         
     if check_n1_security:
     ### Check N-1 stability ###
@@ -201,8 +224,8 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
             for initial_failure in n_1_failures:
 
                 failing_links, system_split = cascade_simulation.simulate_cascade(I_m, B_d, P_0, line_limits,
-                                                                                num_parallels, initial_failure,
-                                                                                max_cascade_length=1, use_sclopf=use_sclopf)
+                                                                                  num_parallels, initial_failure,
+                                                                                  max_cascade_length=1, use_sclopf=use_sclopf)
                 if len(failing_links) > 1:
                     raise(RuntimeError('PyPSA networks are not N-1 stable!'))
 
