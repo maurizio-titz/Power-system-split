@@ -191,7 +191,7 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         
         print("\n## Running for line extension: Loading previously found cascade dictionary!\n" +
               " First, likelihoods of primary and secondary failures are being evaluated:")
-        nx_graph_mod, vulnerable_edge_ls = extend_transmission_capacity.increase_capacity_most_likely_primary_links(network, co2l, n_nodes, 
+        nx_graph_mod, liklihood_prim, vulnerable_edge_ls = extend_transmission_capacity.increase_capacity_most_likely_primary_links(network, co2l, n_nodes, 
                                                                                                                     nx_graph, casc_dict, 
                                                                                                                     nn_links_extended, delta_num_parallel)
         
@@ -273,7 +273,7 @@ def run_cascade_dual_line_failures(co2l: float, n_nodes: int,
         if line_mitigation_dict is None:
             pickle.dump(splitting_cascades, handle, protocol=pickle.HIGHEST_PROTOCOL)
         else:
-            pickle.dump((vulnerable_edge_ls, splitting_cascades), handle, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump((liklihood_prim, vulnerable_edge_ls, splitting_cascades), handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     if cfg.mattermost_url is not None:
         message_text = (f"Cascade for dual line failures simulations (details in filename) with " + 

@@ -138,4 +138,4 @@ def increase_capacity_most_likely_primary_links(pypsa_net: pypsa.Network,
     for edge_r in vulnerable_edges:
         nx_graph.edges[edge_r]['num_parallel'] += delta_num_parallel
     
-    return nx_graph, vulnerable_edges
+    return nx_graph, likeli_prim, vulnerable_edges
