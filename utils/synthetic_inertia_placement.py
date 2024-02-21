@@ -156,6 +156,65 @@ def greedy_inertia_placement_step(
     return mitigate_load_loss_node_arr
 
 
+def _resolve_equality_concentrate_inertia(inertia_already_placed, 
+                                          idxs_nodes_to_choose, atol=1e-8):
+    
+    added_inertia_candidate_nodes = inertia_already_placed[
+                                idxs_nodes_to_choose
+                            ]
+    # select node with max added inertia; if equal, select randomly
+    max_inertia_in_candidates = added_inertia_candidate_nodes.max()
+    
+    idx_node_max_candidates = np.where(abs(max_inertia_in_candidates - 
+                                           added_inertia_candidate_nodes) < atol)[0]
+    if len(idx_node_max_candidates) > 1:
+        idx_node_picked= np.random.choice(idx_node_max_candidates)
+        still_random = True
+    else:
+        idx_node_picked = idx_node_max_candidates[0]
+    
+    return idx_node_picked, still_random
+
+
+def _resolve_equality_hindsight(comp_arr, snapshot_weightings_arr, node_to_split_ls, 
+                                ch_rot_energy_r, rocof_threshold_Hz_s, freq_ref,
+                                idxs_nodes_to_choose, inertia_already_placed,
+                                concentrate_inertia=False, atol=1e-8):
+    
+    # Check for which node placed, the lost load in its components is higher
+    # resolve conflict again randomly or by concentrating inertia.
+    list_lost_load_of_member_components = (
+        get_lost_load_in_member_components(
+            idxs_nodes_to_choose,
+            comp_arr,
+            snapshot_weightings_arr,
+            node_to_split_ls,
+            ch_rot_energy_r,
+            rocof_threshold_Hz_s,
+            freq_ref=freq_ref,
+        )
+    )
+
+    max_val_lost = list_lost_load_of_member_components.max()
+    idxs_max_lost_load = np.where(
+        abs(list_lost_load_of_member_components - max_val_lost) < atol
+    )[0]
+    
+    still_random = False
+    if len(idxs_max_lost_load) > 1:
+        # place inertia at node with max added inertia
+        if concentrate_inertia:
+            idx_node_picked, still_random = _resolve_equality_concentrate_inertia(inertia_already_placed, 
+                                                                    idxs_max_lost_load, atol=atol)
+        else:
+            idx_node_picked = np.random.choice(idxs_max_lost_load)
+            still_random = True
+    else:
+        idx_node_picked = idxs_max_lost_load[0]
+    
+    return idx_node_picked, still_random
+
+
 def run_greedy_inertia_placement(
     component_df: pd.DataFrame,
     indicator_vec_arr: np.ndarray,
@@ -166,8 +225,7 @@ def run_greedy_inertia_placement(
     freq_ref: float = 50,
     load_share_threshold: float = 0,
     show_progress: bool = True,
-    resolve_equal_randomly: bool = False,
-    concentrated_inertia_placement: bool = True,
+    resolve_equality_method: str = 'random',
     atol: float = 1e-8,
 ) -> tuple:
     """Run inertia placement to reduce the amount of lost load, which is defined as the 
@@ -185,7 +243,11 @@ def run_greedy_inertia_placement(
         freq_ref (float, optional): Reference frequency in Hz. Defaults to 50.
         load_share_threshold (float, optional): Load share that splits have to have to be considered. Defaults to 0.
         show_progress (bool, optional): If 'True', show progressbar. Defaults to True.
-        resolve_equal_randomly (bool, optional): _description_. Defaults to False.
+        resolve_equality_method (str, optional): Method to resolve the situation when inertia could
+            be placed at multiple nodes. Either random (choose a random node), hindsight (choose a node)
+            that has the higher lost load in the next step), concentrate (concentrate inertia at nodes
+            where inertia was placed previously), hindsight_concentrate (mix of hindsight and resolving by 
+            concentrating inertia). If a conflict remains, random node is chosen.
         atol (float, optional): absolute tolerance for comparison. Defaults to 1e-8.
 
     Returns:
@@ -257,58 +319,48 @@ def run_greedy_inertia_placement(
         else:
             max_change = proposed_load_loss_change.max()
             idx_node = np.where(abs(proposed_load_loss_change - max_change) < atol)[0]
-
+            
             # Check if a decision has to be made due to two nodes being equal
             if len(idx_node) > 1:
                 resolve_equality_counter += 1
-                if resolve_equal_randomly:
+                if resolve_equality_method == "random":
                     idx_node = np.random.choice(idx_node)
+                    still_random = True
+                
+                elif resolve_equality_method == "concentrate":
+                    idx_node, still_random = _resolve_equality_concentrate_inertia(added_inertia_by_node, idx_node)
+                    
+                
+                elif resolve_equality_method == "hindsight":
+                    idx_node, still_random = _resolve_equality_hindsight(modified_comp_arr,
+                                                                         snapshot_weightings_arr_cut, node_to_split_idx_ls,
+                                                                         ch_rot_energy_r, rocof_threshold_Hz_s,
+                                                                         freq_ref, idx_node, added_inertia_by_node,
+                                                                         concentrate_inertia=False, atol=atol)
+                    
+                elif resolve_equality_method == "hindsight_concentrate":
+                    idx_node, still_random = _resolve_equality_hindsight(modified_comp_arr,
+                                                                         snapshot_weightings_arr_cut, node_to_split_idx_ls,
+                                                                         ch_rot_energy_r, rocof_threshold_Hz_s,
+                                                                         freq_ref, idx_node, added_inertia_by_node,
+                                                                         concentrate_inertia=True, atol=atol) 
                 else:
-                    # Check for which node placed, the lost load in its components is higher
-                    # resolve conflict again randomly
-                    list_lost_load_of_member_components = (
-                        get_lost_load_in_member_components(
-                            idx_node,
-                            modified_comp_arr,
-                            snapshot_weightings_arr_cut,
-                            node_to_split_idx_ls,
-                            ch_rot_energy_r,
-                            rocof_threshold_Hz_s,
-                            freq_ref=freq_ref,
-                        )
-                    )
-
-                    max_val_lost = list_lost_load_of_member_components.max()
-                    idxs_max_lost_load = np.where(
-                        abs(list_lost_load_of_member_components - max_val_lost) < 1e-8
-                    )[0]
-                    if len(idxs_max_lost_load) > 1:
-                        # place inertia at node with max added inertia
-                        if concentrated_inertia_placement:
-                            added_inertia_candidate_nodes = added_inertia_by_node[
-                                idxs_max_lost_load
-                            ]
-                            # select node with max added inertia; if equal, select randomly
-                            idx_node = np.argmax(added_inertia_candidate_nodes)
-                        else:
-                            idx_node = np.random.choice(idxs_max_lost_load)
-                        still_used_random_node_choice += 1
-                    else:
-                        idx_node = idxs_max_lost_load[0]
+                    raise IOError(f"Resolve equality measure '{resolve_equality_method}' not implemented.")
+                
+                if still_random:
+                    still_used_random_node_choice += 1
+                
             else:
                 idx_node = idx_node[0]
 
             # Collect change details
-            results_out_r = [idx_step, idx_node, delta_rot_energy_factor, max_change]
+            results_out_r = [idx_step, idx_node, delta_rot_energy_factor,
+                             max_change, count_beyond_threshold]
             inertia_placed_loss_mitigated_ls.append(results_out_r)
 
             # Modify rest of the components due to the placement of inertia
-            try:
-                idx_node_in_split = node_to_split_idx_ls[idx_node]
-            except TypeError:
-                print(idx_node)
-                raise TypeError
-
+            idx_node_in_split = node_to_split_idx_ls[idx_node]
+            
             added_inertia_by_node[idx_node] += ch_rot_energy_r
             modified_comp_arr[idx_node_in_split, 0] += ch_rot_energy_r
             new_rocof = freq_ref * (
@@ -339,7 +391,7 @@ def run_specific_co2lvl_n_size(
     max_iter: int = 10000,
     rocof_threshold_Hz_s: float = -1.0,
     lshare_threshold: float = 0.0,
-    use_random_resolve: bool = False,
+    resolve_equality_method: str = "random",
     save_it: bool = True,
     show_progress: bool = True,
 ) -> tuple:
@@ -356,10 +408,11 @@ def run_specific_co2lvl_n_size(
         lshare_threshold (float, optional): Amount of load share of components that are being considered
             in the greedy mitigation procedure. Defaults to 0, which corresponds to all components
             being considered.
-        use_random_resolve (bool, optional): If 'True', nodes that would lead to the same
-            lost load mitigation would lead to a random node being picked. Otherwise the node
-            that remains in the components with the highest lost load is picked in a subsequent step.
-            If this does not resolve the choice, a random choice is taken again.
+        resolve_equality_method (str, optional): Method to resolve the situation when inertia could
+            be placed at multiple nodes. Either random (choose a random node), hindsight (choose a node)
+            that has the higher lost load in the next step), concentrate (concentrate inertia at nodes
+            where inertia was placed previously), hindsight_concentrate (mix of hindsight and resolving by 
+            concentrating inertia). If a conflict remains, random node is chosen.
         save_it (bool, optional): If 'True', the results are being pickled and saved. Defaults to True.
 
     Returns:
@@ -390,7 +443,7 @@ def run_specific_co2lvl_n_size(
         rocof_threshold_Hz_s=rocof_threshold_Hz_s,
         max_iter=max_iter,
         load_share_threshold=lshare_threshold,
-        resolve_equal_randomly=use_random_resolve,
+        resolve_equality_method=resolve_equality_method,
         show_progress=show_progress,
     )
 
@@ -399,10 +452,8 @@ def run_specific_co2lvl_n_size(
             results_path_mitigation
             + f"/synthetic_inertia_placement_Co2{co2_lvl:.2f}_N{nn_nodes}"
             + f"_deltarotE{delta_rot_energy:.2f}_rocofthres{rocof_threshold_Hz_s:.2f}"
-            + f"_lshare{lshare_threshold:.2f}_maxiter{max_iter}"
+            + f"_lshare{lshare_threshold:.2f}_maxiter{max_iter}_{resolve_equality_method}"
         )
-        if use_random_resolve:
-            fpath_out += "_randomresolve"
 
         with gzip.open(fpath_out + ".pklz", "wb") as fh_out:
             pickle.dump(res_tuple, fh_out)
@@ -440,6 +491,8 @@ def run_different_parameters_for_co2lvl(
     delta_rot_ls: list,
     max_iter=10000,
     nr_processes: int = 5,
+    use_random_resolve: bool = True,
+    concentrated_inertia_placement: bool = True
 ) -> None:
     """Run the function 'run_specific_co2lvl_n_size' for the parameters
     giving delta_rot_energy.
@@ -451,8 +504,6 @@ def run_different_parameters_for_co2lvl(
         max_iter (int, optional): Number of maximum iterations. Defaults to 10000.
         nr_processes (int, optional): How many processes are being used at the same time. Defaults to 5.
     """
-
-    # Parallelize it please
 
     with multiprocessing.get_context("spawn").Pool(processes=nr_processes) as pool:
         partial_func = partial(single_call, nn_nodes, co2_lvl, max_iter)
