@@ -16,6 +16,7 @@ import pickle
 from tqdm import tqdm
 
 import multiprocessing
+import itertools
 from functools import partial
 
 from utils.data_handling import load_pypsa_network
@@ -473,8 +474,10 @@ def run_specific_co2lvl_n_size(
     return res_tuple
 
 
-def single_call(nn_nodes, co2_lvl, max_iter, delta_rot_e):
+def single_call(nn_nodes, co2_lvl, max_iter, resolve_method_n_delta_rot_e):
     """Wrapper to be used in 'run_different_parameters_fo_co2lvl'"""
+    
+    resolve_method, delta_rot_e = resolve_method_n_delta_rot_e
     
     run_specific_co2lvl_n_size(
         co2_lvl,
@@ -483,6 +486,7 @@ def single_call(nn_nodes, co2_lvl, max_iter, delta_rot_e):
         show_progress=False,
         save_it=True,
         max_iter=max_iter,
+        resolve_equality_method=resolve_method
     )
 
     return
@@ -494,8 +498,8 @@ def run_different_parameters_for_co2lvl(
     delta_rot_ls: list,
     max_iter=10000,
     nr_processes: int = 5,
-    use_random_resolve: bool = True,
-    concentrated_inertia_placement: bool = True
+    resolve_equality_method_ls: list = ["random", "concentrated",
+                                        "hindsight", "hindsight_concentrated"],
 ) -> None:
     """Run the function 'run_specific_co2lvl_n_size' for the parameters
     giving delta_rot_energy.
@@ -508,13 +512,16 @@ def run_different_parameters_for_co2lvl(
         nr_processes (int, optional): How many processes are being used at the same time. Defaults to 5.
     """
 
+    resolve_n_deltrotE_ls = itertools.product(resolve_equality_method_ls, delta_rot_ls)
+    
     with multiprocessing.get_context("spawn").Pool(processes=nr_processes) as pool:
         partial_func = partial(single_call, nn_nodes, co2_lvl, max_iter)
 
         [
             xx
             for xx in tqdm(
-                pool.imap(partial_func, delta_rot_ls), total=len(delta_rot_ls)
+                pool.imap(partial_func, resolve_n_deltrotE_ls),
+                total=len(resolve_n_deltrotE_ls)
             )
         ]
 
