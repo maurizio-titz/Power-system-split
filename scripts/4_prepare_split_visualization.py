@@ -13,6 +13,8 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import networkx as nx
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
 
 sys.path.append('./')
 from utils import cascade_simulation, data_handling
@@ -43,36 +45,37 @@ n_nodes = int(sys.argv[1])
 
 # Setup co2 levels
 # TODO also include CO_2=0
-glob_pypsa_search_str = ("data/European_networks_sclopf/" +
-                         "sclopf-elec_s_{0}*.nc".format(n_nodes))    
-pypsa_file_ls = glob(glob_pypsa_search_str)
-co2l_list = [float(xx.split("Co2L")[-1].split("-")[0]) 
-             for xx in pypsa_file_ls if float(xx.split("Co2L")[-1].split("-")[0]) > 0]
+# glob_pypsa_search_str = ("data/European_networks_sclopf/" +
+#                          "sclopf-elec_s_{0}*.nc".format(n_nodes))    
+# pypsa_file_ls = glob(glob_pypsa_search_str)
+# co2l_list = [float(xx.split("Co2L")[-1].split("-")[0]) 
+#              for xx in pypsa_file_ls if float(xx.split("Co2L")[-1].split("-")[0]) > 0]
 print("Available CO2 Levels:")
+# co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+co2l_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 print(sorted(co2l_list))
-
 # Load PyPSA network and the graph of the subnetwork 
 network = data_handling.load_pypsa_network(0.0, n_nodes, path_to_pypsa_network)
 nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
 I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph)
 
-# #### Cluster split components #### 
-# print('\nClustering split components...\n')
+#### Cluster split components #### 
+print('\nClustering split components...\n')
 
-# # Initialize results
-# component_props = pd.DataFrame()
+# Initialize results
+component_props = pd.DataFrame()
 # indicator_vectors = np.empty((0, nx_graph.number_of_nodes()), int)
 
-# # Append all indicator vectors and components props
-# print('Concatenate components...')
-# for co2l in tqdm(co2l_list):
+# Append all indicator vectors and components props
+print('Concatenate components...')
+for co2l in tqdm(co2l_list):
 
-#     indicator_vec_level = np.load(path_to_eval_results + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.npy')
-#     component_props_level = pd.read_hdf(path_to_eval_results + f'component_properties_Co2L{co2l}_n{n_nodes}.h5')
+    # indicator_vec_level = np.load(path_to_eval_results + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.npy')
+    component_props_level = pd.read_hdf(path_to_eval_results + f'component_properties_Co2L{co2l}_n{n_nodes}.h5')
     
-#     indicator_vectors = np.concatenate([indicator_vectors, indicator_vec_level])
-#     component_props_level.loc[:, 'co2l'] = co2l
-#     component_props = component_props.append(component_props_level, ignore_index=True)
+    # indicator_vectors = np.concatenate([indicator_vectors, indicator_vec_level])
+    component_props_level.loc[:, 'co2l'] = co2l
+    component_props = component_props.append(component_props_level, ignore_index=True)
     
 # n_cluster, cluster_labels = vis.cluster_indicator_vectors_combined(indicator_vectors,
 #                                                                    min_cluster_distance=min_cluster_dist_nodes/len(nx_graph),
@@ -80,43 +83,43 @@ I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
 # component_props.loc[:, 'cluster_label'] = cluster_labels
 
 
-# #### Cluster splits #### 
-# print('\n### Extracting splits ###\n')
+#### Cluster splits #### 
+print('\n### Extracting splits ###\n')
 
-# split_groups = component_props.groupby(['co2l', 'time_stamp', 'split_number']) 
-# split_props = pd.DataFrame(index=split_groups.groups.keys(),
-#                            columns=['n_components', 'lost_load', 
-#                                     'lost_load_share', 'category'])
-# split_props.index=split_props.index.rename(['co2l','time_stamp','split_number'])
-# split_vectors = np.empty((split_groups.ngroups,
-#                          nx_graph.number_of_nodes()), float)
+split_groups = component_props.groupby(['co2l', 'time_stamp', 'split_number']) 
+split_props = pd.DataFrame(index=split_groups.groups.keys(),
+                           columns=['n_components', 'lost_load', 
+                                    'lost_load_share', 'category'])
+split_props.index=split_props.index.rename(['co2l','time_stamp','split_number'])
+split_vectors = np.empty((split_groups.ngroups,
+                         nx_graph.number_of_nodes()), float)
 
-# for i, (name, split) in enumerate(tqdm(split_groups)):
-#     split_props.loc[name,'n_components'] = split.shape[0]
+for i, (name, split) in enumerate(tqdm(split_groups)):
+    split_props.loc[name,'n_components'] = split.shape[0]
     
-#     split_props.loc[name,'lost_load_share'] = (split.rocof.abs()>1).mul(split.load_share).sum()
-#     split_props.loc[name,'lost_load'] = (split.rocof.abs()>1).mul(split.load).sum()
+    split_props.loc[name,'lost_load_share'] = (split.rocof.abs()>1).mul(split.load_share).sum()
+    split_props.loc[name,'lost_load'] = (split.rocof.abs()>1).mul(split.load).sum()
     
-#     if split_props.loc[name,'lost_load_share']>0.99:
-#         split_props.loc[name,'category'] = 'global_blackout'
-#     elif split_props.loc[name,'lost_load_share']>0:
-#         split_props.loc[name,'category'] = 'local_blackout'
-#     elif ((split.rocof.abs()<1) & (split.load_share>0.99)).any():
-#         split_props.loc[name,'category'] = 'negligible'
-#     else:
-#         split_props.loc[name,'category'] = 'no_blackout'
+    if split_props.loc[name,'lost_load_share']>0.99:
+        split_props.loc[name,'category'] = 'global_blackout'
+    elif split_props.loc[name,'lost_load_share']>0:
+        split_props.loc[name,'category'] = 'local_blackout'
+    elif ((split.rocof.abs()<1) & (split.load_share>0.99)).any():
+        split_props.loc[name,'category'] = 'negligible'
+    else:
+        split_props.loc[name,'category'] = 'no_blackout'
     
-#     for idx, component_props_of_idx in split.iterrows():
-#         split_vectors[i, indicator_vectors[idx].astype(bool)] = component_props_of_idx.rocof
+    # for idx, component_props_of_idx in split.iterrows():
+    #     split_vectors[i, indicator_vectors[idx].astype(bool)] = component_props_of_idx.rocof
 
 
 
-# # Save clustering results 
+# Save clustering results 
 # np.save(save_path + f'indicator_vectors_all_n{n_nodes}.npy', indicator_vectors)
-# component_props.to_hdf(save_path + f'component_properties_all_n{n_nodes}.h5', key='df', mode= 'w')
-# np.save(save_path + f'split_vectors_all_n{n_nodes}.npy', split_vectors)
-# split_props=split_props.astype(dtype=dict(zip(split_props.columns,[int,float,float,str])))
-# split_props.to_hdf(save_path + f'split_properties_all_n{n_nodes}.h5', key='df', mode= 'w')
+component_props.to_hdf(save_path + f'component_properties_all_n{n_nodes}.h5', key='df', mode= 'w')
+np.save(save_path + f'split_vectors_all_n{n_nodes}.npy', split_vectors)
+split_props=split_props.astype(dtype=dict(zip(split_props.columns,[int,float,float,str])))
+split_props.to_hdf(save_path + f'split_properties_all_n{n_nodes}.h5', key='df', mode= 'w')
         
         
 #### Calculate likelihoods #####

@@ -1,6 +1,7 @@
 import sys
 sys.path.append('./')
 
+import os
 import cartopy.geodesic as gd
 import networkx as nx
 import numpy as np
@@ -9,19 +10,19 @@ from shapely.geometry import Point
 from utils import data_handling, subgraph_evaluation
 from utils.config import results_path, data_path
 
+# Load arguments
+n_nodes = int(sys.argv[1])
+
 # Setup paths 
 path_to_pypsa_network = data_path + 'European_networks_sclopf/'
-save_path = results_path + 'sclopf/pre_outage_data/'
-
+save_path = results_path + 'sclopf/pre_outage_data_{n_nodes}/'
+os.makedirs(save_path, exist_ok=True)
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
 # For our data set, "0" indicates the Continental European AC grid. 
 snet_index = 0
 
 # Setup co2 levels
 co2l_list = np.arange(0.0,0.81,0.1).round(1)
-
-# Load arguments
-n_nodes = int(sys.argv[1])
 
 # Get number of time steps and graph
 network = data_handling.load_pypsa_network(0.0, n_nodes, path_to_pypsa_network)
