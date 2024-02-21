@@ -35,6 +35,10 @@ def build_idx_to_node_idx_list_n_reverse(indicator_vec_arr: np.ndarray):
 
     Args:
         indicator_vec_arr (np.ndarray): _description_
+
+    Returns:
+        split_node_idx_ls, node_split_idx_list: Lists collecting the translation 
+            from split number to node idx and vice versa.
     """
 
     split_node_idx_ls = list()
@@ -58,8 +62,23 @@ def get_lost_load_in_member_components(
     rocof_neg_threshold: float,
     freq_ref: float = 50.0,
 ) -> np.ndarray:
-    """Get how much load there is in all components that have the nodes in 'node_list'
-    as members."""
+    """Get how much load would still be lost after adding an additional Erot at each node in 'node_arr'.
+
+    Args:
+        node_arr (np.ndarray): Array with nodes for which the total lost load will be displayed.
+        component_props_arr (np.ndarray): Component properties of each split.
+        snapshot_weightings_arr (np.ndarray): Array with snapshot weightings showing time 
+            length of a snapshots.
+        node_to_split_idx_ls (list): List translating node to connected split numbers.
+        change_rot_energy (float): Change of rotational energy per step.
+        rocof_neg_threshold (float): Threshold below in Hz/s 
+            which a split component is considered to be unrecoverable.
+        freq_ref (float, optional): Reference frequency in Hz. Defaults to 50..
+
+    Returns:
+        np.ndarray: array with total load load for each member node given in 'node_arr'
+            if an additional rot energy would be placed.
+    """
 
     lost_load_member_comps = np.zeros(len(node_arr))
 
@@ -94,8 +113,25 @@ def greedy_inertia_placement_step(
     rocof_neg_threshold: float,
     load_share_threshold: float,
     freq_ref: float = 50.0,
-):
-    """Place inertia according to the highest amount of mitigated load."""
+) -> np.ndarray:
+    """Place inertia according to the highest amount of mitigated load.
+
+    Args:
+        component_props_arr (np.ndarray): Component properties of each split.
+        indicator_vectors (np.ndarray): Vector having ones in every row k showing 
+            nodes being in split k.
+        snapshot_weightings_arr (np.ndarray): Array with snapshot weightings showing 
+            time length of a snapshots.
+        split_to_node_list (list): List translating split number to node idx
+        delta_rot_energy (float): Change in rotational energy.
+        rocof_neg_threshold (float): Threshold below in Hz/s 
+            which a split component is considered to be unrecoverable.
+        load_share_threshold (float): Load threshold for a split component to be considered.
+        freq_ref (float, optional): Reference frequency in Hz. Defaults to 50..
+
+    Returns:
+        np.ndarray: Array that shows how much load lost can be mitigated for each node.
+    """
 
     # Check if component properties has all the entries needed (e.g., last day and first day)
     nn_nodes = indicator_vectors.shape[1]
@@ -133,9 +169,30 @@ def run_greedy_inertia_placement(
     resolve_equal_randomly: bool = False,
     concentrated_inertia_placement: bool = True,
     atol: float = 1e-8,
-):
-    """Run inertia placement to reduce the amount of lost load, which is defined as the
-    load in a component that suffers a rocof small er as 'rocof_threshold_Hz_s'."""
+) -> tuple:
+    """Run inertia placement to reduce the amount of lost load, which is defined as the 
+    load in a component that suffers a rocof small er as 'rocof_threshold_Hz_s'.
+
+    Args:
+        component_df (pd.DataFrame): Dataframe with information on components of splits.
+        indicator_vec_arr (np.ndarray): Vector with entries for each split
+        snapshot_weightings_generators (pd.DataFrame): Snapshot weightings to show how many 
+        delta_rot_energy (float): Change of rotational energy per step.
+        rocof_threshold_Hz_s (float, optional): Threshold for RoCoF below which a split component is considered 
+            to be unrecoverable. Defaults to -1. .
+        max_iter (int, optional): Number of iterations. Note, simulation will be stopped if 
+            every split is below the threshold. Defaults to 10000.
+        freq_ref (float, optional): Reference frequency in Hz. Defaults to 50.
+        load_share_threshold (float, optional): Load share that splits have to have to be considered. Defaults to 0.
+        show_progress (bool, optional): If 'True', show progressbar. Defaults to True.
+        resolve_equal_randomly (bool, optional): _description_. Defaults to False.
+        atol (float, optional): absolute tolerance for comparison. Defaults to 1e-8.
+
+    Returns:
+        modified_comp_index, modified_comp_arr,
+        inertia_placed_loss_mitigated_ls, 
+        resolve_equality_counter, still_used_random_node_choice
+    """
 
     assert rocof_threshold_Hz_s < 0
 
@@ -285,16 +342,16 @@ def run_specific_co2lvl_n_size(
     use_random_resolve: bool = False,
     save_it: bool = True,
     show_progress: bool = True,
-):
-    """Run the inertia placement for an optimized power system that was analyzed by
-    running cascade experiments.
+) -> tuple:
+    """Run the inertia placement for an optimized power system that was analyzed by 
+    running cascade experiments. 
 
     Args:
         co2_lvl (float): CO2 level of PyPSA network.
         nn_nodes (int, optional): Number of nodes of PyPSA network. Defaults to 800.
         delta_rot_energy (float, optional): Change in rotational energy per step. Defaults to 100.
         max_iter (int, optional): Maximum number of iterations. Defaults to 10000.
-        rocof_threshold_Hz_s (float, optional): Threshold after which a component is counted as
+        rocof_threshold_Hz_s (float, optional): Threshold after which a component is counted as 
             experiencing a black out aka the load is counted as lost. Defaults to -1..
         lshare_threshold (float, optional): Amount of load share of components that are being considered
             in the greedy mitigation procedure. Defaults to 0, which corresponds to all components
@@ -363,7 +420,8 @@ def run_specific_co2lvl_n_size(
 
 
 def single_call(nn_nodes, co2_lvl, max_iter, delta_rot_e):
-
+    """Wrapper to be used in 'run_different_parameters_fo_co2lvl'"""
+    
     run_specific_co2lvl_n_size(
         co2_lvl,
         nn_nodes=nn_nodes,
@@ -382,9 +440,17 @@ def run_different_parameters_for_co2lvl(
     delta_rot_ls: list,
     max_iter=10000,
     nr_processes: int = 5,
-):
+) -> None:
     """Run the function 'run_specific_co2lvl_n_size' for the parameters
-    giving delta_rot_energy."""
+    giving delta_rot_energy.
+
+    Args:
+        co2_lvl (float): CO2 level
+        nn_nodes (int): Number of nodes of PyPSA network.
+        delta_rot_ls (list): List with change in rotational energy per step added
+        max_iter (int, optional): Number of maximum iterations. Defaults to 10000.
+        nr_processes (int, optional): How many processes are being used at the same time. Defaults to 5.
+    """
 
     # Parallelize it please
 
