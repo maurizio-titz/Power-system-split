@@ -167,11 +167,13 @@ def _resolve_equality_concentrate_inertia(inertia_already_placed,
     
     idx_node_max_candidates = np.where(abs(max_inertia_in_candidates - 
                                            added_inertia_candidate_nodes) < atol)[0]
+    
     if len(idx_node_max_candidates) > 1:
         idx_node_picked= np.random.choice(idx_node_max_candidates)
         still_random = True
     else:
         idx_node_picked = idx_node_max_candidates[0]
+        still_random = False
     
     return idx_node_picked, still_random
 
@@ -320,7 +322,8 @@ def run_greedy_inertia_placement(
             max_change = proposed_load_loss_change.max()
             idx_node = np.where(abs(proposed_load_loss_change - max_change) < atol)[0]
             
-            # Check if a decision has to be made due to two nodes being equal
+            # Check if a decision has to be made due to more nodes being options to 
+            # place inertia 
             if len(idx_node) > 1:
                 resolve_equality_counter += 1
                 if resolve_equality_method == "random":
@@ -328,7 +331,7 @@ def run_greedy_inertia_placement(
                     still_random = True
                 
                 elif resolve_equality_method == "concentrate":
-                    idx_node, still_random = _resolve_equality_concentrate_inertia(added_inertia_by_node, idx_node)
+                    idx_node, still_random = _resolve_equality_concentrate_inertia(added_inertia_by_node, idx_node, atol=atol)
                     
                 
                 elif resolve_equality_method == "hindsight":
@@ -345,7 +348,7 @@ def run_greedy_inertia_placement(
                                                                          freq_ref, idx_node, added_inertia_by_node,
                                                                          concentrate_inertia=True, atol=atol) 
                 else:
-                    raise IOError(f"Resolve equality measure '{resolve_equality_method}' not implemented.")
+                    raise IOError(f"Resolve equality measure '{resolve_equality_method}' not known.")
                 
                 if still_random:
                     still_used_random_node_choice += 1
@@ -387,7 +390,7 @@ def run_greedy_inertia_placement(
 def run_specific_co2lvl_n_size(
     co2_lvl: float,
     nn_nodes: int = 400,
-    delta_rot_energy: float = 100,
+    delta_rot_energy: float = 10,
     max_iter: int = 10000,
     rocof_threshold_Hz_s: float = -1.0,
     lshare_threshold: float = 0.0,
