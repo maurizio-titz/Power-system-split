@@ -512,7 +512,7 @@ def run_different_parameters_for_co2lvl(
         nr_processes (int, optional): How many processes are being used at the same time. Defaults to 5.
     """
 
-    resolve_n_deltrotE_ls = itertools.product(resolve_equality_method_ls, delta_rot_ls)
+    resolve_n_deltrotE_ls = list(itertools.product(resolve_equality_method_ls, delta_rot_ls))
     
     with multiprocessing.get_context("spawn").Pool(processes=nr_processes) as pool:
         partial_func = partial(single_call, nn_nodes, co2_lvl, max_iter)
