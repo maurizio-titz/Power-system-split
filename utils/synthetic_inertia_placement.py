@@ -498,8 +498,8 @@ def run_different_parameters_for_co2lvl(
     delta_rot_ls: list,
     max_iter=10000,
     nr_processes: int = 5,
-    resolve_equality_method_ls: list = ["random", "concentrated",
-                                        "hindsight", "hindsight_concentrated"],
+    resolve_equality_method_ls: list = ["random", "concentrate",
+                                        "hindsight", "hindsight_concentrate"],
 ) -> None:
     """Run the function 'run_specific_co2lvl_n_size' for the parameters
     giving delta_rot_energy.
