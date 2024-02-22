@@ -230,6 +230,7 @@ def run_greedy_inertia_placement(
     show_progress: bool = True,
     resolve_equality_method: str = 'random',
     atol: float = 1e-8,
+    revert_change_fac: bool = False,
 ) -> tuple:
     """Run inertia placement to reduce the amount of lost load, which is defined as the 
     load in a component that suffers a rocof small er as 'rocof_threshold_Hz_s'.
@@ -299,7 +300,7 @@ def run_greedy_inertia_placement(
             modified_comp_arr[:, 2] < rocof_threshold_Hz_s
         )
         pbar.set_description(
-            f"Beyond threshold {count_beyond_threshold/ len_cut_df*100:.1f}%"
+            f"Bey. thres.: {count_beyond_threshold/ len_cut_df*100:.1f}%, fac: {int(delta_rot_energy_factor):d} "
         )
         ch_rot_energy_r = delta_rot_energy_factor * delta_rot_energy
 
@@ -309,7 +310,7 @@ def run_greedy_inertia_placement(
             indicator_vec_arr_cut,
             snapshot_weightings_arr_cut,
             split_to_node_idx_ls,
-            delta_rot_energy,
+            ch_rot_energy_r,
             rocof_threshold_Hz_s,
             load_share_threshold,
             freq_ref=freq_ref,
@@ -373,7 +374,8 @@ def run_greedy_inertia_placement(
             )
             modified_comp_arr[idx_node_in_split, 2] = new_rocof
 
-            delta_rot_energy_factor = 1.0
+            if revert_change_fac:
+                delta_rot_energy_factor = 1.0
 
         # Break when all splits are pushed below rocof threshold
         if count_beyond_threshold == 0:
@@ -398,6 +400,7 @@ def run_specific_co2lvl_n_size(
     resolve_equality_method: str = "random",
     save_it: bool = True,
     show_progress: bool = True,
+    revert_ch_rotE_fac: bool = False
 ) -> tuple:
     """Run the inertia placement for an optimized power system that was analyzed by 
     running cascade experiments. 
@@ -459,6 +462,9 @@ def run_specific_co2lvl_n_size(
             + f"_lshare{lshare_threshold:.2f}_maxiter{max_iter}_{resolve_equality_method}"
         )
 
+        if revert_ch_rotE_fac:
+            fpath_out += "_revertfac"
+
         with gzip.open(fpath_out + ".pklz", "wb") as fh_out:
             pickle.dump(res_tuple, fh_out)
 
@@ -474,7 +480,7 @@ def run_specific_co2lvl_n_size(
     return res_tuple
 
 
-def single_call(nn_nodes, co2_lvl, max_iter, resolve_method_n_delta_rot_e):
+def single_call(nn_nodes, co2_lvl, max_iter, revert_fac, resolve_method_n_delta_rot_e):
     """Wrapper to be used in 'run_different_parameters_fo_co2lvl'"""
     
     resolve_method, delta_rot_e = resolve_method_n_delta_rot_e
@@ -486,7 +492,8 @@ def single_call(nn_nodes, co2_lvl, max_iter, resolve_method_n_delta_rot_e):
         show_progress=False,
         save_it=True,
         max_iter=max_iter,
-        resolve_equality_method=resolve_method
+        resolve_equality_method=resolve_method,
+        revert_ch_rotE_fac=revert_fac
     )
 
     return
@@ -498,6 +505,7 @@ def run_different_parameters_for_co2lvl(
     delta_rot_ls: list,
     max_iter=10000,
     nr_processes: int = 5,
+    revert_chrotE_fac: bool = False,
     resolve_equality_method_ls: list = ["random", "concentrate",
                                         "hindsight", "hindsight_concentrate"],
 ) -> None:
@@ -515,7 +523,7 @@ def run_different_parameters_for_co2lvl(
     resolve_n_deltrotE_ls = list(itertools.product(resolve_equality_method_ls, delta_rot_ls))
     
     with multiprocessing.get_context("spawn").Pool(processes=nr_processes) as pool:
-        partial_func = partial(single_call, nn_nodes, co2_lvl, max_iter)
+        partial_func = partial(single_call, nn_nodes, co2_lvl, max_iter, revert_chrotE_fac)
 
         [
             xx
