@@ -34,8 +34,8 @@ path_to_pypsa_network_sclopf = './data/European_networks_sclopf/'
 path_to_cascades_sclopf =  './results/sclopf/cascade_results/'
 path_to_cascades_lopf =  './results/lopf/cascade_results/'
 
-save_path_sclopf =  './results/sclopf/cascade_results/'
-save_path_lopf =  './results/lopf/cascade_results/'
+save_path_sclopf =  './results/sclopf/evaluation_results/'
+save_path_lopf =  './results/lopf/evaluation_results/'
 
 # Dummy decorator to not get stuck on @profile
 if 'profile' not in globals():
@@ -90,11 +90,14 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
         full_path_to_file = path_to_pypsa_network + f'sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.1f}-2920SEG.nc'
         
         full_path_to_cascades = path_to_cascades_sclopf + f'system_splits_Co2L{co2l}_n{n_nodes}.pklz'
+        save_path = save_path_sclopf
     else:
         path_to_pypsa_network = path_to_pypsa_network_lopf
         full_path_to_file = path_to_pypsa_network + f'elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-3H.nc'
         
         full_path_to_cascades = path_to_cascades_lopf + + f'system_splits_Co2L{co2l}_n{n_nodes}.pklz'
+        save_path = save_path_lopf
+    
     network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 
