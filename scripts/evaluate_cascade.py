@@ -24,9 +24,18 @@ import utils.config as cfg
 from utils import send_mattermost_messages
 
 # Setup paths to solved PyPSA networks and results own scripts
-path_to_pypsa_network = './data/European_networks_sclopf/'
-path_to_cascade_results  = './results/sclopf/cascade_results/'
-save_path =  './results/sclopf/evaluation_results/'
+#path_to_pypsa_network = './data/European_networks_sclopf/'
+#path_to_cascade_results  = './results/sclopf/cascade_results/'
+#save_path =  './results/sclopf/evaluation_results/'
+
+path_to_pypsa_network_lopf = './data/European_networks_lopf/'
+path_to_pypsa_network_sclopf = './data/European_networks_sclopf/'
+
+path_to_cascades_sclopf =  './results/sclopf/cascade_results/'
+path_to_cascades_lopf =  './results/lopf/cascade_results/'
+
+save_path_sclopf =  './results/sclopf/cascade_results/'
+save_path_lopf =  './results/lopf/cascade_results/'
 
 # Dummy decorator to not get stuck on @profile
 if 'profile' not in globals():
@@ -37,7 +46,8 @@ if 'profile' not in globals():
 def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
                      start_time_str=None, end_time_str=None, 
                      eval_indicator_vectors: bool = True, 
-                     verbose: bool = False, show_progress: bool = True):
+                     verbose: bool = False, show_progress: bool = True,
+                     use_sclopf=True):
     """Find the properties of the splits (i.e., RoCoF or lost load) and 
     indicator vectors describing the network.
 
@@ -74,12 +84,23 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
     # Load PyPSA network, the graph of the subnetwork and its matrices
     if verbose:
         print("Loading PyPSA Network and converting it to NetworkX Graph.\n")
-    network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
+        
+    if use_sclopf:
+        path_to_pypsa_network = path_to_pypsa_network_sclopf
+        full_path_to_file = path_to_pypsa_network + f'sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.1f}-2920SEG.nc'
+        
+        full_path_to_cascades = path_to_cascades_sclopf + f'system_splits_Co2L{co2l}_n{n_nodes}.pklz'
+    else:
+        path_to_pypsa_network = path_to_pypsa_network_lopf
+        full_path_to_file = path_to_pypsa_network + f'elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-3H.nc'
+        
+        full_path_to_cascades = path_to_cascades_lopf + + f'system_splits_Co2L{co2l}_n{n_nodes}.pklz'
+    network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 
     # Load cascade results
-    splitting_cascades = pickle.load(open(path_to_cascade_results + 
-                                        f'system_splits_Co2L{co2l}_n{n_nodes}.pklz' ,'rb'))
+    with gzip.open(full_path_to_cascades, 'rb') as fh_casc:
+        splitting_cascades = pickle.load(fh_casc)
 
     # Initialize results
     comp_cols = ['time_stamp', 'init_failure_0','init_failure_1',
