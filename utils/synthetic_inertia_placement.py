@@ -318,6 +318,8 @@ def run_greedy_inertia_placement(
         # If no change was detected, more synthetic rot. energy is added
         if (proposed_load_loss_change == 0).all():
             delta_rot_energy_factor += 1.0
+            
+            print("no")
 
         else:
             max_change = proposed_load_loss_change.max()

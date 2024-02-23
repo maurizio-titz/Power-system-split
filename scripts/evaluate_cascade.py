@@ -79,7 +79,7 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
 
     # Load cascade results
     splitting_cascades = pickle.load(open(path_to_cascade_results + 
-                                        f'system_splits_Co2L{co2l}_n{n_nodes}.pickle' ,'rb'))
+                                        f'system_splits_Co2L{co2l}_n{n_nodes}.pklz' ,'rb'))
 
     # Initialize results
     comp_cols = ['time_stamp', 'init_failure_0','init_failure_1',
