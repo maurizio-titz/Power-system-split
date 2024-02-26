@@ -176,6 +176,8 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
                     print(type(indi_vec_r))
                     print(indi_vec_r.shape)
                     
+                    raise ValueError
+                    
 
     
         #component_props.to_hdf(save_path + f'component_properties_Co2L{co2l}_n{n_nodes}.h5',
