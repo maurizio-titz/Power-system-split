@@ -4,6 +4,7 @@
 """Plot the results that came out of the mitigation strategies.
 The two mitigation strategies are line extension and inertia placement."""
 
+import os
 import numpy as np
 
 import networkx
@@ -19,6 +20,8 @@ from utils import data_handling
 import gzip
 import pickle
 
+from tqdm import tqdm
+
 from glob import glob
 
 color1 = "#d95f02"
@@ -28,6 +31,9 @@ color4 = "#e7298a"
 
 color_ls = [color1, color2,
             color3, color4]
+
+script_path = os.path.dirname(__file__)
+
 
 def plot_map_inertia_placement(co2_lvl, nn=400, max_iter=10000,
                                max_node_size=800, 
@@ -230,13 +236,12 @@ def plot_all_syn_inertia_over_time():
     
     return
 
-def aggregate_months(casc_dict):
+def aggregate_months(casc_dict, show_progress=True, to_month=12):
     
     keys_all = list(casc_dict.keys())
-    month_str_ls = ["01", "02", "03", "04", "05", "06", 
-                    "07", "08", "09", "10", "11", "12"]
+    month_str_ls = [f"{xx+1:02d}" for xx in range(to_month)]
     nr_splits_per_month = list()
-    for month_r in month_str_ls:
+    for month_r in tqdm(month_str_ls, disable=not show_progress):
         month_r_keys = [xx for xx in keys_all if xx[5:7] == month_r]
         
         if len(month_r_keys) > 0:
@@ -248,29 +253,238 @@ def aggregate_months(casc_dict):
     return np.array(nr_splits_per_month)
 
 
-def plot_line_mitigation():
+def data_line_mitigation_diff_nnlines(delta_para=5, save_res=True):
     """"""
     
     # Load file
     meta_data_path = "results/sclopf/cascade_results/"
     
-    norm_path = meta_data_path + "system_splits_Co2L0.1_n400.pickle"
-    with open(norm_path, 'rb') as fh_in_norm:
+    norm_path = meta_data_path + "system_splits_Co2L0.1_n400.pklz"
+    with gzip.open(norm_path, 'rb') as fh_in_norm:
         norm_dict = pickle.load(fh_in_norm)
     
     norm_splits_per_month = aggregate_months(norm_dict)
     
-    small_change_path = meta_data_path + "system_splits_Co2L0.1_n400_lineextension_nnlines10_deltanumpara3.0000.pklz"
-    with gzip.open(small_change_path, 'rb') as fh_in_small:
-        vulnerable_edges_small, small_dict = pickle.load(fh_in_small)
+    mitigate_split_ls = list()
+    for nn_lines in tqdm([10, 20, 40]):
+        small_change_path = (meta_data_path + "system_splits_Co2L0.1_n400_" + 
+                             f"lineextension_nnlines{nn_lines}" +
+                             f"_deltanumpara{delta_para:.4f}_" + 
+                             "stopped_2013-03-01 00:00.pklz")
+        with gzip.open(small_change_path, 'rb') as fh_in_r:
+            _, vulnerable_edges_r, dict_r = pickle.load(fh_in_r)
+        splits_per_month_r = aggregate_months(dict_r)
         
-    small_splits_per_month = aggregate_months(small_dict)
+        res_out_r = (nn_lines, vulnerable_edges_r, splits_per_month_r)
+        mitigate_split_ls.append(res_out_r)
+        
+    if save_res:
+        path_out = script_path + f"/cascdes_par_months_deltanumpara{delta_para:.4f}_diffnn_lines.pklz"
+        with gzip.open(path_out, 'wb') as fh_out:
+            pickle.dump((norm_splits_per_month, mitigate_split_ls), fh_out)
     
-    large_change_path = meta_data_path + "system_splits_Co2L0.1_n400_lineextension_nnlines10_deltanumpara5.0000.pklz"
-    with gzip.open(large_change_path, 'rb') as fh_in_large:
-        vulnerable_edges_large, large_dict = pickle.load(fh_in_large)
+    return norm_splits_per_month, mitigate_split_ls
+
+
+def data_line_mitigation_diff_numpara(nn_lines=10, save_res=True):
+    """"""
     
-    large_splits_per_month = aggregate_months(large_dict)
+    # Load file
+    meta_data_path = "results/sclopf/cascade_results/"
     
-    return norm_dict, small_dict, large_dict
-    return vulnerable_edges_small, vulnerable_edges_large, norm_splits_per_month, small_splits_per_month, large_splits_per_month
+    norm_path = meta_data_path + "system_splits_Co2L0.1_n400.pklz"
+    with gzip.open(norm_path, 'rb') as fh_in_norm:
+        norm_dict = pickle.load(fh_in_norm)
+    
+    norm_splits_per_month = aggregate_months(norm_dict)
+    
+    mitigate_split_ls = list()
+    for delta_para in tqdm([1, 5]):
+        small_change_path = (meta_data_path + "system_splits_Co2L0.1_n400_" + 
+                             f"lineextension_nnlines{nn_lines}" +
+                             f"_deltanumpara{delta_para:.4f}_" + 
+                             "stopped_2013-03-01 00:00.pklz")
+        with gzip.open(small_change_path, 'rb') as fh_in_r:
+            _, vulnerable_edges_r, dict_r = pickle.load(fh_in_r)
+        splits_per_month_r = aggregate_months(dict_r, to_month=2)
+        
+        res_out_r = (delta_para, vulnerable_edges_r, splits_per_month_r)
+        mitigate_split_ls.append(res_out_r)
+        
+    if save_res:
+        path_out = script_path + f"/cascdes_par_months_nnlines{nn_lines}_diffnumpara_lines.pklz"
+        print(path_out)
+        with gzip.open(path_out, 'wb') as fh_out:
+            pickle.dump((norm_splits_per_month, mitigate_split_ls), fh_out)
+    
+    return norm_splits_per_month, mitigate_split_ls
+
+
+def plot_most_likely_lines_on_map(savefig=True):
+    
+    # Load network
+    pypsa_net = data_handling.load_pypsa_network("data/European_networks_sclopf/sclopf-elec_s_400_ec_lv1.0_Co2L0.1-2920SEG.nc", use_sclopf=True)
+    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index=0)
+    
+    # Load file
+    path_out = (script_path + 
+                    f"/cascdes_par_months_deltanumpara{1:.4f}_diffnn_lines.pklz")
+    
+    with gzip.open(path_out) as fh_in:
+        norm_month_ls, diff_para_ls = pickle.load(fh_in)
+        
+    vuln_res_dict = dict()
+    for ele_r in diff_para_ls[::-1]:
+        nn_lines, vulnerable_ls, _ = ele_r
+        vuln_res_dict[nn_lines] = vulnerable_ls
+    
+    # Plot it
+    edge_color_ls = list()
+    edge_width_ls = list()
+    
+    for ll in nx_graph.edges():
+        
+        if ll in vuln_res_dict[10] and ll in vuln_res_dict[20] and ll in vuln_res_dict[40]:
+            edge_color_ls.append(color_ls[0])
+            edge_width_ls.append(3)
+            
+        elif ll in vuln_res_dict[40] and ll in vuln_res_dict[20] and ll not in vuln_res_dict[10]:
+            edge_color_ls.append(color_ls[1])
+            edge_width_ls.append(3)
+            
+        elif ll in vuln_res_dict[40] and ll not in vuln_res_dict[20] and ll not in vuln_res_dict[10]:
+            edge_color_ls.append(color_ls[2])
+            edge_width_ls.append(3)
+            
+        else:
+            edge_color_ls.append('gray')
+            edge_width_ls.append(1.3)
+        
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    pos_graph = networkx.get_node_attributes(nx_graph, "pos")
+    neti = networkx.draw_networkx_edges(nx_graph, pos_graph, ax=ax,
+                                 edge_color=edge_color_ls,
+                                width=edge_width_ls)
+    
+    plt.legend([matplotlib.lines.Line2D([0, 1], [0, 1], color=color_ls[idx], lw=3) for idx in range(3)],
+               [10, 20, 40])
+    
+    ax.axis('off')
+    
+    if savefig:
+        fig_path = script_path + "/lines_on_map.png"
+        fig.savefig(fig_path, bbox_inches='tight')
+        fig.clear()
+        plt.close(fig)
+    else:
+        plt.show()
+    
+    return
+    
+
+def plot_bar_histograms_diff_nnlines(save_fig=False):
+    
+    # Load data
+    fig, ax = plt.subplots(2, 1, figsize=(10, 8))
+    for idx_para, delta_para in enumerate([1, 5]):
+        path_out = (script_path + 
+                    f"/cascdes_par_months_deltanumpara{delta_para:.4f}_diffnn_lines.pklz")
+    
+        with gzip.open(path_out) as fh_in:
+            norm_month_ls, diff_para_ls = pickle.load(fh_in)
+            
+        
+        
+        width_bar = 1/(len(diff_para_ls)+1) - 0.05
+        
+        norm_month_arr = np.array(norm_month_ls)
+        
+        ax[idx_para].bar(norm_month_arr[:, 0] - width_bar, norm_month_arr[:, 1]*1e-3, width_bar,
+            label="Normal", color=color_ls[0])
+        
+        for idx, ele_r in enumerate(diff_para_ls):
+            nn_lines, _, splits_per_month = ele_r
+
+            ax[idx_para].bar(splits_per_month[:, 0] + idx * width_bar,
+                splits_per_month[:, 1]*1e-3, width_bar, label="$N_{\\rm lines}=" +
+                f"{nn_lines}" + "$", color=color_ls[idx+1])
+
+        title_str = "Diff. number of lines for $\\Delta C_{\\rm para}=" + f"{delta_para}$"
+        ax[idx_para].set_title(title_str)
+        
+    # Aesthetics
+    for ax_r in ax: 
+        ax_r.set_xlabel("Months", fontsize=18)
+        ax_r.set_ylabel("\\# Splits $/ 10^3$", fontsize=18)
+    
+    ax[0].legend(ncols=1, fontsize=12)
+    
+    plt.tight_layout()
+    
+    if save_fig:
+        fig_path = script_path + f"/nr_of_cascades_diffnnlines.png"
+        fig.savefig(fig_path, bbox_inches='tight')
+        
+        fig.clear()
+        plt.close(fig)
+        
+    else:
+        plt.show()
+    
+    
+    return
+
+
+def plot_bar_histograms_diff_numpara(save_fig=False):
+    
+    # Load data
+    fig, ax = plt.subplots(3, 1, figsize=(10, 10))
+    for idx_li, nn_lines in enumerate([10, 20, 40]):
+        path_out = (script_path + 
+                    f"/cascdes_par_months_nnlines{nn_lines}_diffnumpara_lines.pklz")
+    
+        with gzip.open(path_out) as fh_in:
+            norm_month_ls, diff_para_ls = pickle.load(fh_in)
+            
+        
+        
+        width_bar = 1/(len(diff_para_ls)+1) - 0.05
+        
+        norm_month_arr = np.array(norm_month_ls)
+        
+        ax[idx_li].bar(norm_month_arr[:, 0] - width_bar, norm_month_arr[:, 1]*1e-3, width_bar,
+            label="Normal", color=color_ls[0])
+        
+        
+        
+        for idx, ele_r in enumerate(diff_para_ls):
+            delta_para, _, splits_per_month = ele_r
+
+            ax[idx_li].bar(splits_per_month[:, 0] + idx * width_bar,
+                splits_per_month[:, 1]*1e-3, width_bar, label="$\\Delta {C_{\\rm para}=" +
+                f"{delta_para:.1f}" + "}$", color=color_ls[idx+1])
+
+        title_str = "Diff. capacities for $N_{\\rm lines}=" + f"{nn_lines}$"
+        ax[idx_li].set_title(title_str)
+        
+    # Aesthetics
+    for ax_r in ax: 
+        ax_r.set_xlabel("Months", fontsize=18)
+        ax_r.set_ylabel("\\# Splits $/ 10^3$", fontsize=18)
+    
+    ax[0].legend(ncols=1, fontsize=12)
+    
+    plt.tight_layout()
+    
+    if save_fig:
+        fig_path = script_path + f"/nr_of_cascades_diffnumpara.png"
+        fig.savefig(fig_path, bbox_inches='tight')
+        
+        fig.clear()
+        plt.close(fig)
+        
+    else:
+        plt.show()
+    
+    return

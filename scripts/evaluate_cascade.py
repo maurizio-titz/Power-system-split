@@ -168,8 +168,14 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
             # indicator_vectors[ii]
             if eval_indicator_vectors:
                 indi_vec_r = subgraph_evaluation.get_indicator_vectors_of_subgraphs(subgraphs, nx_graph)
-                indicator_vectors[idx_indi_vec:idx_indi_vec + indi_vec_r.shape[0], :] = indi_vec_r
-                idx_indi_vec += indi_vec_r.shape[0]
+                try:
+                    indicator_vectors[idx_indi_vec:idx_indi_vec + indi_vec_r.shape[0], :] = indi_vec_r
+                    idx_indi_vec += indi_vec_r.shape[0]
+                except ValueError:
+                    print(indi_vec_r)
+                    print(type(indi_vec_r))
+                    print(indi_vec_r.shape)
+                    
 
     
         #component_props.to_hdf(save_path + f'component_properties_Co2L{co2l}_n{n_nodes}.h5',
