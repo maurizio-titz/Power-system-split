@@ -138,7 +138,9 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
     
     total_nr_splits = sum(len(vv) for vv in splitting_cascades_dtkeys.values())
     if eval_indicator_vectors:
-        indicator_vectors = np.empty((total_nr_splits, nx_graph.number_of_nodes()), int)
+        # TODO replace by empty
+        #indicator_vectors = np.empty((total_nr_splits, nx_graph.number_of_nodes()), int)
+        indicator_vectors = np.full((total_nr_splits, nx_graph.number_of_nodes()), np.nan, dtype=float)
     
     component_props_dict = dict()
     out_dict_key = 0   
@@ -169,12 +171,17 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
             if eval_indicator_vectors:
                 indi_vec_r = subgraph_evaluation.get_indicator_vectors_of_subgraphs(subgraphs, nx_graph)
                 try:
-                    indicator_vectors[idx_indi_vec:idx_indi_vec + indi_vec_r.shape[0], :] = indi_vec_r
+                    indicator_vectors[idx_indi_vec:idx_indi_vec + indi_vec_r.shape[0],
+                                      :] = indi_vec_r
                     idx_indi_vec += indi_vec_r.shape[0]
+                    
                 except ValueError:
                     print(indi_vec_r)
                     print(type(indi_vec_r))
                     print(indi_vec_r.shape)
+                    error_path = "error_path_indie_vec.pklz"
+                    with gzip.open(error_path, 'wb') as fh_error:
+                        pickle.dump((indicator_vectors, idx_indi_vec, indi_vec_r, out_dict_key), fh_error)
                     
                     raise ValueError
                     
