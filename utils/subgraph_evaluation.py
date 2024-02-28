@@ -111,7 +111,7 @@ def get_inertia_gen_subgraph(subgraph, generators, current_generation,
     stores = stores[in_subgraph & is_online]
     
     # Calc rotational energy
-    total_gens = gens.append(stores)
+    total_gens = pd.concat([gens, stores])
     total_gens = total_gens.reset_index(names=['index']).set_index(['index', 'carrier'])  
     rot_energy = total_gens.nominal_power.mul(INERTIA_CONSTANTS, level=1).sum()
 
