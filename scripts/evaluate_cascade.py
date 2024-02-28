@@ -140,8 +140,9 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
     if eval_indicator_vectors:
         # TODO replace by empty
         #indicator_vectors = np.empty((total_nr_splits, nx_graph.number_of_nodes()), int)
-        indicator_vectors = np.full((total_nr_splits, nx_graph.number_of_nodes()), np.nan, dtype=float)
-    
+        #indicator_vectors = np.full((total_nr_splits, nx_graph.number_of_nodes()), np.nan, dtype=float)
+        indicator_vectors_ls = list()
+        
     component_props_dict = dict()
     out_dict_key = 0   
     idx_indi_vec = 0
@@ -170,22 +171,10 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
             # indicator_vectors[ii]
             if eval_indicator_vectors:
                 indi_vec_r = subgraph_evaluation.get_indicator_vectors_of_subgraphs(subgraphs, nx_graph)
-                try:
-                    indicator_vectors[idx_indi_vec:idx_indi_vec + indi_vec_r.shape[0],
-                                      :] = indi_vec_r
-                    idx_indi_vec += indi_vec_r.shape[0]
-                    
-                except ValueError:
-                    print(indi_vec_r)
-                    print(type(indi_vec_r))
-                    print(indi_vec_r.shape)
-                    error_path = "error_path_indie_vec.pklz"
-                    with gzip.open(error_path, 'wb') as fh_error:
-                        pickle.dump((indicator_vectors, idx_indi_vec, indi_vec_r, out_dict_key), fh_error)
-                    
-                    raise ValueError
-                    
 
+                #indicator_vectors[idx_indi_vec:idx_indi_vec + indi_vec_r.shape[0], :] = indi_vec_r
+                #idx_indi_vec += indi_vec_r.shape[0]
+                indicator_vectors_ls.extend(indi_vec_r.tolist())
     
         #component_props.to_hdf(save_path + f'component_properties_Co2L{co2l}_n{n_nodes}.h5',
         #                    key='df', mode= 'w')
@@ -203,7 +192,7 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
     if eval_indicator_vectors:
             indi_vec_save_path = save_path + f'indicator_vectors_Co2L{co2l}_n{n_nodes}{cut_path_str}.pklz'
             with gzip.open(indi_vec_save_path) as fh_vec_out:
-                pickle.dump(indicator_vectors, fh_vec_out)
+                pickle.dump(np.array(indicator_vectors_ls, dtype=int), fh_vec_out)
     
     component_props = pd.DataFrame.from_dict(component_props_dict, orient="index",
                                              columns=comp_cols)
