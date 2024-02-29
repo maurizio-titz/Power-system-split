@@ -335,8 +335,9 @@ def plot_centroid_with_failures(
         )
 
 
-def load_lost_load_share(n_nodes=400, mask=None):
-    co2l_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+def load_lost_load_share(
+    n_nodes=400, mask=None, co2l_list=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+):
     if mask is None:
         path = path_to_evaluation_results + f"masks_all_n400.pklz"
         with gzip.open(path, "rb") as out:
