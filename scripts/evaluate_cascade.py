@@ -136,7 +136,7 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
         splitting_cascades_dtkeys = splitting_cascades_cut
         did_cut_dict = True
     
-    total_nr_splits = sum(len(vv) for vv in splitting_cascades_dtkeys.values())
+    #total_nr_splits = sum(len(vv) for vv in splitting_cascades_dtkeys.values())
     if eval_indicator_vectors:
         # TODO replace by empty
         #indicator_vectors = np.empty((total_nr_splits, nx_graph.number_of_nodes()), int)
@@ -145,7 +145,7 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
         
     component_props_dict = dict()
     out_dict_key = 0   
-    idx_indi_vec = 0
+    #idx_indi_vec = 0
     for timestamp, splits in tqdm(splitting_cascades_dtkeys.items(), disable=not show_progress):
         
         for ii, (init_failure, cascade) in enumerate(tqdm(splits.items(), leave=False, disable=not show_progress)):
@@ -191,7 +191,7 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
     
     if eval_indicator_vectors:
             indi_vec_save_path = save_path + f'indicator_vectors_Co2L{co2l}_n{n_nodes}{cut_path_str}.pklz'
-            with gzip.open(indi_vec_save_path) as fh_vec_out:
+            with gzip.open(indi_vec_save_path, 'wb') as fh_vec_out:
                 pickle.dump(np.array(indicator_vectors_ls, dtype=int), fh_vec_out)
     
     component_props = pd.DataFrame.from_dict(component_props_dict, orient="index",
