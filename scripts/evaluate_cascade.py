@@ -65,7 +65,7 @@ def evaluate_cascade(co2l: float, n_nodes: int, snet_index: int = 0,
         correct_len_str = len("xxxx-xx-xx xx:xx")
         has_correct_len = len(time_str) == correct_len_str
         
-        rr = re.compile('\d{4}/\d{2}/\d{2} \d{2}:\d{2}')
+        rr = re.compile(r'\d{4}/\d{2}/\d{2} \d{2}:\d{2}')
         does_match = rr.match(time_str) is not None
         
         return has_correct_len, does_match
