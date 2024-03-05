@@ -100,6 +100,8 @@ def cluster_kmeans(
                     "is_main_component transformation only works for lshare indicator"
                 )
             indicator_vectors = calc_is_main_component_indicator_vectors(indicator_vectors, main_component_by="main_comp_most_frequent_lshare")
+        elif transformation == "blackout":
+            indicator_vectors = np.array(indicator_vectors < -1, dtype=int)
         elif transformation == "not_zero":
             indicator_vectors = np.array(indicator_vectors != 0, dtype=int)
         else:

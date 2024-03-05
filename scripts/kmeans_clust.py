@@ -28,6 +28,7 @@ transformations = [
     "main_comp_most_frequent_lshare",
     #    "sign", "tanh", None, "clipped_tanh", "clipped"
 ]
+indicator_type_transformation = [("lshare", "main_comp_most_frequent_lshare"), ("rocof", "blackout")]
 # n_clusters_list = [8, 16, 32, 48, 64, 96, 128]
 n_clusters_list = [128]
 NUM_NODES = 400
@@ -69,22 +70,21 @@ nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 snapshot_weights = network.snapshot_weightings.objective
 
 print("performing clustering")
-for indicator_type in types:
+for indicator_type, transformation in indicator_type_transformation:
     print(indicator_type)
-    for transformation in transformations:
-        print(transformation)
-        for n_clusters in tqdm(n_clusters_list):
-            print(n_clusters)
-            # split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_significance_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
-            # mask = split_mask(split_properties_df, n_nodes, lost_load_share)
-            cluster_kmeans(
-                NUM_NODES,
-                co2l_list,
-                n_clusters,
-                indicator_type,
-                path_to_indicator_vectors,
-                path_to_clustering_results,
-                transformation=transformation,
-                mask=masks,
-                weights=snapshot_weights,
-            )
+    print(transformation)
+    for n_clusters in tqdm(n_clusters_list):
+        print(n_clusters)
+        # split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_significance_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
+        # mask = split_mask(split_properties_df, n_nodes, lost_load_share)
+        cluster_kmeans(
+            NUM_NODES,
+            co2l_list,
+            n_clusters,
+            indicator_type,
+            path_to_indicator_vectors,
+            path_to_clustering_results,
+            transformation=transformation,
+            mask=masks,
+            weights=snapshot_weights,
+        )
