@@ -17,7 +17,7 @@ n_nodes = int(sys.argv[1])
 
 # Setup paths
 path_to_pypsa_network = data_path + "European_networks_sclopf/"
-save_path = results_path + f"sclopf/pre_outage_data_{n_nodes}/"
+save_path = results_path + f"sclopf/pre_outage_data/"
 os.makedirs(save_path, exist_ok=True)
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
 # For our data set, "0" indicates the Continental European AC grid.
@@ -62,9 +62,9 @@ for i, co2l in enumerate(co2l_list):
 
             nodal_inertia_min_max[i, t_count, nodecount] = obs.rot_energy
 
-np.save(save_path + "inertia_time_series_all_co2ls.npy", inertia_time_series)
+np.save(save_path + f"inertia_time_series_all_co2ls_{n_nodes}.npy", inertia_time_series)
 np.save(
-    save_path + "min_max_nodal_inertia_generation_all_co2ls.npy", nodal_inertia_min_max
+    save_path + f"min_max_nodal_inertia_generation_all_co2ls_{n_nodes}.npy", nodal_inertia_min_max
 )
 
 
@@ -123,14 +123,14 @@ for i, co2l in enumerate(co2l_list):
         if np.any(np.isnan(dipole_vector)):
             raise ValueError("SPI coordinates are not valid!")
 
-np.save(save_path + "dipole_vector_time_series_all_co2ls.npy", dipole_vector)
-np.save(save_path + "mean_nodal_consumption_all_co2ls.npy", mean_consumption_vector)
+np.save(save_path + f"dipole_vector_time_series_all_co2ls_{n_nodes}.npy", dipole_vector)
+np.save(save_path + f"mean_nodal_consumption_all_co2ls_{n_nodes}.npy", mean_consumption_vector)
 np.save(
-    save_path + "weighted_mean_nodal_consumption_all_co2ls.npy",
+    save_path + f"weighted_mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
     weighted_mean_consumption_vector,
 )
 np.save(
-    save_path + "graph_net_power_mismatch_time_series_all_co2ls.npy", graph_net_mismatch
+    save_path + f"graph_net_power_mismatch_time_series_all_co2ls_{n_nodes}.npy", graph_net_mismatch
 )
 
 #### Calculate spatial power inhomogeneity ####
@@ -156,4 +156,4 @@ for i, co2l in enumerate(co2l_list):
         vec_norm[i, j] = distance
         if np.any(np.isnan(vec_norm)):
             raise ValueError("SPI coordinates are not valid!")
-np.save(save_path + "spi_time_series_all_co2ls.npy", vec_norm)
+np.save(save_path + f"spi_time_series_all_co2ls_{n_nodes}.npy", vec_norm)

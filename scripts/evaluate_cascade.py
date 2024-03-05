@@ -240,7 +240,7 @@ def evaluate_cascade(
     component_props = pd.DataFrame.from_dict(
         component_props_dict, orient="index", columns=comp_cols
     )
-    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}_dict"
+    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
     save_df_path += cut_path_str
 
     component_props.to_hdf(save_df_path + ".h5", key="df", mode="w")
@@ -257,9 +257,11 @@ def evaluate_cascade(
 if __name__ == "__main__":
 
     # Load arguments
-    co2l_in = float(sys.argv[1])
-    n_nodes_in = int(sys.argv[2])
-
-    evaluate_cascade(co2l_in, n_nodes_in)
-    run_all_co2_lvl_node_based(n_nodes_in)
-    run_all_co2_lvl_edge_based(n_nodes_in)
+    # co2l_in = float(sys.argv[1])
+    # n_nodes_in = int(sys.argv[2])
+    n_nodes_in = 400
+    for co2l_in in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+        print(f"Starting evaluation of N={n_nodes_in}, C02_lvl={co2l_in}.")
+        # evaluate_cascade(co2l_in, n_nodes_in)
+        run_all_co2_lvl_node_based(n_nodes_in)
+        run_all_co2_lvl_edge_based(n_nodes_in)

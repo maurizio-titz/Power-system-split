@@ -21,11 +21,12 @@ import networkx as nx
 import multiprocessing as mp
 from functools import partial
 
+from utils.config import path_to_indicator_vectors, path_to_pypsa_network, path_to_cascade_results, path_to_evaluation_results
 from utils.data_handling import (load_pypsa_network,
                                  build_networkx_graph,
                                  nx_edges_to_matrix_indices)
 
-fpath_out_root = "results/sclopf/indicator_vectors_rocof_lshare_edges"
+fpath_out_root = path_to_indicator_vectors
 if not os.path.exists(fpath_out_root):
     os.mkdir(fpath_out_root)
 
@@ -74,10 +75,10 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_lvl: float,
     
     # Check before if the results already exists
     if save_res:
-        fpath_indi_vec_rocof_out = (fpath_out_root + 
+        fpath_indi_vec_rocof_out = (path_to_indicator_vectors + 
                                     "/indicator_vector_rocof_Co2l" + 
                                     "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
-        fpath_indi_vec_lshare_out = (fpath_out_root + 
+        fpath_indi_vec_lshare_out = (path_to_indicator_vectors + 
                                      "/indicator_vector_lshare_Co2l" + 
                                      "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
         
@@ -91,16 +92,17 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_lvl: float,
               flush=True)
         
     # Load component properties and indicator vector
-    path_to_cascade_results = ("results/sclopf/cascade_results/system_splits_Co2L" +
-                               "{0:.1f}_n{1}.pickle".format(co2_lvl, n_nodes))
-    with open(path_to_cascade_results, 'rb') as fh_in_casc:
+    path_to_cascade_results_file = (path_to_cascade_results + "/system_splits_Co2L" +
+                               "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
+    with gzip.open(path_to_cascade_results_file, 'rb') as fh_in_casc:
         cascade_dict = pickle.load(fh_in_casc)
         
-    path_to_indicator_vectors = ("results/sclopf/evaluation_results/" + 
-                                 "indicator_vectors_Co2L{0:.1f}_n{1}.npy".format(co2_lvl, n_nodes))
-    indicator_vector_arr = np.load(path_to_indicator_vectors)  
+    indicator_vectors_file_path = (path_to_evaluation_results + 
+                                 "indicator_vectors_Co2L{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
+    with gzip.open(indicator_vectors_file_path, 'rb') as fh_in_indi:
+        indicator_vector_arr = pickle.load(fh_in_indi)  
         
-    df_comp_props = pd.read_hdf("results/sclopf/evaluation_results/" + 
+    df_comp_props = pd.read_hdf(path_to_evaluation_results + 
                                 "component_properties_Co2L{0:.1f}_n{1}.h5".format(co2_lvl, n_nodes),
                                 key='df')
     if verbose:
@@ -186,7 +188,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
     
     # Check if files already exists
     if save_res:
-        fpath_out_edge_base = (fpath_out_root + "/indicator_vector_failed_edges_Co2l" +
+        fpath_out_edge_base = (path_to_indicator_vectors + "/indicator_vector_failed_edges_Co2l" +
                                "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
         if os.path.exists(fpath_out_edge_base) and not overwrite:
             raise IOError("File already exists! Please remove or choose 'overwrite=True'.")
@@ -198,10 +200,10 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
               flush=True)
         
     ## Results path of cascade simulations
-    path_to_cascade_results = ("results/sclopf/cascade_results/" + 
-                               "system_splits_Co2L{0:.1f}_n{1}.pickle".format(co2_lvl, n_nodes))
+    path_to_cascade_results_file = ("results/sclopf/cascade_results/" + 
+                               "system_splits_Co2L{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
     
-    with open(path_to_cascade_results, 'rb') as fh:
+    with gzip.open(path_to_cascade_results_file, 'rb') as fh:
         cascade_dict = pickle.load(fh)
         
     ## PyPSA network
@@ -249,7 +251,7 @@ def run_all_co2_lvl_edge_based(n_nodes: int, overwrite: bool=False) -> None:
     
     # Identify all input files
     ## Cascade and PyPSA files need to exist
-    glob_pypsa_search_str = ("data/European_networks_sclopf/" +
+    glob_pypsa_search_str = (path_to_pypsa_network +
                              "sclopf-elec_s_{0}*.nc".format(n_nodes))    
     pypsa_file_ls = glob(glob_pypsa_search_str)
     co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
@@ -269,11 +271,11 @@ def run_all_co2_lvl_node_based(n_nodes: int) -> None:
     
     # Identify all input files
     ## Cascade and PyPSA files need to exist
-    glob_pypsa_search_str = ("data/European_networks_sclopf/" +
+    glob_pypsa_search_str = (path_to_pypsa_network +
                              "sclopf-elec_s_{0}*.nc".format(n_nodes))    
     pypsa_file_ls = glob(glob_pypsa_search_str)
     co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
-    
+    print(co2_lvl_ls)
     for co2_r in co2_lvl_ls:
         if co2_r > 0.:
             extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_r, n_nodes,
@@ -287,7 +289,7 @@ def check_rocof_lshare_indicator_vectors(co2_lvl, nn_nodes=400, show_progress=Fa
     """Check if the indicator that gives the rocof and load share gives 
     consistent results with the previous results."""
     
-    path_in = "results/sclopf/indicator_vectors_rocof_lshare_edges"
+    path_in = path_to_evaluation_results
     
     ## Load Data
     # Load indicator vector rocof
@@ -383,7 +385,7 @@ def check_component_properties_indicatorvectors_all_co2lvl(nn_nodes=400,
             results = [async_r.get() for async_r in async_results]
             
     if save_it:
-        fpath_out = fpath_out_root + f"/check_rocof_allCo2lvls_nn{nn_nodes}.pklz"
+        fpath_out = path_to_indicator_vectors + f"/check_rocof_allCo2lvls_nn{nn_nodes}.pklz"
         with gzip.open(fpath_out, 'wb') as fh_out:
             pickle.dump(results, fh_out)
             
