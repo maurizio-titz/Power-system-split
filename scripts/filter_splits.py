@@ -223,5 +223,5 @@ if __name__ == "__main__":
         )
 
         split_properties_df.to_csv(
-            path_to_evaluation_results + f"split_significance_Co2L{co2l}_n{n_nodes}.csv"
+            path_to_evaluation_results + f"split_properties_Co2L{co2l}_n{n_nodes}.csv"
         )

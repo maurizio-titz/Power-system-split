@@ -42,7 +42,7 @@ print("loading masks")
 split_properties_all = []
 for co2l in co2l_list:
     split_properties_df = pd.read_csv(
-        path_to_evaluation_results + f"split_significance_Co2L{co2l}_n{NUM_NODES}.csv",
+        path_to_evaluation_results + f"split_properties_Co2L{co2l}_n{NUM_NODES}.csv",
         index_col=0,
     )
     split_properties_df["co2l"] = co2l
@@ -75,7 +75,7 @@ for indicator_type, transformation in indicator_type_transformation:
     print(transformation)
     for n_clusters in tqdm(n_clusters_list):
         print(n_clusters)
-        # split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_significance_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
+        # split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_properties_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
         # mask = split_mask(split_properties_df, n_nodes, lost_load_share)
         cluster_kmeans(
             NUM_NODES,

@@ -60,21 +60,21 @@ def get_most_likely_primary_links(pypsa_net: pypsa.Network, nx_graph: networkx.g
     return likelihood_primary_failures, likelihood_secondary_failures, list_names_vulnerable_links
 
 
-def calc_impactful_primary_links(co2lvl=None, split_significance_df=None):
+def calc_impactful_primary_links(co2lvl=None, split_properties_df=None):
     """calculate lost load caused by each trigger/primary failure."""
 
-    assert co2lvl is not None or split_significance_df is not None, "Either co2lvl or split_significance must be provided"
+    assert co2lvl is not None or split_properties_df is not None, "Either co2lvl or split_properties must be provided"
     
-    if split_significance_df is None:
-        split_significance_df = pd.read_csv(path_to_evaluation_results + 
-                                            f"split_significance_Co2L{co2lvl}_n400.csv", index_col=0)
-    lost_load_total_shares = split_significance_df.lost_load_total_share.values
+    if split_properties_df is None:
+        split_properties_df = pd.read_csv(path_to_evaluation_results + 
+                                            f"split_properties_Co2L{co2lvl}_n400.csv", index_col=0)
+    lost_load_total_shares = split_properties_df.lost_load_total_share.values
     
     cumulative_lost_load_share_by_initial_failure = defaultdict(float)
-    init_failures_0 = split_significance_df.init_failures_0.values
-    init_failures_1 = split_significance_df.init_failures_1.values
+    init_failures_0 = split_properties_df.init_failures_0.values
+    init_failures_1 = split_properties_df.init_failures_1.values
     
-    for ii in range(split_significance_df.shape[0]):
+    for ii in range(split_properties_df.shape[0]):
         lost_load_share_split = lost_load_total_shares[ii]
         cumulative_lost_load_share_by_initial_failure[init_failures_0[ii]] += lost_load_share_split
         cumulative_lost_load_share_by_initial_failure[init_failures_1[ii]] += lost_load_share_split

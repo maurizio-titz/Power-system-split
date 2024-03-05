@@ -184,7 +184,7 @@ if __name__ == "__main__":
         
         print(len(split_ind_to_component_ind))
         # load_indicator_vectors(n_nodes, co2, indicator_type, path_to_indicator_vectors, mask=None)
-        split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_significance_Co2L{co2}_n{n_nodes}.csv', index_col=0)
+        split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_properties_Co2L{co2}_n{n_nodes}.csv', index_col=0)
         component_mask = split_mask_component_vectors(mask, split_ind_to_component_ind, n_component_vectors)
         component_masks.append(component_mask)
 
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     #                 continue
     #             for n_clusters in tqdm(n_clusters_list):
     #                 print(n_clusters)
-    #                 #split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_significance_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
+    #                 #split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_properties_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
     #                 #mask = split_mask(split_properties_df, n_nodes, lost_load_share)
     #                 cluster_kmeans(
     #                     n_nodes,
