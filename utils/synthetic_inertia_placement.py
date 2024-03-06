@@ -22,12 +22,12 @@ from functools import partial
 from utils.data_handling import load_pypsa_network
 
 # Send messages to mattermost
+from utils.config import path_to_intertia_mitigation_results, path_to_evaluation_results, path_to_pypsa_network
 import utils.config as cfg
 from utils import send_mattermost_messages
 
-results_path_mitigation = "results/sclopf/syn_inertia_mitigation"
-if not os.path.exists(results_path_mitigation):
-    os.mkdir(results_path_mitigation)
+if not os.path.exists(path_to_intertia_mitigation_results):
+    os.mkdir(path_to_intertia_mitigation_results)
 
 
 def build_idx_to_node_idx_list_n_reverse(indicator_vec_arr: np.ndarray):
@@ -124,7 +124,7 @@ def greedy_inertia_placement_step(
         snapshot_weightings_arr (np.ndarray): Array with snapshot weightings showing 
             time length of a snapshots.
         split_to_node_list (list): List translating split number to node idx
-        delta_rot_energy (float): Change in rotational energy.
+        delta_rot_energy (float): Change in rotational energy in MWs.
         rocof_neg_threshold (float): Threshold below in Hz/s 
             which a split component is considered to be unrecoverable.
         load_share_threshold (float): Load threshold for a split component to be considered.
@@ -231,6 +231,7 @@ def run_greedy_inertia_placement(
     resolve_equality_method: str = 'random',
     atol: float = 1e-8,
     revert_change_fac: bool = False,
+    fixed_step_size: bool = True,
 ) -> tuple:
     """Run inertia placement to reduce the amount of lost load, which is defined as the 
     load in a component that suffers a rocof small er as 'rocof_threshold_Hz_s'.
@@ -253,6 +254,8 @@ def run_greedy_inertia_placement(
             where inertia was placed previously), hindsight_concentrate (mix of hindsight and resolving by 
             concentrating inertia). If a conflict remains, random node is chosen.
         atol (float, optional): absolute tolerance for comparison. Defaults to 1e-8.
+        revert_change_fac: If 'True', the step size is reset after after placing inertia.
+        fixed_step_size: If 'True', the step size is fixed and not increased if no change is detected. Instead an error is raised.
 
     Returns:
         modified_comp_index, modified_comp_arr,
@@ -318,7 +321,12 @@ def run_greedy_inertia_placement(
 
         # If no change was detected, more synthetic rot. energy is added
         if (proposed_load_loss_change == 0).all():
+            
+            if fixed_step_size:
+                raise BaseException("No change detected, but fixed step size is used. Use larger delta_rot_energy_factor")
+            
             delta_rot_energy_factor += 1.0
+            
             
             print("no")
 
@@ -431,14 +439,14 @@ def run_specific_co2lvl_n_size(
     assert rocof_threshold_Hz_s < 0
 
     # Load files for DataFrame collecting component properties, indicator vectors and PyPSA network.
-    fpath_component_in = f"results/sclopf/evaluation_results/component_properties_Co2L{co2_lvl:.1f}_n{nn_nodes}.h5"
+    fpath_component_in = path_to_evaluation_results + f"component_properties_Co2L{co2_lvl:.1f}_n{nn_nodes}.h5"
     component_df = pd.read_hdf(fpath_component_in, key="df")
 
-    fpath_indicator_vec_in = f"results/sclopf/evaluation_results/indicator_vectors_Co2L{co2_lvl:.1f}_n{nn_nodes}.npy"
+    fpath_indicator_vec_in = path_to_evaluation_results + f"indicator_vectors_Co2L{co2_lvl:.1f}_n{nn_nodes}.npy"
     indicator_vec_arr = np.load(fpath_indicator_vec_in)
 
     fpath_pypsa_network = (
-        "data/European_networks_sclopf/"
+        path_to_pypsa_network
         + f"sclopf-elec_s_{nn_nodes}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc"
     )
     pypsa_net = load_pypsa_network(fpath_pypsa_network, True)
@@ -458,7 +466,7 @@ def run_specific_co2lvl_n_size(
 
     if save_it:
         fpath_out = (
-            results_path_mitigation
+            path_to_intertia_mitigation_results
             + f"/synthetic_inertia_placement_Co2{co2_lvl:.2f}_N{nn_nodes}"
             + f"_deltarotE{delta_rot_energy:.2f}_rocofthres{rocof_threshold_Hz_s:.2f}"
             + f"_lshare{lshare_threshold:.2f}_maxiter{max_iter}_{resolve_equality_method}"

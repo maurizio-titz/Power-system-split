@@ -9,5 +9,6 @@ path_to_clustering_results = root_path + "/results/sclopf/clustering/"
 path_to_cascade_results = root_path + "/results/sclopf/cascade_results/"
 path_to_evaluation_results = root_path + "/results/sclopf/evaluation_results/"
 path_to_pypsa_network = root_path + "/data/European_networks_sclopf/"
+path_to_intertia_mitigation_results = root_path + "/results/sclopf/syn_inertia_mitigation/"
 
 mattermost_url = None
