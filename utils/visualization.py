@@ -19,7 +19,7 @@ from tqdm import tqdm
 sys.path.append("./")
 from utils import data_handling
 from utils.config import path_to_clustering_results, path_to_pypsa_network
-from utils.plotting import plot_clusters
+from utils.clustering_visualisation import plot_clusters
 
 
 def calc_likelihood_failure(
