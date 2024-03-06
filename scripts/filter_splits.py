@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from utils.config import *
+from utils.config import path_to_evaluation_results, path_to_indicator_vectors
 
 
 def add_lost_load_to_component_props(component_props):
@@ -31,11 +31,11 @@ def add_lost_load_to_component_props(component_props):
     )
 
     component_props["lost_load_shedding"] = component_props.power_imbalance
-    component_props.lost_load_shedding[component_props.lost_load_shedding > 0] = 0
+    component_props.loc[component_props.lost_load_shedding > 0, "lost_load_shedding"] = 0
     component_props.lost_load_shedding = component_props.lost_load_shedding * -1
 
-    component_props["lost_load_rocof"] = 0
-    component_props.lost_load_rocof[component_props.rocof < -1] = component_props.load[
+    component_props["lost_load_rocof"] = 0.0
+    component_props.loc[component_props.rocof < -1, "lost_load_rocof"] = component_props.load[
         component_props.rocof < -1
     ]
 
@@ -81,7 +81,18 @@ def split_mask(split_properties_df, n_nodes, lost_load_share):
     return np.array(index_mask)
 
 
-def calc_split_props(component_props, indicator_lshare_df):
+def calc_split_props(component_props, indicator_lshare_df, co2l):
+    """calculate properties of splits from component properties and indicator vectors.
+
+    Args:
+        component_props (pd.DataFrame): _description_
+        indicator_lshare_df (np.ndarray): _description_
+        co2l (float): _description_
+
+    Returns:
+        pd.DataFrame: split properties containing loss of load etc.
+    """
+    
     split_properties = {}
 
     ind = 0
@@ -116,7 +127,6 @@ def calc_split_props(component_props, indicator_lshare_df):
         lost_load_rocof = current_component_props.lost_load_rocof.sum()
         lost_load_shedding = current_component_props.lost_load_shedding.sum()
         largest_component_load = current_component_props.load.max()
-        co2l = current_component_props.co2l.iloc[0]
 
         # get number of nodes that split from main component
         lshare_vec = indicator_lshare_df.loc[ind, "indicator_vector_lshare"]
@@ -124,7 +134,6 @@ def calc_split_props(component_props, indicator_lshare_df):
         n_components = len(current_component_props)
 
         split_properties[ind] = {
-            "co2l": co2l,
             "time_stamp": current_time_stamp,
             "init_failures_0": current_initial_failures[0],
             "init_failures_1": current_initial_failures[1],
@@ -141,10 +150,24 @@ def calc_split_props(component_props, indicator_lshare_df):
         # remove first max_ind_current_split rows of component_props
         component_props = component_props.iloc[max_ind_current_split + 1 :]
         ind += 1
+    
+    split_properties_df = pd.DataFrame.from_dict(split_properties, orient="index")
+    split_properties_df["lost_load_rocof_share"] = (
+        split_properties_df.lost_load_rocof / split_properties_df.total_load
+    )
+    split_properties_df["lost_load_shedding_share"] = (
+        split_properties_df.lost_load_shedding / split_properties_df.total_load
+    )
+    split_properties_df["lost_load_total_share"] = (
+        split_properties_df.lost_load_total / split_properties_df.total_load
+    )
+    split_properties_df["co2l"] = co2l
 
+    split_properties_df.to_csv(
+        path_to_evaluation_results + f"split_properties_Co2L{co2l}_n{n_nodes}.csv"
+    )
+    
     pbar.close()
-
-    return split_properties
 
 
 def split_mask_component_vectors(
@@ -209,19 +232,4 @@ if __name__ == "__main__":
             index_tuple_time_split, indicator_vector_lshare
         )
 
-        split_properties = calc_split_props(component_props, indicator_lshare_df)
-
-        split_properties_df = pd.DataFrame.from_dict(split_properties, orient="index")
-        split_properties_df["lost_load_rocof_share"] = (
-            split_properties_df.lost_load_rocof / split_properties_df.total_load
-        )
-        split_properties_df["lost_load_shedding_share"] = (
-            split_properties_df.lost_load_shedding / split_properties_df.total_load
-        )
-        split_properties_df["lost_load_total_share"] = (
-            split_properties_df.lost_load_total / split_properties_df.total_load
-        )
-
-        split_properties_df.to_csv(
-            path_to_evaluation_results + f"split_properties_Co2L{co2l}_n{n_nodes}.csv"
-        )
+        split_properties = calc_split_props(component_props, indicator_lshare_df, co2l)
