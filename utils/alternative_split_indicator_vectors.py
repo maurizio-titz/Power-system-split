@@ -200,15 +200,14 @@ def find_failed_edge_indicator_vector_for_cascade_results(co2_lvl: float, n_node
               flush=True)
         
     ## Results path of cascade simulations
-    path_to_cascade_results_file = ("results/sclopf/cascade_results/" + 
+    path_to_cascade_results_file = (path_to_cascade_results + 
                                "system_splits_Co2L{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes))
     
     with gzip.open(path_to_cascade_results_file, 'rb') as fh:
         cascade_dict = pickle.load(fh)
         
     ## PyPSA network
-    pypsa_net = load_pypsa_network(co2_lvl, n_nodes,
-                                   'data/European_networks_sclopf/')
+    pypsa_net = load_pypsa_network(path_to_pypsa_network + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc", True)
     graph_nx = build_networkx_graph(pypsa_net, snet_index=snet_idx)
     
     edge_names_ls = list(graph_nx.edges())
@@ -255,10 +254,10 @@ def run_all_co2_lvl_edge_based(n_nodes: int, overwrite: bool=False) -> None:
                              "sclopf-elec_s_{0}*.nc".format(n_nodes))    
     pypsa_file_ls = glob(glob_pypsa_search_str)
     co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
-    
+    print(f"running edge based alternative indicator vectors: {co2_lvl_ls}")
     for co2_r in co2_lvl_ls:
-        if co2_r > 0.:
-            find_failed_edge_indicator_vector_for_cascade_results(co2_r, n_nodes,
+        print(co2_r)
+        find_failed_edge_indicator_vector_for_cascade_results(co2_r, n_nodes,
                                                                   save_res=True,
                                                                   verbose=True, 
                                                                   overwrite=overwrite)
@@ -275,10 +274,10 @@ def run_all_co2_lvl_node_based(n_nodes: int) -> None:
                              "sclopf-elec_s_{0}*.nc".format(n_nodes))    
     pypsa_file_ls = glob(glob_pypsa_search_str)
     co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
-    print(co2_lvl_ls)
+    print(f"running node based alternative indicator vectors: {co2_lvl_ls}")
     for co2_r in co2_lvl_ls:
-        if co2_r > 0.:
-            extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_r, n_nodes,
+        print(co2_r)
+        extract_nodal_rocof_and_load_share_in_split_from_old_results(co2_r, n_nodes,
                                                                          save_res=True,
                                                                          verbose=True)
     

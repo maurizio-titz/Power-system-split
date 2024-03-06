@@ -442,8 +442,9 @@ def run_specific_co2lvl_n_size(
     fpath_component_in = path_to_evaluation_results + f"component_properties_Co2L{co2_lvl:.1f}_n{nn_nodes}.h5"
     component_df = pd.read_hdf(fpath_component_in, key="df")
 
-    fpath_indicator_vec_in = path_to_evaluation_results + f"indicator_vectors_Co2L{co2_lvl:.1f}_n{nn_nodes}.npy"
-    indicator_vec_arr = np.load(fpath_indicator_vec_in)
+    fpath_indicator_vec_in = path_to_evaluation_results + f"indicator_vectors_Co2L{co2_lvl:.1f}_n{nn_nodes}.pklz"
+    with gzip.open(fpath_indicator_vec_in, "rb") as fh_in:
+        indicator_vec_arr = pickle.load(fh_in)
 
     fpath_pypsa_network = (
         path_to_pypsa_network
