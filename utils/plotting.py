@@ -2,17 +2,17 @@ import os
 
 os.chdir("..")
 # from utils.config import path_to_cascade_results, path_to_pypsa_network, path_to_statistics
-import pypsa
+# import pypsa
 import pickle
 import numpy as np
-import importlib
+# import importlib
 import networkx as nx
 from matplotlib import pyplot as plt
-import pandas as pd
+# import pandas as pd
 
-import sys
+# import sys
 import pickle
-import copy
+# import copy
 
 import networkx as nx
 import pandas as pd
@@ -21,16 +21,16 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.colors as mplcolors
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
-import seaborn as sns
-import matplotlib.lines as mlines
-from sklearn.cluster import KMeans
+# import seaborn as sns
+# import matplotlib.lines as mlines
+# from sklearn.cluster import KMeans
 import gzip
 
-import cartopy.crs as ccrs
-import cartopy
+# import cartopy.crs as ccrs
+# import cartopy
 
-from tqdm.notebook import tqdm
-from sklearn.metrics import silhouette_score
+# from tqdm.notebook import tqdm
+# from sklearn.metrics import silhouette_score
 
 from matplotlib import colors
 

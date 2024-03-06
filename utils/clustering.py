@@ -33,9 +33,9 @@ def cluster_kmeans(
     """
 
     if weights is None:
-        indicator_vectors = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights=None)
+        indicator_vectors = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors=path_to_indicator_vectors, mask=mask, weights=None)
     else:
-        indicator_vectors, weights = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights=weights)
+        indicator_vectors, weights = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors=path_to_indicator_vectors, mask=mask, weights=weights)
 
     with gzip.open(f"{path_to_clustering_results}/weights.pkl","wb") as fh_out:
         pickle.dump(weights, fh_out)

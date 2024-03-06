@@ -30,7 +30,7 @@ transformations = [
 ]
 indicator_type_transformation = [("lshare", "main_comp_most_frequent_lshare"), ("rocof", "blackout")]
 # n_clusters_list = [8, 16, 32, 48, 64, 96, 128]
-n_clusters_list = [128]
+n_clusters_list = [16, 128]
 NUM_NODES = 400
 
 n_nodes_split, lost_load_share = 5, 0.005

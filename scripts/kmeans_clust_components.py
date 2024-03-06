@@ -37,7 +37,7 @@ def cluster_kmeans(
         path_to_clustering_results (string): ....
     """
 
-    results = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask)
+    results = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors=path_to_indicator_vectors, mask=mask)
 
     indicator_vectors = results
     if test:

@@ -5,12 +5,13 @@ from tqdm import tqdm
 import sys
 import pandas as pd
 from collections import Counter
+from utils.config import path_to_indicator_vectors
 
-def load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask=None, weights=None):
-    if (isinstance(co2l, list) or isinstance(co2l, np.array)) and not isinstance(mask,list):
+def load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors=path_to_indicator_vectors, mask=None, weights=None):
+    if (isinstance(co2l, list) or isinstance(co2l, np.ndarray)) and not isinstance(mask,list):
         raise TypeError("if co2l is a list mask has to be a list, too")
     
-    if not ((isinstance(co2l, list) or isinstance(co2l, np.array)) or isinstance(co2l, float)):
+    if not ((isinstance(co2l, list) or isinstance(co2l, np.ndarray)) or isinstance(co2l, float)):
         Exception("co2l has to be float or list")
 
     if weights is None and isinstance(co2l, float):
@@ -97,7 +98,7 @@ def create_component_indicator_vectors(n_nodes, co2l, indicator_type, path_to_in
         mask (_type_): _description_
     """
     
-    indicator_vectors = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask)
+    indicator_vectors = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors=path_to_indicator_vectors, mask=mask)
     
     component_indicator_vectors = []
     split_ind_to_component_ind_list = []
