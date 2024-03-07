@@ -19,13 +19,10 @@ from tqdm import tqdm
 sys.path.append('./')
 from utils import cascade_simulation, data_handling
 from utils import visualization as vis
-from utils.config import *
+from utils.config import path_to_pypsa_network, path_to_cascade_results, path_to_evaluation_results, path_to_vis_results
 
 # Setup paths 
-path_to_pypsa_network   = data_path + 'European_networks_sclopf/'
-path_to_cascade_results   = results_path + 'sclopf/cascade_results/'
-path_to_eval_results= results_path + 'sclopf/evaluation_results/'
-save_path = results_path + 'sclopf/split_visualization/'
+save_path = path_to_vis_results
 
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
 # For our data set, "0" indicates the Continental European AC grid. 
@@ -33,7 +30,7 @@ snet_index = 0
 
 # Choose fraction of simulations for agglomerative clustering
 # (the rest is classified via NN classifier)
-subset_size_for_clustering = 0.01 
+# subset_size_for_clustering = 0.01 
 
 # Choose minimum distance between seperated cluster
 # (the node-criterion only selects splits with >10 nodes, 
@@ -41,7 +38,7 @@ subset_size_for_clustering = 0.01
 min_cluster_dist_nodes = 9
 
 # Load arguments
-n_nodes = int(sys.argv[1])
+n_nodes = 400
 
 # Setup co2 levels
 # TODO also include CO_2=0
@@ -51,11 +48,14 @@ n_nodes = int(sys.argv[1])
 # co2l_list = [float(xx.split("Co2L")[-1].split("-")[0]) 
 #              for xx in pypsa_file_ls if float(xx.split("Co2L")[-1].split("-")[0]) > 0]
 print("Available CO2 Levels:")
-# co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-co2l_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 print(sorted(co2l_list))
 # Load PyPSA network and the graph of the subnetwork 
-network = data_handling.load_pypsa_network(0.0, n_nodes, path_to_pypsa_network)
+fpath_pypsa_network = (
+        path_to_pypsa_network
+        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_list[0]}-2920SEG.nc"
+    )
+network = data_handling.load_pypsa_network(fpath_pypsa_network, True)
 nx_graph = data_handling.build_networkx_graph(network, snet_index= snet_index)
 I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(nx_graph)
 
@@ -70,12 +70,12 @@ component_props = pd.DataFrame()
 print('Concatenate components...')
 for co2l in tqdm(co2l_list):
 
-    # indicator_vec_level = np.load(path_to_eval_results + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.npy')
-    component_props_level = pd.read_hdf(path_to_eval_results + f'component_properties_Co2L{co2l}_n{n_nodes}.h5')
+    # indicator_vec_level = np.load(path_to_evaluation_results + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.npy')
+    component_props_level = pd.read_hdf(path_to_evaluation_results + f'component_properties_Co2L{co2l}_n{n_nodes}.h5')
     
     # indicator_vectors = np.concatenate([indicator_vectors, indicator_vec_level])
     component_props_level.loc[:, 'co2l'] = co2l
-    component_props = component_props.append(component_props_level, ignore_index=True)
+    component_props = pd.concat([component_props, component_props_level], ignore_index=True)
     
 # n_cluster, cluster_labels = vis.cluster_indicator_vectors_combined(indicator_vectors,
 #                                                                    min_cluster_distance=min_cluster_dist_nodes/len(nx_graph),
