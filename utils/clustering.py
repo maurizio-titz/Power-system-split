@@ -3,7 +3,7 @@ from sklearn.cluster import KMeans
 import pickle
 import gzip
 from sklearn.metrics import silhouette_score
-from tqdm import tqdm
+import os
 import sys
 from utils.indicator_utils import *
 
@@ -37,6 +37,7 @@ def cluster_kmeans(
     else:
         indicator_vectors, weights = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors=path_to_indicator_vectors, mask=mask, weights=weights)
 
+    os.makedirs(path_to_clustering_results, exist_ok=True)
     with gzip.open(f"{path_to_clustering_results}/weights.pkl","wb") as fh_out:
         pickle.dump(weights, fh_out)
     
@@ -79,6 +80,15 @@ def cluster_kmeans(
         )
 
     def transform_indicator_vectors(indicator_vectors, transformation):
+        """transforms indicator vectors to allow better clustering
+
+        Args:
+            indicator_vectors (np.ndarray): indicator vectors
+            transformation (str): name of transformation
+
+        Returns:
+            np.ndarray: transformed indicator vectors
+        """
         if transformation == "sign":
             indicator_vectors = np.sign(indicator_vectors)
         elif transformation == "tanh":
@@ -110,6 +120,16 @@ def cluster_kmeans(
         return indicator_vectors
 
 def calculate_samples_per_cluster(n_clusters, weights, labels):
+    """calculate the weighted number of samples per cluster
+
+    Args:
+        n_clusters (int): number of clusters
+        weights (list): weights given by snapshot lengths
+        labels (list): label of each sample, i.e. which cluster it belongs to
+
+    Returns:
+        _type_: _description_
+    """
     if weights is None:
         samples_per_centroid = np.unique(labels, return_counts=True)[1]
     else:

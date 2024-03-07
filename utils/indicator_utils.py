@@ -27,16 +27,17 @@ def load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vect
         return all_vectors, all_weights
         
     elif weights is not None and isinstance(co2l, list):
-        all_vectors, all_weights = load_indicator_vectors_unweighted_multiple_lvl(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights, all_vectors)
+        all_vectors, all_weights = load_indicator_vectors_weighted_multiple_lvl(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights)
         return all_vectors, all_weights
 
-def load_indicator_vectors_unweighted_multiple_lvl(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights, all_vectors):
+def load_indicator_vectors_weighted_multiple_lvl(n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights):
+    all_vectors = []
     all_weights = []
     for i,co2 in enumerate(co2l):
         file_name = f"indicator_vector_{indicator_type}_Co2l{co2}_n{n_nodes}.pklz"
         with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
             vectors_lvl = pickle.load(out)
-        weights_lvl = np.array([int(weights[x[0]]) for x in vectors_lvl[0]])
+        weights_lvl = np.array([int(weights[time_stamp[0]]) for time_stamp in vectors_lvl[0]])
         vectors_lvl = vectors_lvl[-1]
                 
         if mask is not None:
@@ -54,7 +55,7 @@ def load_indicator_vectors_weighted_single_lvl(n_nodes, co2l, indicator_type, pa
     file_name = f"indicator_vector_{indicator_type}_Co2l{co2l}_n{n_nodes}.pklz"
     with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
         all_vectors = pickle.load(out)
-    all_weights = [weights[x[0]] for x in all_vectors[0]]
+    all_weights = [weights[time_stamp[0]] for time_stamp in all_vectors[0]]
     all_vectors = all_vectors[-1]
     if mask is not None:
         all_weights = all_weights[mask]
