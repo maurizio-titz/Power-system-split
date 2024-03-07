@@ -35,7 +35,7 @@ NUM_NODES = 400
 
 n_nodes_split, lost_load_share = 5, 0.005
 
-co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
 
 # get masks
 print("loading masks")
@@ -57,7 +57,7 @@ masks = [
     for co2l in co2l_list
 ]
 # path = path_to_evaluation_results + f"/masks_all_n{n_nodes}.pklz"
-path = path_to_evaluation_results + f"/masks_0.1-0.8_n{NUM_NODES}.pklz"
+path = path_to_evaluation_results + f"/masks_0.6-0_n{NUM_NODES}_nns{n_nodes_split}_lls{lost_load_share}.pklz"
 with gzip.open(path, "wb") as out:
     pickle.dump(masks, out)
 # with gzip.open(path, 'rb') as out:
@@ -65,7 +65,8 @@ with gzip.open(path, "wb") as out:
 
 
 snet_index = 0
-network = data_handling.load_pypsa_network(0.5, NUM_NODES, path_to_pypsa_network)
+network = data_handling.load_pypsa_network(path_to_pypsa_network +
+                        f"sclopf-elec_s_{NUM_NODES}_ec_lv1.0_Co2L{0.5}-2920SEG.nc", True)
 nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 snapshot_weights = network.snapshot_weightings.objective
 
@@ -73,7 +74,7 @@ print("performing clustering")
 for indicator_type, transformation in indicator_type_transformation:
     print(indicator_type)
     print(transformation)
-    for n_clusters in tqdm(n_clusters_list):
+    for n_clusters in n_clusters_list:
         print(n_clusters)
         # split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_properties_Co2L{co2l}_n{n_nodes}.csv', index_col=0)
         # mask = split_mask(split_properties_df, n_nodes, lost_load_share)
