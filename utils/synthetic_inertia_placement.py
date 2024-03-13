@@ -140,7 +140,7 @@ def greedy_inertia_placement_step(
 
     # Check if component properties has all the entries needed (e.g., last day and first day)
     nn_nodes = indicator_vectors.shape[1]
-    mitigate_load_loss_node_arr = np.zeros(nn_nodes)
+    mitigate_load_share_loss_node_arr = np.zeros(nn_nodes)
 
     # Try which lost load can be mitigated when placing delta_rot_energy at each node
     # to pick the node with the maximum change (i.e., greedy optimization).
@@ -150,15 +150,15 @@ def greedy_inertia_placement_step(
         if (
             split_r[2] < rocof_neg_threshold
             and modified_rocof > rocof_neg_threshold
-            and split_r[4] > load_share_threshold
+            and split_r[3] > load_share_threshold
         ):
             idx_node_for_split = split_to_node_list[idx_split]
-            mitigated_load_loss_r = split_r[3]
-            mitigate_load_loss_node_arr[idx_node_for_split] += (
-                mitigated_load_loss_r * snapshot_weightings_arr[idx_split]
+            mitigated_load_share_loss_r = split_r[3]
+            mitigate_load_share_loss_node_arr[idx_node_for_split] += (
+                mitigated_load_share_loss_r * snapshot_weightings_arr[idx_split]
             )
 
-    return mitigate_load_loss_node_arr
+    return mitigate_load_share_loss_node_arr
 
 
 def _resolve_equality_concentrate_inertia(
@@ -296,7 +296,7 @@ def run_greedy_inertia_placement(
 
     # convert component_df to array
     modified_component_df = component_df_cut.loc[
-        :, ["rot_energy", "power_imbalance", "rocof", "load", "load_share"]
+        :, ["rot_energy", "power_imbalance", "rocof", "load_share"]
     ].copy()
     loss_share_before_mitigation = modified_component_df["load_share"].sum()
 
