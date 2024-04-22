@@ -17,7 +17,11 @@ from tqdm import tqdm
 sys.path.append("./")
 # Post messages to mattermost
 import utils.config as cfg
-from utils.config import path_to_pypsa_network, path_to_cascade_results, path_to_evaluation_results
+from utils.config import (
+    path_to_pypsa_network_sclopf,
+    path_to_cascade_results,
+    path_to_evaluation_results,
+)
 from utils import data_handling, send_mattermost_messages, subgraph_evaluation
 from utils.alternative_split_indicator_vectors import (
     run_all_co2_lvl_edge_based,
@@ -30,7 +34,7 @@ from utils.alternative_split_indicator_vectors import (
 # save_path =  './results/sclopf/evaluation_results/'
 
 # path_to_pypsa_network_lopf = "./data/European_networks_lopf/"
-path_to_pypsa_network_sclopf = path_to_pypsa_network
+path_to_pypsa_network_sclopf = path_to_pypsa_network_sclopf
 
 path_to_cascades_sclopf = path_to_cascade_results
 # path_to_cascades_lopf = "./results/lopf/cascade_results/"
@@ -263,5 +267,5 @@ if __name__ == "__main__":
     n_nodes_in = 400
     # for co2l_in in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
     #     evaluate_cascade(co2l_in, n_nodes_in)
-    run_all_co2_lvl_node_based(n_nodes_in)
     run_all_co2_lvl_edge_based(n_nodes_in)
+    # run_all_co2_lvl_node_based(n_nodes_in)

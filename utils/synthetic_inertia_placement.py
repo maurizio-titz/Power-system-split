@@ -5,33 +5,30 @@
 and lost load. This is done via adding rot energy to individual nodes
 iteratively (i.e., greedily to the one mitigating the most lost load)."""
 
+import gzip
+import itertools
+import multiprocessing
 import os
+import pickle
+from functools import partial
 
 import numpy as np
 import pandas as pd
-
-import gzip
-import pickle
-
 from tqdm import tqdm
 
-import multiprocessing
-import itertools
-from functools import partial
-
-from utils.data_handling import load_pypsa_network
-
-# Send messages to mattermost
-from utils.config import (
-    path_to_intertia_mitigation_results,
-    path_to_evaluation_results,
-    path_to_pypsa_network,
-)
 import utils.config as cfg
 from utils import send_mattermost_messages
 
-if not os.path.exists(path_to_intertia_mitigation_results):
-    os.mkdir(path_to_intertia_mitigation_results)
+# Send messages to mattermost
+from utils.config import (
+    path_to_evaluation_results,
+    path_to_inertia_mitigation_results,
+    path_to_pypsa_network_sclopf,
+)
+from utils.data_handling import load_pypsa_network
+
+if not os.path.exists(path_to_inertia_mitigation_results):
+    os.mkdir(path_to_inertia_mitigation_results)
 
 
 def build_idx_to_node_idx_list_n_reverse(indicator_vec_arr: np.ndarray):
@@ -235,7 +232,6 @@ def _resolve_equality_hindsight(
 
     return idx_node_picked, still_random
 
-
 def run_greedy_inertia_placement(
     component_df: pd.DataFrame,
     indicator_vec_arr: np.ndarray,
@@ -250,6 +246,7 @@ def run_greedy_inertia_placement(
     atol: float = 1e-8,
     revert_change_fac: bool = False,
     fixed_step_size: bool = True,
+    initial_added_inertia_by_node: np.ndarray = None,
 ) -> tuple:
     """Run inertia placement to reduce the amount of lost load, which is defined as the
     load in a component that suffers a rocof smaller than 'rocof_threshold_Hz_s'.
@@ -315,7 +312,15 @@ def run_greedy_inertia_placement(
     still_used_random_node_choice = 0
     delta_rot_energy_factor = 1.0
 
-    added_inertia_by_node = np.zeros(indicator_vec_arr.shape[1])
+    if initial_added_inertia_by_node is None:
+        added_inertia_by_node = np.zeros(indicator_vec_arr.shape[1])
+        starting_point_string = ""
+    else:
+        raise NotImplementedError(
+            "starting optimization with initial inertia not implemented yet"
+        )
+        added_inertia_by_node = initial_added_inertia_by_node
+        starting_point_string = "_warmStart"
 
     pbar = tqdm(range(max_iter), disable=not show_progress)
     for idx_step in pbar:
@@ -500,7 +505,7 @@ def run_specific_co2lvl_n_size(
         indicator_vec_arr = pickle.load(fh_in)
 
     fpath_pypsa_network = (
-        path_to_pypsa_network
+        path_to_pypsa_network_sclopf
         + f"sclopf-elec_s_{nn_nodes}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc"
     )
     pypsa_net = load_pypsa_network(fpath_pypsa_network, True)
@@ -520,10 +525,10 @@ def run_specific_co2lvl_n_size(
 
     if save_it:
         fpath_out = (
-            path_to_intertia_mitigation_results
-            + f"/synthetic_inertia_placement_Co2{co2_lvl:.2f}_N{nn_nodes}"
-            + f"_deltarotE{delta_rot_energy:.2f}_rocofthres{rocof_threshold_Hz_s:.2f}"
-            + f"_lshare{lshare_threshold:.2f}_maxiter{max_iter}_{resolve_equality_method}"
+            path_to_inertia_mitigation_results
+            + f"/synthetic_inertia_placement_Co2{co2_lvl:g}_N{nn_nodes}"
+            + f"_deltarotE{delta_rot_energy:g}_rocofthres{rocof_threshold_Hz_s:g}"
+            + f"_lshare{lshare_threshold:g}_maxiter{max_iter}_{resolve_equality_method}"
         )
 
         if revert_ch_rotE_fac:

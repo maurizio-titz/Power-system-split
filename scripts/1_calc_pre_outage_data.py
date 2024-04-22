@@ -10,15 +10,13 @@ import numpy as np
 from shapely.geometry import Point
 
 from utils import data_handling, subgraph_evaluation
-from utils.config import data_path, results_path
+from utils.config import path_to_pre_outage, path_to_pypsa_network_sclopf
 
 # Load arguments
 n_nodes = int(sys.argv[1])
 
 # Setup paths
-path_to_pypsa_network = data_path + "European_networks_sclopf/"
-save_path = results_path + f"sclopf/pre_outage_data/"
-os.makedirs(save_path, exist_ok=True)
+os.makedirs(path_to_pre_outage, exist_ok=True)
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
 # For our data set, "0" indicates the Continental European AC grid.
 snet_index = 0
@@ -27,7 +25,9 @@ snet_index = 0
 co2l_list = np.arange(0.0, 0.81, 0.1).round(1)
 
 # Get number of time steps and graph
-network = data_handling.load_pypsa_network(0.0, n_nodes, path_to_pypsa_network)
+network = data_handling.load_pypsa_network_wrapper(
+    0.0, n_nodes, path_to_pypsa_network_sclopf
+)
 nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 n_time_steps = network.snapshots.shape[0]
 
@@ -39,14 +39,16 @@ nodal_inertia_min_max = np.zeros((co2l_list.shape[0], 2, nx_graph.number_of_node
 for i, co2l in enumerate(co2l_list):
     print("Co2 level %.2f" % co2l)
 
-    network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
+    network = data_handling.load_pypsa_network_wrapper(
+        co2l, n_nodes, path_to_pypsa_network_sclopf
+    )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 
     for t_count, timestamp in enumerate(network.snapshots):
         obs = subgraph_evaluation.evaluate_observables_for_subgraphs(
             [nx_graph], network, timestamp, snet=0
         )
-        inertia_time_series[i, t_count] = obs.rot_energy
+        inertia_time_series[i, t_count] = obs[:, 0]
 
     # Select timestamps with min and max total inertia
     t_largest = network.snapshots[np.argmax(inertia_time_series[i])]
@@ -60,11 +62,15 @@ for i, co2l in enumerate(co2l_list):
                 [subgraph], network, timestamp, snet=0
             )
 
-            nodal_inertia_min_max[i, t_count, nodecount] = obs.rot_energy
+            nodal_inertia_min_max[i, t_count, nodecount] = obs[:, 0]
 
-np.save(save_path + f"inertia_time_series_all_co2ls_{n_nodes}.npy", inertia_time_series)
 np.save(
-    save_path + f"min_max_nodal_inertia_generation_all_co2ls_{n_nodes}.npy", nodal_inertia_min_max
+    path_to_pre_outage + f"inertia_time_series_all_co2ls_{n_nodes}.npy",
+    inertia_time_series,
+)
+np.save(
+    path_to_pre_outage + f"min_max_nodal_inertia_generation_all_co2ls_{n_nodes}.npy",
+    nodal_inertia_min_max,
 )
 
 
@@ -82,7 +88,9 @@ for i, co2l in enumerate(co2l_list):
 
     print("Co2 level %.2f" % co2l)
 
-    network = data_handling.load_pypsa_network(co2l, n_nodes, path_to_pypsa_network)
+    network = data_handling.load_pypsa_network_wrapper(
+        co2l, n_nodes, path_to_pypsa_network_sclopf
+    )
 
     ### NOTE: Here, the mean position is subtracted from the coordinates
     position_vector = np.array([pos[n] for n in nx_graph.nodes()])
@@ -123,14 +131,22 @@ for i, co2l in enumerate(co2l_list):
         if np.any(np.isnan(dipole_vector)):
             raise ValueError("SPI coordinates are not valid!")
 
-np.save(save_path + f"dipole_vector_time_series_all_co2ls_{n_nodes}.npy", dipole_vector)
-np.save(save_path + f"mean_nodal_consumption_all_co2ls_{n_nodes}.npy", mean_consumption_vector)
 np.save(
-    save_path + f"weighted_mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
+    path_to_pre_outage + f"dipole_vector_time_series_all_co2ls_{n_nodes}.npy",
+    dipole_vector,
+)
+np.save(
+    path_to_pre_outage + f"mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
+    mean_consumption_vector,
+)
+np.save(
+    path_to_pre_outage + f"weighted_mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
     weighted_mean_consumption_vector,
 )
 np.save(
-    save_path + f"graph_net_power_mismatch_time_series_all_co2ls_{n_nodes}.npy", graph_net_mismatch
+    path_to_pre_outage
+    + f"graph_net_power_mismatch_time_series_all_co2ls_{n_nodes}.npy",
+    graph_net_mismatch,
 )
 
 #### Calculate spatial power inhomogeneity ####
@@ -156,4 +172,4 @@ for i, co2l in enumerate(co2l_list):
         vec_norm[i, j] = distance
         if np.any(np.isnan(vec_norm)):
             raise ValueError("SPI coordinates are not valid!")
-np.save(save_path + f"spi_time_series_all_co2ls_{n_nodes}.npy", vec_norm)
+np.save(path_to_pre_outage + f"spi_time_series_all_co2ls_{n_nodes}.npy", vec_norm)

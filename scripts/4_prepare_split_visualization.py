@@ -22,7 +22,7 @@ sys.path.append("./")
 from utils import cascade_simulation, data_handling
 from utils import visualization as vis
 from utils.config import (
-    path_to_pypsa_network,
+    path_to_pypsa_network_sclopf,
     path_to_cascade_results,
     path_to_evaluation_results,
     path_to_vis_results,
@@ -60,7 +60,7 @@ co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 print(sorted(co2l_list))
 # Load PyPSA network and the graph of the subnetwork
 fpath_pypsa_network = (
-    path_to_pypsa_network
+    path_to_pypsa_network_sclopf
     + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_list[0]}-2920SEG.nc"
 )
 network = data_handling.load_pypsa_network(fpath_pypsa_network, True)

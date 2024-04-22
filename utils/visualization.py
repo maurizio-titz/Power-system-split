@@ -18,8 +18,8 @@ from tqdm import tqdm
 
 sys.path.append("./")
 from utils import data_handling
-from utils.config import path_to_clustering_results, path_to_pypsa_network
-from utils.clustering_visualisation import plot_clusters
+from utils.config import path_to_clustering_results, path_to_pypsa_network_sclopf
+from utils.clustering_visualisation import plot_clusters_wrapper
 
 
 def calc_likelihood_failure(
@@ -147,7 +147,9 @@ def cluster_indicator_vectors_combined(
     n_nodes = 400
     # data_path = "/media/data/system_split/data/European_networks_sclopf/"
     # path_to_pypsa_network = data_path + 'European_networks_sclopf/'
-    network = data_handling.load_pypsa_network(0.5, n_nodes, path_to_pypsa_network)
+    network = data_handling.load_pypsa_network(
+        0.5, n_nodes, path_to_pypsa_network_sclopf
+    )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
     pos = nx.get_node_attributes(nx_graph, "pos")
 
@@ -204,7 +206,7 @@ def cluster_indicator_vectors_combined(
     cmap = "viridis"
     if "rocof" in indicator_type:
         cmap = "coolwarm"
-    plot_clusters(
+    plot_clusters_wrapper(
         nx_graph,
         pos,
         f"{indicator_type}_{affinity}_minDist{min_cluster_distance}",

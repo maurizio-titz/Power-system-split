@@ -8,5 +8,6 @@ __pycache__/
 results/
 *.pickle
 *.h5
+*.png
 
 utils/config_local.py

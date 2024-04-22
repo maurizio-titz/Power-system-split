@@ -9,7 +9,12 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from utils.config import path_to_evaluation_results, path_to_indicator_vectors
+from utils import data_handling
+from utils.config import (
+    path_to_evaluation_results,
+    path_to_indicator_vectors,
+    path_to_pypsa_network_sclopf,
+)
 
 
 def add_lost_load_to_component_props(component_props):
@@ -31,13 +36,15 @@ def add_lost_load_to_component_props(component_props):
     )
 
     component_props["lost_load_shedding"] = component_props.power_imbalance
-    component_props.loc[component_props.lost_load_shedding > 0, "lost_load_shedding"] = 0
+    component_props.loc[
+        component_props.lost_load_shedding > 0, "lost_load_shedding"
+    ] = 0
     component_props.lost_load_shedding = component_props.lost_load_shedding * -1
 
     component_props["lost_load_rocof"] = 0.0
-    component_props.loc[component_props.rocof < -1, "lost_load_rocof"] = component_props.load[
-        component_props.rocof < -1
-    ]
+    component_props.loc[component_props.rocof < -1, "lost_load_rocof"] = (
+        component_props.load[component_props.rocof < -1]
+    )
 
     component_props["lost_load_total"] = component_props.loc[
         :, ["lost_load_shedding", "lost_load_rocof"]
@@ -67,21 +74,32 @@ def create_lshare_df(index_tuple_time_split, indicator_vector_lshare):
     return indicator_lshare_df
 
 
-def split_mask(split_properties_df, n_nodes, lost_load_share):
+def split_mask(
+    split_properties_df: pd.DataFrame,
+    n_nodes: int,
+    lost_load_share: float,
+    ignore_shedding: bool = False,
+):
     """create mask for filtering insignificant splits
 
     Args:
         n_nodes (int): minimal number of nodes in split-off component for split to be considered significant
         lost_load_share (float): minimal lost load share due to RoCoF and shedding for split to be considered significant
     """
-    index_mask = (split_properties_df.n_nodes_split_off > n_nodes) | (
-        split_properties_df.lost_load_total_share > lost_load_share
-    )
+
+    if ignore_shedding:
+        index_mask = (split_properties_df.n_nodes_split_off > n_nodes) | (
+            split_properties_df.lost_load_total_share > lost_load_share
+        )
+    else:
+        index_mask = (split_properties_df.n_nodes_split_off > n_nodes) | (
+            split_properties_df.lost_load_rocof_share > lost_load_share
+        )
 
     return np.array(index_mask)
 
 
-def calc_split_props(component_props, indicator_lshare_df, co2l):
+def calc_split_props(component_props, indicator_lshare_df, co2l, n_nodes=400):
     """calculate properties of splits from component properties and indicator vectors.
 
     Args:
@@ -92,7 +110,7 @@ def calc_split_props(component_props, indicator_lshare_df, co2l):
     Returns:
         pd.DataFrame: split properties containing loss of load etc.
     """
-    
+
     split_properties = {}
 
     ind = 0
@@ -150,7 +168,7 @@ def calc_split_props(component_props, indicator_lshare_df, co2l):
         # remove first max_ind_current_split rows of component_props
         component_props = component_props.iloc[max_ind_current_split + 1 :]
         ind += 1
-    
+
     split_properties_df = pd.DataFrame.from_dict(split_properties, orient="index")
     split_properties_df["lost_load_rocof_share"] = (
         split_properties_df.lost_load_rocof / split_properties_df.total_load
@@ -163,10 +181,20 @@ def calc_split_props(component_props, indicator_lshare_df, co2l):
     )
     split_properties_df["co2l"] = co2l
 
+    network = data_handling.load_pypsa_network(
+        path_to_pypsa_network_sclopf + "sclopf-elec_s_400_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        True,
+    )
+    split_properties_df["snapshot_weighting"] = (
+        network.snapshot_weightings.generators.loc[
+            split_properties_df.time_stamp
+        ].values
+    )
+
     split_properties_df.to_csv(
         path_to_evaluation_results + f"split_properties_Co2L{co2l}_n{n_nodes}.csv"
     )
-    
+
     pbar.close()
 
 
@@ -211,7 +239,8 @@ if __name__ == "__main__":
     n_nodes = 400
     co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 
-    for co2l in co2l_list[::-1]:
+    for co2l in [0.0]:
+        # for co2l in co2l_list[::-1]:
         print(f"co2l: {co2l}")
         # load component_props
         component_props = pd.read_hdf(
@@ -232,4 +261,4 @@ if __name__ == "__main__":
             index_tuple_time_split, indicator_vector_lshare
         )
 
-        split_properties = calc_split_props(component_props, indicator_lshare_df, co2l)
+        calc_split_props(component_props, indicator_lshare_df, co2l)

@@ -1,46 +1,30 @@
 import os
 
 os.chdir("..")
-# from utils.config import path_to_cascade_results, path_to_pypsa_network, path_to_statistics
-# import pypsa
+import copy
+import gzip
 import pickle
-import numpy as np
-# import importlib
-import networkx as nx
-from matplotlib import pyplot as plt
-# import pandas as pd
+from typing import Optional
 
-# import sys
-import pickle
-# import copy
-
-import networkx as nx
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.colors as mplcolors
-from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
-# import seaborn as sns
-# import matplotlib.lines as mlines
-# from sklearn.cluster import KMeans
-import gzip
-
-# import cartopy.crs as ccrs
-# import cartopy
-
-# from tqdm.notebook import tqdm
-# from sklearn.metrics import silhouette_score
-
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
+import pandas as pd
 from matplotlib import colors
+from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
-# from utils.config import path_to_pypsa_network, path_to_cascade_results
-from utils.config import path_to_evaluation_results, path_to_indicator_vectors
+from utils.clustering import get_path_to_clustering_dir, load_clustering
+from utils.config import (
+    path_to_clustering_results,
+    path_to_evaluation_results,
+    path_to_indicator_vectors,
+)
 
-# from utils import data_handling, cascade_simulation
 
-
-def plot_clusters(
+def plot_clusters_old(
     nx_graph,
     pos,
     indicator_name,
@@ -52,10 +36,8 @@ def plot_clusters(
     cmap="seismic",
     n_subplots=16,
 ):
-    if co2l == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
-        co2l_string = "all"
-    else:
-        co2l_string = co2l
+
+    co2l_string = co2l
 
     index_by_sample_numbers = np.argsort(samples_per_centroid)[::-1][:n_subplots]
 
@@ -335,8 +317,8 @@ def plot_centroid_with_failures(
         )
 
 
-def load_lost_load_share(
-    n_nodes=400, mask=None, co2l_list=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+def load_lost_load_share_broken(
+    n_nodes=400, mask=None, co2l_list=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
 ):
     if mask is None:
         path = path_to_evaluation_results + f"masks_all_n400.pklz"
@@ -355,24 +337,62 @@ def load_lost_load_share(
     return np.concatenate(vectors)
 
 
+def get_lost_load_share(
+    masks,
+    n_nodes=400,
+    co2l_list=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6),
+    lost_load_type="total",
+    dir=None,
+):
+    if dir is not None:
+        with gzip.open(f"{dir}/lost_load_{lost_load_type}_share.pklz", "rb") as out:
+            return pickle.load(out)
+
+    lost_load_all = []
+    for co2l, mask in zip(co2l_list, masks):
+        split_properties = pd.read_csv(
+            path_to_evaluation_results + f"split_properties_Co2L{co2l}_n{n_nodes}.csv",
+            index_col=0,
+        )
+        lost_load = split_properties[f"lost_load_{lost_load_type}_share"].values
+        lost_load_all.append(lost_load[mask])
+
+    if dir is not None:
+        with gzip.open(f"{dir}/lost_load_{lost_load_type}_share.pklz", "wb") as out:
+            pickle.dump(np.concatenate(lost_load_all), out)
+
+    return np.concatenate(lost_load_all)
+
+
 def load_masked_indicator_vectors(
     indicator_type,
-    co2l_list=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8),
+    sub_dir=None,
+    co2l_list=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6),
     n_nodes=400,
     masks=None,
+    return_weights=False,
+    transformation=None,
+    n_nodes_split=None,
+    lost_load_share=None,
 ):
+    if (return_weights or masks is None) and sub_dir is None:
+        sub_dir = get_path_to_clustering_dir(
+            n_nodes=n_nodes,
+            co2l=co2l,
+            indicator_type=indicator_type,
+            transformation=transformation,
+            n_nodes_split=n_nodes_split,
+            lost_load_share=lost_load_share,
+        )
+
     if masks is None:
-        if "component" in indicator_type:
-            path = path_to_evaluation_results + f"components_masks_all_n{n_nodes}.pklz"
-        else:
-            path = path_to_evaluation_results + f"masks_all_n{n_nodes}.pklz"
+        path = sub_dir + "masks.pklz"
 
         with gzip.open(path, "rb") as out:
             masks = pickle.load(out)
 
     vectors = []
     for co2l, mask in zip(co2l_list, masks):
-        # path = path_to_evaluation_results + f"/total_lost_load_share_Co2L{co2l}_n{n_nodes}.pklz"
         path = (
             path_to_indicator_vectors
             + f"/indicator_vector_{indicator_type}_Co2l{co2l}_n{n_nodes}.pklz"
@@ -380,8 +400,10 @@ def load_masked_indicator_vectors(
         with gzip.open(path, "rb") as out:
             vectors.append(pickle.load(out)[-1][mask])
 
-            # with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
-            #     results.append(pickle.load(out)[-1])
+    if return_weights:
+        with gzip.open(f"{sub_dir}/weights.pklz", "rb") as fh_in:
+            weights = pickle.load(fh_in)
+        return np.concatenate(vectors), weights
 
     return np.concatenate(vectors)
 
@@ -434,17 +456,19 @@ def plot_clusters_lost_load(
     ncols=4,
     titles=None,
     group_affiliation=None,
+    show_ind=False,
+    show=True,
 ):
     # edge_cmap = mpl.cm.get_cmap(edge_cmap)
-    if co2l == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
-        co2l_string = "all"
-    else:
-        co2l_string = co2l
+    # if co2l == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+    #     co2l_string = "all"
+    # else:
+    co2l_string = co2l
 
     index_by_sample_numbers = np.argsort(samples_per_centroid)[::-1][:n_subplots]
 
     if total_lost_load_share is None:
-        total_lost_load_share = load_lost_load_share(mask=mask)
+        total_lost_load_share = get_lost_load_share(masks=mask, co2l_list=co2l)
     # if original_ind_to_components_ind is not None:
     #     total_lost_load_share = map_components_to_original(
     #         total_lost_load_share, original_ind_to_components_ind
@@ -456,10 +480,10 @@ def plot_clusters_lost_load(
     # if edge_centroids is None:
     #     failed_edges = load_masked_indicator_vectors("failed_edges", masks=mask)
 
-    if centroid_mean_distance != None:
-        normalized_centroid_mean_distance = centroid_mean_distance / max(
-            centroid_mean_distance
-        )
+    # if centroid_mean_distance != None:
+    #     normalized_centroid_mean_distance = centroid_mean_distance / max(
+    #         centroid_mean_distance
+    #     )
 
     sum_lost_load_share_per_centroid = np.array(
         [np.sum(total_lost_load_share[labels == i]) for i in range(len(centroids))]
@@ -478,25 +502,10 @@ def plot_clusters_lost_load(
     vmax = max(maxes)
     vmin = min(mins)
 
-    # if "clipped_tanh" in indicator_name:
-    #     vmax = 0
-    #     vmin = -1.0
-    # elif "clipped" in indicator_name:
-    #     vmax = 0
-    #     vmin = vmin
-    # elif "tanh" in indicator_name or "sign" in indicator_name:
-    #     vmax = 1.0
-    #     vmin = -1.0
-    # elif "lshare" in indicator_name:
-    #     vmax = 1.0
-    #     vmin = 0.0
-    #     if "main" in cbar_label:
-    #         vmin = 0.001
-    #         centroids = np.abs(centroids - 1)
-
     vmax = 1.0
     vmin = 10**-3
-    centroids = np.abs(centroids - 1)
+    if "main" in indicator_name:
+        centroids = np.abs(centroids - 1)
 
     vmin_edge = 1e-3
     vmax_edge = 1
@@ -507,7 +516,9 @@ def plot_clusters_lost_load(
     n_subplots = min(n_subplots, len(centroids))
     n_rows = int(np.ceil(n_subplots / ncols))
     fig = plt.figure(figsize=(ncols * 3, n_rows * 3))
-    gs = GridSpec(2, 1, figure=fig, height_ratios=[0.5, n_rows * 3], hspace=0.05)
+    gs = GridSpec(
+        2, 1, figure=fig, height_ratios=[0.5, n_rows * 3], hspace=0.5 / n_rows
+    )
     gs_maps = GridSpecFromSubplotSpec(
         n_rows, ncols, subplot_spec=gs[1], hspace=0.04, wspace=0.0
     )
@@ -574,9 +585,9 @@ def plot_clusters_lost_load(
 
         if titles is None:
             number_of_samples_string = sci_notation(samples_in_centriod, sig_fig=1)
-            cum_lost_load_symbol = r"$\bar{\sum loss}$"
+            cum_lost_load_symbol = r"$\bar{r}$"
             # sci_notation(number, sig_fig=2)
-            if centroid_mean_distance != None:
+            if centroid_mean_distance is not None:
                 title = (
                     f"{group_affiliation[ind]}\n"
                     + f"{cum_lost_load_symbol}={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\n"
@@ -585,9 +596,15 @@ def plot_clusters_lost_load(
                 )
             else:
                 title = (
-                    f"cum. l.l.={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\n"
-                    + f"n={number_of_samples_string}"
+                    f"{group_affiliation[ind]}\n"
+                    + r"$\bar{R}$"
+                    + f"={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\n"
+                    + f"n=$"
+                    + number_of_samples_string
+                    + "$"
                 )
+            if show_ind:
+                title = f"{ind}: " + title
         else:
             title = titles[ind]
         ax.set_title(
@@ -596,15 +613,6 @@ def plot_clusters_lost_load(
             loc="left",
         )
 
-    # if edge_centroid is None:
-    #     # cbar_ax = fig.add_axes([0.375, 0.05, 0.25, 0.03])
-    #     pass
-    # else:
-    #     # cbar_ax = fig.add_axes([0.25, 0.05, 0.2, 0.02 / n_rows * 3])
-    #     # # cbar_ax = fig.add_axes([0.0, 0.05, 0.3, 0.02/n_rows*3])
-    #     # cbar_ax_edge = fig.add_axes([0.55, 0.05, 0.2, 0.02 / n_rows * 3])
-    #     # # cbar_ax_edge = fig.add_axes([0.7, 0.05, 0.3, 0.02/n_rows*3])
-    #     # # sm_edge = plt.cm.ScalarMappable(cmap=edge_cmap, norm=plt.Normalize(vmin=vmin_edge, vmax=vmax_edge))
     sm_edge = plt.cm.ScalarMappable(
         cmap=edge_cmap, norm=mplcolors.LogNorm(vmin=vmin_edge, vmax=vmax_edge)
     )
@@ -622,9 +630,7 @@ def plot_clusters_lost_load(
     )  # , labelpad=-10)
     cb_edge.ax.xaxis.set_label_position("top")
 
-    sm = plt.cm.ScalarMappable(
-        cmap=cmap, norm=mplcolors.LogNorm(vmin=vmin_edge, vmax=vmax_edge)
-    )
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=mplcolors.LogNorm(vmin=vmin, vmax=vmax))
     cb = fig.colorbar(sm, cax=ax_node_colorbar, orientation="horizontal", aspect=1000)
     cb.ax.tick_params(labelsize=14, width=1.0, which="both")
     # if "main" in cbar_label:
@@ -633,20 +639,209 @@ def plot_clusters_lost_load(
     cb.ax.set_xlabel(cbar_label, fontsize=14, rotation=0)
     cb.ax.xaxis.set_label_position("top")
 
-    if save_dir != None:
+    if save_dir is not None:
+        fname = ""
         if edge_centroid is not None:
-            fig.savefig(
-                save_dir
-                + f"clusters_lines_lost_load_{indicator_name}_co2l{co2l_string}_k{len(centroids)}_vmin{vmin}{order_string}.pdf",
-                bbox_inches="tight",
+            fname = (
+                f"clusters_lines_lost_load_k{len(centroids)}_vmin{vmin}{order_string}"
             )
         else:
-            fig.savefig(
-                save_dir
-                + f"clusters_lost_load_{indicator_name}_co2l{co2l_string}_k{len(centroids)}_vmin{vmin}{order_string}.pdf",
-                bbox_inches="tight",
-            )
+            fname = f"clusters_lost_load_k{len(centroids)}_vmin{vmin}{order_string}"
+        if show_ind:
+            fname += "_inds"
+        fig.savefig(
+            save_dir + fname + ".pdf",
+            bbox_inches="tight",
+        )
+    if show:
         plt.close()
+
+
+def plot_clusters(
+    nx_graph: nx.Graph,
+    pos,
+    indicator_name: str,
+    co2l: list,
+    samples_per_centroid: Optional[np.ndarray],
+    centroids,
+    edge_centroids=None,
+    save_dir=None,
+    cmap: str = "seismic",
+    n_subplots: int = 16,
+    centroid_mean_distance=None,
+    edge_cmap: str = "inferno",
+    cbar_label: str = "",
+    ncols=4,
+    titles=None,
+    sort_by_sample_number: bool = False,
+):
+    """Plots the node indicator vector centroids as a map.
+
+    Args:
+        nx_graph (nx.Graph): _description_
+        pos (_type_): _description_
+        indicator_name (str): _description_
+        co2l (list): _description_
+        samples_per_centroid (Optional[np.ndarray]): _description_
+        centroids (_type_): _description_
+        labels (_type_): _description_
+        edge_centroids (_type_, optional): _description_. Defaults to None.
+        save_dir (_type_, optional): _description_. Defaults to None.
+        cmap (str, optional): _description_. Defaults to "seismic".
+        n_subplots (int, optional): _description_. Defaults to 16.
+        centroid_mean_distance (_type_, optional): _description_. Defaults to None.
+        edge_cmap (str, optional): _description_. Defaults to "inferno".
+        cbar_label (str, optional): _description_. Defaults to "".
+        mask (_type_, optional): _description_. Defaults to None.
+        ncols (int, optional): _description_. Defaults to 4.
+        titles (_type_, optional): _description_. Defaults to None.
+    """
+    co2l_string = str(max(co2l)) + "-" + str(min(co2l))
+    if (not samples_per_centroid is None) and sort_by_sample_number:
+        index_by_sample_numbers = np.argsort(samples_per_centroid)[::-1][:n_subplots]
+    else:
+        index_by_sample_numbers = np.arange(n_subplots)
+
+    maxes = [max(centroids[i]) for i in index_by_sample_numbers]
+    mins = [min(centroids[i]) for i in index_by_sample_numbers]
+    vmax = max(maxes)
+    vmin = min(mins)
+
+    vmax = 1.0
+    vmin = 10**-3
+    if "main" in cbar_label:
+        centroids = np.abs(centroids - 1)
+
+    vmin_edge = 1e-3
+    vmax_edge = 1
+
+    if cbar_label is None:
+        cbar_label = indicator_name.replace("_", " ")
+
+    n_subplots = min(n_subplots, len(centroids))
+    n_rows = int(np.ceil(n_subplots / ncols))
+    fig = plt.figure(figsize=(ncols * 3, n_rows * 3))
+    gs = GridSpec(2, 1, figure=fig, height_ratios=[0.5, n_rows * 3], hspace=0.05)
+    gs_maps = GridSpecFromSubplotSpec(
+        n_rows, ncols, subplot_spec=gs[1], hspace=0.04, wspace=0.0
+    )
+    gs_cbars = GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[0], hspace=0.0, wspace=0.2)
+    ax_node_colorbar = fig.add_subplot(gs_cbars[0])
+    ax_edge_colorbar = fig.add_subplot(gs_cbars[1])
+    mpl.style.use("default")
+    plt.rc("text", usetex=False)
+    plt.rc("text.latex", preamble=r"\usepackage{amsmath}")
+
+    plot_count = 0
+    for ind, gs_iter in zip(index_by_sample_numbers, gs_maps):
+        if plot_count == n_subplots:
+            break
+        plot_count += 1
+
+        centroid, samples_in_centriod = centroids[ind], samples_per_centroid[ind]
+        if edge_centroids is not None:
+            edge_centroid = edge_centroids[ind]
+
+        ax = fig.add_subplot(gs_iter)
+        nodes = nx.draw_networkx_nodes(
+            nx_graph,
+            pos=pos,
+            ax=ax,
+            node_color=centroid,
+            cmap=cmap,
+            vmax=vmax,
+            vmin=vmin,
+            node_size=10,
+        )
+        nodes.set_edgecolor("black")
+        nodes.set_linewidth(0.2)
+
+        if edge_centroid is None:
+            edges = nx.draw_networkx_edges(
+                nx_graph,
+                pos=pos,
+                ax=ax,
+                edge_color="black",
+                width=0.5,
+            )
+        else:
+            failed_edges_prob_log = np.array([np.log10(x) for x in edge_centroid])
+            edges = nx.draw_networkx_edges(
+                nx_graph,
+                pos=pos,
+                ax=ax,
+                width=1,
+                edge_cmap=edge_cmap,
+                edge_color=failed_edges_prob_log,
+                edge_vmin=np.log10(vmin_edge),
+                edge_vmax=np.log10(vmax_edge),
+            )
+
+        ax.axis("off")
+
+        if titles is None:
+            number_of_samples_string = sci_notation(samples_in_centriod, sig_fig=1)
+            cum_lost_load_symbol = r"$\bar{\sum loss}$"
+            # sci_notation(number, sig_fig=2)
+            if centroid_mean_distance != None:
+                title = (
+                    ""
+                    f"i={ind}\n"
+                    # + f"{cum_lost_load_symbol}={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\n"
+                    + f"n=${number_of_samples_string}$\n"
+                    # + f"d={round(normalized_centroid_mean_distance[ind],ndigits=1)}\n"
+                )
+            else:
+                title = (
+                    # f"cum. l.l.={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\n"
+                    # +
+                    f"n={number_of_samples_string}"
+                )
+        else:
+            title = titles[ind]
+        ax.set_title(
+            title,
+            y=0.73,
+            loc="left",
+        )
+
+    sm_edge = plt.cm.ScalarMappable(
+        cmap=edge_cmap, norm=mplcolors.LogNorm(vmin=vmin_edge, vmax=vmax_edge)
+    )
+    cb_edge = fig.colorbar(
+        sm_edge, cax=ax_edge_colorbar, orientation="horizontal", aspect=1000
+    )
+    cb_edge.ax.tick_params(labelsize=14, width=1.0, which="both")
+    cb_edge.ax.set_xlabel(
+        "edge failure prob",
+        fontsize=14,
+        rotation=0,
+    )  # , labelpad=-10)
+    cb_edge.ax.xaxis.set_label_position("top")
+
+    sm = plt.cm.ScalarMappable(
+        cmap=cmap, norm=mplcolors.LogNorm(vmin=vmin_edge, vmax=vmax_edge)
+    )
+    cb = fig.colorbar(sm, cax=ax_node_colorbar, orientation="horizontal", aspect=1000)
+    cb.ax.tick_params(labelsize=14, width=1.0, which="both")
+    cb.ax.set_xlabel(cbar_label, fontsize=14, rotation=0)
+    cb.ax.xaxis.set_label_position("top")
+
+    if edge_centroid is not None:
+        edge_string = "lines_"
+    else:
+        edge_string = ""
+    if sort_by_sample_number is not None:
+        sort_string = "_sorted"
+    else:
+        sort_string = ""
+
+    if save_dir is not None:
+        fig.savefig(
+            save_dir
+            + f"/clusters_{edge_string}{indicator_name}_co2l{co2l_string}_k{len(centroids)}_vmin{vmin}{sort_string}.pdf",
+            bbox_inches="tight",
+        )
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
@@ -665,7 +860,7 @@ def sci_notation(number, sig_fig=2):
     if float(a) == 1:
         return "10^" + str(b)
     else:
-        return a + " \cdot 10^{" + str(b) + "}"
+        return a + r" \cdot 10^{" + str(b) + "}"
 
 
 def plot_group_lost_load_hist_by_co2_single(
@@ -697,16 +892,17 @@ def plot_group_lost_load_hist_by_co2_single(
     """
     # cmap="cvidis"
     cmap = plt.get_cmap("cividis_r")
-    co2ls = np.arange(0.1, 0.81, 0.1).round(1)
+    co2ls = np.arange(0.0, 0.61, 0.1).round(1)
     group_mask = np.any([labels == i for i in centroid_inds], axis=0)
     lost_loads_lvl = [
         lost_loads[i][group_mask[masks_sig_to_co2[co2l_inds_hist[i]]]]
         for i in range(len(co2_lvls_hist))
     ]
     if ax is None:
-        fig, ax = plt.subplots(
-            1, len(co2_lvls_hist), figsize=(len(co2_lvls_hist) * 3, 3), sharey=True
-        )
+        fig, ax = plt.subplots()
+        # fig, ax = plt.subplots(
+        #     1, len(co2_lvls_hist), figsize=(len(co2_lvls_hist) * 3, 3), sharey=True
+        # )
     # fig, ax = plt.subplots(len(co2_lvls_hist),1, figsize=(3, 3), sharey=True)
     for i, co2l_ind in enumerate(co2l_inds_hist):
         co2 = co2_lvls_hist[i]
@@ -715,7 +911,7 @@ def plot_group_lost_load_hist_by_co2_single(
             weights=weights[group_mask & masks_sig_to_co2[co2l_ind]]
             / (n_failures_weighted),
             label=f"CO2={int(co2*100)}%",
-            bins=np.arange(0, 100, 5),
+            bins=np.linspace(0, 100, 21),
             alpha=0.8,
             log=True,
             color=cmap(np.where(co2ls == co2)[0][0] / (len(co2ls) - 1)),
@@ -801,3 +997,104 @@ def plot_group_lost_load_hist_by_co2(
     axes[0].set_ylabel("share of events [%]")
     if axes is None:
         fig.subplots_adjust(wspace=0.05)
+
+
+def plot_clusters_wrapper(
+    indicator_type: str,
+    transformation: str,
+    n_nodes: str,
+    n_clusters: int,
+    nx_graph: nx.Graph,
+    masks: list,
+    pos,
+    co2l=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6),
+    clustering_results_dir=None,
+    save_dir=None,
+    sort_by_sample_number=False,
+):
+    """plot all clusters for a given indicator type and transformation. Plots the node centroid and the corresponding edge centroid.
+
+    Args:
+        indicator_type (str): _description_
+        transformation (str): _description_
+        n_nodes (str): _description_
+        n_clusters (int): _description_
+        nx_graph (nx.Graph): _description_
+        masks (list): _description_
+        pos (_type_): _description_
+        co2l (tuple, optional): _description_. Defaults to (0.1, 0.2, 0.3, 0.4, 0.5, 0.6).
+        clustering_results_dir (str, optional): _description_.
+    """
+
+    if transformation == None:
+        indicator_name = indicator_type
+    else:
+        indicator_name = indicator_type + "_" + transformation
+
+    edge_cmap = copy.copy(mpl.cm.get_cmap("plasma_r"))
+    if "not_zero" in transformation:
+        node_cmap = plt.get_cmap("viridis")
+        node_cmap = truncate_colormap(node_cmap, 0.1, 0.9, 1000)
+    if indicator_type == "rocof" and transformation != "blackout":
+        node_cmap = plt.get_cmap("seismic")
+        node_cmap = truncate_colormap(node_cmap, 0.15, 0.85, 1000)
+        if transformation == "clipped":
+            node_cmap = plt.get_cmap("viridis")
+            node_cmap = truncate_colormap(node_cmap, 0.1, 0.9, 1000)
+    elif indicator_type == "lshare" or transformation == "blackout":
+        node_cmap = plt.get_cmap("plasma_r")
+        node_cmap = truncate_colormap(node_cmap, 0.1, 0.9, 1000)
+        node_cmap.set_under("gainsboro", 1.0)
+        edge_cmap = copy.copy(mpl.cm.get_cmap("cividis_r"))
+
+    edge_cmap.set_under("gainsboro", 1.0)
+    if "main" in transformation:
+        node_cbar_label = "split off main component prob"
+    elif "blackout" in transformation:
+        node_cbar_label = "blackout prob"
+    else:
+        node_cbar_label = None
+
+    labels, centroids, samples_per_centroid, centroid_mean_distance, _, _ = (
+        load_clustering(
+            n_nodes=n_nodes,
+            co2l=co2l,
+            n_clusters=n_clusters,
+            indicator_type=indicator_type,
+            load_dir=clustering_results_dir,
+            transformation=transformation,
+        )
+    )
+    os.makedirs(save_dir, exist_ok=True)
+    failed_edges_indicator_vectors, weights = load_masked_indicator_vectors(
+        "failed_edges",
+        masks=masks,
+        return_weights=True,
+        sub_dir=clustering_results_dir,
+    )
+    edge_centroids = np.array(
+        [
+            np.average(
+                failed_edges_indicator_vectors[labels == i],
+                axis=0,
+                weights=weights[labels == i],
+            )
+            for i in range(n_clusters)
+        ]
+    )
+    plot_clusters(
+        nx_graph,
+        pos,
+        indicator_name,
+        co2l,
+        samples_per_centroid,
+        centroids,
+        cmap=node_cmap,
+        n_subplots=n_clusters,
+        centroid_mean_distance=centroid_mean_distance,
+        edge_centroids=edge_centroids,
+        edge_cmap=edge_cmap,
+        save_dir=save_dir,
+        cbar_label=node_cbar_label,
+        sort_by_sample_number=sort_by_sample_number,
+    )
