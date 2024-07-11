@@ -21,14 +21,21 @@ from utils import send_mattermost_messages
 
 # Send messages to mattermost
 from utils.config import (
-    path_to_evaluation_results,
-    path_to_inertia_mitigation_results,
+    path_to_evaluation_results_lopf,
+    path_to_evaluation_results_sclopf,
+    path_to_inertia_mitigation_results_lopf,
+    path_to_inertia_mitigation_results_sclopf,
+    path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
 )
-from utils.data_handling import load_pypsa_network
+from utils.data_handling import load_pypsa_network, load_pypsa_network_wrapper
 
-if not os.path.exists(path_to_inertia_mitigation_results):
-    os.mkdir(path_to_inertia_mitigation_results)
+# if use_sclopf:
+#     path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_sclopf
+# else:
+#     path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_lopf
+# if not os.path.exists(path_to_inertia_mitigation_results):
+#     os.mkdir(path_to_inertia_mitigation_results)
 
 
 def build_idx_to_node_idx_list_n_reverse(indicator_vec_arr: np.ndarray):
@@ -232,6 +239,7 @@ def _resolve_equality_hindsight(
 
     return idx_node_picked, still_random
 
+
 def run_greedy_inertia_placement(
     component_df: pd.DataFrame,
     indicator_vec_arr: np.ndarray,
@@ -245,7 +253,7 @@ def run_greedy_inertia_placement(
     resolve_equality_method: str = "random",
     atol: float = 1e-8,
     revert_change_fac: bool = False,
-    fixed_step_size: bool = True,
+    fixed_step_size: bool = False,
     initial_added_inertia_by_node: np.ndarray = None,
 ) -> tuple:
     """Run inertia placement to reduce the amount of lost load, which is defined as the
@@ -441,7 +449,7 @@ def run_greedy_inertia_placement(
 
         current_loss = modified_comp_arr[modified_comp_arr[:, 2] < -1, 3].sum()
         mitigated_loss = np.array(inertia_placed_loss_mitigated_ls)[:, 3].sum()
-        deviation = (loss_share_before_mitigation - mitigated_loss) / current_loss
+        # deviation = (loss_share_before_mitigation - mitigated_loss) / current_loss
 
     return (
         modified_comp_index,
@@ -463,6 +471,7 @@ def run_specific_co2lvl_n_size(
     save_it: bool = True,
     show_progress: bool = True,
     revert_ch_rotE_fac: bool = False,
+    use_sclopf: bool = True,
 ) -> tuple:
     """Run the inertia placement for an optimized power system that was analyzed by
     running cascade experiments.
@@ -491,6 +500,15 @@ def run_specific_co2lvl_n_size(
     assert rocof_threshold_Hz_s < 0
 
     # Load files for DataFrame collecting component properties, indicator vectors and PyPSA network.
+    if use_sclopf:
+        path_to_evaluation_results = path_to_evaluation_results_sclopf
+        path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_sclopf
+        path_to_pypsa_network = path_to_pypsa_network_sclopf
+    else:
+        path_to_evaluation_results = path_to_evaluation_results_lopf
+        path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_lopf
+        path_to_pypsa_network = path_to_pypsa_network_lopf
+
     fpath_component_in = (
         path_to_evaluation_results
         + f"component_properties_Co2L{co2_lvl:.1f}_n{nn_nodes}.h5"
@@ -499,16 +517,16 @@ def run_specific_co2lvl_n_size(
 
     fpath_indicator_vec_in = (
         path_to_evaluation_results
-        + f"indicator_vectors_Co2L{co2_lvl:.1f}_n{nn_nodes}.pklz"
+        + f"component_indicator_vectors_Co2L{co2_lvl:.1f}_n{nn_nodes}.pklz"
     )
     with gzip.open(fpath_indicator_vec_in, "rb") as fh_in:
         indicator_vec_arr = pickle.load(fh_in)
 
     fpath_pypsa_network = (
-        path_to_pypsa_network_sclopf
+        path_to_pypsa_network
         + f"sclopf-elec_s_{nn_nodes}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc"
     )
-    pypsa_net = load_pypsa_network(fpath_pypsa_network, True)
+    pypsa_net = load_pypsa_network_wrapper(co2_lvl, nn_nodes, use_sclopf=use_sclopf)
     snapshot_weightings_generators = pypsa_net.snapshot_weightings.generators
 
     res_tuple = run_greedy_inertia_placement(
@@ -530,6 +548,7 @@ def run_specific_co2lvl_n_size(
             + f"_deltarotE{delta_rot_energy:g}_rocofthres{rocof_threshold_Hz_s:g}"
             + f"_lshare{lshare_threshold:g}_maxiter{max_iter}_{resolve_equality_method}"
         )
+        os.makedirs(path_to_inertia_mitigation_results, exist_ok=True)
 
         if revert_ch_rotE_fac:
             fpath_out += "_revertfac"
@@ -539,7 +558,7 @@ def run_specific_co2lvl_n_size(
 
         if cfg.mattermost_url is not None:
             message_text = (
-                f"Finished synthetic inertia placement for  "
+                "Finished synthetic inertia placement for  "
                 + f"N={nn_nodes}, C02_lvl={co2_lvl} and saved results in '"
                 + fpath_out
                 + "'."
@@ -549,7 +568,9 @@ def run_specific_co2lvl_n_size(
     return res_tuple
 
 
-def single_call(nn_nodes, co2_lvl, max_iter, revert_fac, resolve_method_n_delta_rot_e):
+def single_call(
+    nn_nodes, co2_lvl, use_sclopf, max_iter, revert_fac, resolve_method_n_delta_rot_e
+):
     """Wrapper to be used in 'run_different_parameters_fo_co2lvl'"""
 
     resolve_method, delta_rot_e = resolve_method_n_delta_rot_e
@@ -563,6 +584,7 @@ def single_call(nn_nodes, co2_lvl, max_iter, revert_fac, resolve_method_n_delta_
         max_iter=max_iter,
         resolve_equality_method=resolve_method,
         revert_ch_rotE_fac=revert_fac,
+        use_sclopf=use_sclopf,
     )
 
     return
@@ -571,16 +593,17 @@ def single_call(nn_nodes, co2_lvl, max_iter, revert_fac, resolve_method_n_delta_
 def run_different_parameters_for_co2lvl(
     co2_lvl: float,
     nn_nodes: int,
+    use_sclopf: bool,
     delta_rot_ls: list,
     max_iter=10000,
     nr_processes: int = 5,
     revert_chrotE_fac: bool = False,
-    resolve_equality_method_ls: list = [
+    resolve_equality_method_ls: list = (
         "random",
         "concentrate",
         "hindsight",
         "hindsight_concentrate",
-    ],
+    ),
 ) -> None:
     """Run the function 'run_specific_co2lvl_n_size' for the parameters
     giving delta_rot_energy.
@@ -599,7 +622,7 @@ def run_different_parameters_for_co2lvl(
 
     with multiprocessing.get_context("spawn").Pool(processes=nr_processes) as pool:
         partial_func = partial(
-            single_call, nn_nodes, co2_lvl, max_iter, revert_chrotE_fac
+            single_call, nn_nodes, co2_lvl, use_sclopf, max_iter, revert_chrotE_fac
         )
 
         [

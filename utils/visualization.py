@@ -18,8 +18,8 @@ from tqdm import tqdm
 
 sys.path.append("./")
 from utils import data_handling
-from utils.config import path_to_clustering_results, path_to_pypsa_network_sclopf
 from utils.clustering_visualisation import plot_clusters_wrapper
+from utils.config import path_to_clustering_results_sclopf, path_to_pypsa_network_sclopf
 
 
 def calc_likelihood_failure(
@@ -57,14 +57,15 @@ def calc_likelihood_failure(
             cascade_edges = data_handling.matrix_indices_to_nx_edges(cascade, nx_graph)
 
             for failed_edge in cascade_edges:
-
                 likelihood_secondary[failed_edge] += weight / number_of_simulations
 
-            init_edge1, init_edge2 = data_handling.matrix_indices_to_nx_edges(
+            init_edges = data_handling.matrix_indices_to_nx_edges(
                 init_failure, nx_graph
             )
-            likelihood_primary[init_edge1] += weight / number_of_simulations
-            likelihood_primary[init_edge2] += weight / number_of_simulations
+
+            # for single line failures init_edges is a list of tuples with one element
+            for init_edge in init_edges:
+                likelihood_primary[init_edge] += weight / number_of_simulations
 
     return likelihood_primary, likelihood_secondary
 
@@ -118,7 +119,7 @@ def cluster_indicator_vectors_combined(
     subset=0.05,
     n_jobs=20,
     affinity="hamming",
-    save_dir=path_to_clustering_results + "agglom/",
+    save_dir=path_to_clustering_results_sclopf + "agglom/",
 ):
     """Cluster indicator vectors of graph components into similar groups with Agglomerative clustering and
     Nearest-Neighbor classification combined.

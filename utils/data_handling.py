@@ -9,10 +9,16 @@ import os
 
 import networkx as nx
 import numpy as np
+import pandas as pd
 import pypsa
 from scipy import sparse
 
-from utils.config import path_to_pypsa_network_sclopf
+from utils.config import (
+    path_to_pypsa_network_lopf,
+    path_to_pypsa_network_sclopf,
+    path_to_vis_results_lopf,
+    path_to_vis_results_sclopf,
+)
 
 
 def build_networkx_graph(pypsa_network, snet_index=None):
@@ -107,15 +113,18 @@ def get_effective_injections(network, snapshot, nx_graph):
 
 def load_pypsa_network_wrapper(co2lvl, n_nodes, use_sclopf: bool = True):
     if not use_sclopf:
-        raise NotImplementedError(
-            "Only networks evaluated with SCLOPF by this function"
+        return load_pypsa_network(
+            path_to_pypsa_network_lopf
+            + f"elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-3H.nc",
+            use_sclopf,
         )
 
-    return load_pypsa_network(
-        path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-2920SEG.nc",
-        True,
-    )
+    else:
+        return load_pypsa_network(
+            path_to_pypsa_network_sclopf
+            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-2920SEG.nc",
+            use_sclopf,
+        )
 
 
 def load_pypsa_network(path_to_pypsa_network: str, use_sclopf: bool):
@@ -232,3 +241,30 @@ def get_matrices_from_nx_graph(nx_graph):
     )
 
     return I_m, B_d, num_parallels, line_limits
+
+
+def load_split_props(n_nodes: int, co2l=None, use_sclopf: bool = True):
+    """Load component properties for a certain Co2 constraint and aggregation level of n_nodes. If co2l is None, return all lvls.
+
+    Args:
+        co2l (float): Co2 constraint
+        n_nodes (int): Aggregation level of nodes
+        use_sclopf (bool): If 'True' the network is used was evaluated using security constrained lopf and
+            the outage lines are removed beforehand.
+
+    Returns:
+        split_properties (pandas.DataFrame): dataframe containing the properties of each split, e.g. loss, number of components etc.
+    """
+
+    if use_sclopf:
+        load_dir = path_to_vis_results_sclopf
+    else:
+        load_dir = path_to_vis_results_lopf
+
+    # load hdf pandas
+    split_properties = pd.read_hdf(load_dir + f"split_properties_all_n{n_nodes}.h5")
+
+    if co2l is not None:
+        return split_properties[split_properties.index.get_level_values("co2l") == co2l]
+
+    return split_properties

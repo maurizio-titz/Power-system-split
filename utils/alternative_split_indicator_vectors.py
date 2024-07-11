@@ -4,36 +4,37 @@
 """Find indicator vector for a split that either has the number
 of functioning links or the inertia in the split."""
 
-import os
-import sys
-
-import numpy as np
-import pandas as pd
-
 import gzip
+import multiprocessing as mp
+import os
 import pickle
-
-from tqdm import tqdm
+import sys
+from functools import partial
 from glob import glob
 
 import networkx as nx
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
 
-import multiprocessing as mp
-from functools import partial
-
-from utils.config import (
-    path_to_indicator_vectors,
+from utils.config import (  # path_to_cascade_results_lopf,
+    path_to_cascade_results_lopf,
+    path_to_cascade_results_sclopf,
+    path_to_evaluation_results_lopf,
+    path_to_evaluation_results_sclopf,
+    path_to_indicator_vectors_lopf,
+    path_to_indicator_vectors_sclopf,
+    path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
-    path_to_cascade_results,
-    path_to_evaluation_results,
 )
-from utils.data_handling import (
-    load_pypsa_network,
+from utils.data_handling import (  # nx_edges_to_matrix_indices,
     build_networkx_graph,
-    nx_edges_to_matrix_indices,
+    load_pypsa_network,
+    load_pypsa_network_wrapper,
+    load_split_props,
 )
 
-fpath_out_root = path_to_indicator_vectors
+fpath_out_root = path_to_indicator_vectors_sclopf
 if not os.path.exists(fpath_out_root):
     os.mkdir(fpath_out_root)
 
@@ -78,20 +79,28 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
     save_res: bool = True,
     verbose: bool = True,
     overwrite: bool = False,
+    use_sclopf: bool = True,
 ):
     """Use the results from the old indicator vectors to arrive at the
     vectors that give the RoCoF for every node's component"""
 
     # Check before if the results already exists
+    if use_sclopf:
+        path_to_cascade_results = path_to_cascade_results_sclopf
+        path_to_evaluation_results = path_to_evaluation_results_sclopf
+    else:
+        path_to_evaluation_results = path_to_evaluation_results_lopf
+        path_to_cascade_results = path_to_cascade_results_lopf
+
     if save_res:
         fpath_indi_vec_rocof_out = (
-            path_to_indicator_vectors
-            + "/indicator_vector_rocof_Co2l"
+            path_to_evaluation_results
+            + "/rocof_indicator_vector_Co2L"
             + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
         )
         fpath_indi_vec_lshare_out = (
-            path_to_indicator_vectors
-            + "/indicator_vector_lshare_Co2l"
+            path_to_evaluation_results
+            + "/lshare_indicator_vector_Co2L"
             + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
         )
 
@@ -111,17 +120,25 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
         )
 
     # Load component properties and indicator vector
-    path_to_cascade_results_file = (
-        path_to_cascade_results
-        + "/system_splits_Co2L"
-        + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
-    )
+    if use_sclopf:
+        path_to_cascade_results_file = (
+            path_to_cascade_results
+            + "/system_splits_Co2L"
+            + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+        )
+    else:
+        path_to_cascade_results_file = (
+            path_to_cascade_results
+            + "/system_splits_singlelinefailures_Co2L"
+            + "{0:.1f}_n{1}_lopf.pklz".format(co2_lvl, n_nodes)
+        )
+
     with gzip.open(path_to_cascade_results_file, "rb") as fh_in_casc:
         cascade_dict = pickle.load(fh_in_casc)
 
     indicator_vectors_file_path = (
         path_to_evaluation_results
-        + "indicator_vectors_Co2L{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+        + "component_indicator_vectors_Co2L{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
     )
     with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
         indicator_vector_arr = pickle.load(fh_in_indi)
@@ -138,12 +155,13 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
     df_comp_props.time_stamp = pd.to_datetime(df_comp_props.time_stamp)
 
     # Add list of tuples of initial failures
-    df_comp_props["init_failure_tuples"] = list(
-        zip(
-            df_comp_props.init_failure_0.astype(int),
-            df_comp_props.init_failure_1.astype(int),
+    if use_sclopf:
+        df_comp_props["init_failure_tuples"] = list(
+            zip(
+                df_comp_props.init_failure_0.astype(int),
+                df_comp_props.init_failure_1.astype(int),
+            )
         )
-    )
 
     # iterate through each time
     unique_times = pd.unique(df_comp_props.time_stamp)
@@ -165,9 +183,18 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
         df_time_r = df_comp_props.loc[df_comp_props.time_stamp == time_stamp_r]
 
         # Find the number of unique tuples aka number of splits
-        unique_init_tuples = pd.unique(df_time_r["init_failure_tuples"])
+        if use_sclopf:
+            unique_init_tuples = pd.unique(df_time_r["init_failure_tuples"])
+        else:
+            unique_init_tuples = pd.unique(df_time_r["init_failure"])
+
         for idx_split, init_tuple_r in enumerate(unique_init_tuples):
-            df_event_r = df_time_r.loc[df_time_r.init_failure_tuples == init_tuple_r]
+            if use_sclopf:
+                df_event_r = df_time_r.loc[
+                    df_time_r.init_failure_tuples == init_tuple_r
+                ]
+            else:
+                df_event_r = df_time_r.loc[df_time_r.init_failure == init_tuple_r]
 
             indicator_vector_view = indicator_vector_arr[df_event_r.index]
             assert (np.sum(indicator_vector_view, axis=0) == 1).all()
@@ -205,6 +232,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(
     save_res: bool = True,
     verbose: bool = True,
     overwrite: bool = False,
+    use_sclopf: bool = True,
 ) -> tuple:
     """Find the indicator vectors that has an entry for every split that has a 'True'
     if a link failed during the split.
@@ -227,35 +255,48 @@ def find_failed_edge_indicator_vector_for_cascade_results(
 
     # Check if files already exists
     if save_res:
-        fpath_out_edge_base = (
-            path_to_indicator_vectors
-            + "/indicator_vector_failed_edges_Co2l"
-            + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
-        )
+        if use_sclopf:
+            fpath_out_edge_base = (
+                path_to_evaluation_results_sclopf
+                + "/failed_edges_indicator_vector_Co2l"
+                + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+            )
+        else:
+            fpath_out_edge_base = (
+                path_to_evaluation_results_lopf
+                + "/failed_edges_indicator_vector_Co2l"
+                + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+            )
         if os.path.exists(fpath_out_edge_base) and not overwrite:
             raise IOError(
                 "File already exists! Please remove or choose 'overwrite=True'."
             )
+        os.makedirs(os.path.dirname(fpath_out_edge_base), exist_ok=True)
 
     # Load file
     if verbose:
         print("Loading cascade results and PyPSA output to generate graph:", flush=True)
 
     ## Results path of cascade simulations
-    path_to_cascade_results_file = (
-        path_to_cascade_results
-        + "system_splits_Co2L{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
-    )
+    if use_sclopf:
+        path_to_cascade_results_file = (
+            path_to_cascade_results_sclopf
+            + "system_splits_Co2L{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+        )
+    else:
+        path_to_cascade_results_file = (
+            path_to_cascade_results_lopf
+            + "system_splits_singlelinefailures_Co2L{0:.1f}_n{1}_lopf.pklz".format(
+                co2_lvl, n_nodes
+            )
+        )
 
     with gzip.open(path_to_cascade_results_file, "rb") as fh:
         cascade_dict = pickle.load(fh)
 
     ## PyPSA network
-    pypsa_net = load_pypsa_network(
-        path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc",
-        True,
-    )
+
+    pypsa_net = load_pypsa_network_wrapper(co2_lvl, n_nodes, use_sclopf=use_sclopf)
     graph_nx = build_networkx_graph(pypsa_net, snet_index=snet_idx)
 
     edge_names_ls = list(graph_nx.edges())
@@ -312,32 +353,52 @@ def find_failed_edge_indicator_vector_for_cascade_results(
     )
 
 
-def run_all_co2_lvl_edge_based(n_nodes: int, overwrite: bool = False) -> None:
+def run_all_co2_lvl_edge_based(
+    n_nodes: int, overwrite: bool = False, use_sclopf: bool = True
+) -> None:
+    """Calculate and save the edge based indicator vectors, i.e. the failed edge vectors, for all CO2 levels.
+
+    Args:
+        n_nodes (int): _description_
+        overwrite (bool, optional): _description_. Defaults to False.
+        use_sclopf (bool, optional): _description_. Defaults to True.
+    """
 
     # Identify all input files
     ## Cascade and PyPSA files need to exist
-    glob_pypsa_search_str = (
-        path_to_pypsa_network_sclopf + "sclopf-elec_s_{0}*.nc".format(n_nodes)
-    )
+    if use_sclopf:
+        path_to_pypsa_network = path_to_pypsa_network_sclopf
+    else:
+        path_to_pypsa_network = path_to_pypsa_network_lopf
+
+    glob_pypsa_search_str = path_to_pypsa_network + "*elec_s_{0}*.nc".format(n_nodes)
     pypsa_file_ls = glob(glob_pypsa_search_str)
     co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
     print(f"running edge based alternative indicator vectors: {co2_lvl_ls}")
     for co2_r in co2_lvl_ls:
         print(co2_r)
         find_failed_edge_indicator_vector_for_cascade_results(
-            co2_r, n_nodes, save_res=True, verbose=True, overwrite=overwrite
+            co2_r,
+            n_nodes,
+            save_res=True,
+            verbose=True,
+            overwrite=overwrite,
+            use_sclopf=use_sclopf,
         )
 
     return
 
 
-def run_all_co2_lvl_node_based(n_nodes: int) -> None:
+def run_all_co2_lvl_node_based(n_nodes: int, use_sclopf=True) -> None:
 
     # Identify all input files
     ## Cascade and PyPSA files need to exist
-    glob_pypsa_search_str = (
-        path_to_pypsa_network_sclopf + "sclopf-elec_s_{0}*.nc".format(n_nodes)
-    )
+    if use_sclopf:
+        path_to_pypsa_network = path_to_pypsa_network_sclopf
+    else:
+        path_to_pypsa_network = path_to_pypsa_network_lopf
+
+    glob_pypsa_search_str = path_to_pypsa_network + "*elec_s_{0}*.nc".format(n_nodes)
     pypsa_file_ls = glob(glob_pypsa_search_str)
     co2_lvl_ls = [float(xx.split("Co2L")[-1].split("-")[0]) for xx in pypsa_file_ls]
     print(f"running node based alternative indicator vectors: {co2_lvl_ls}")
@@ -354,26 +415,26 @@ def check_rocof_lshare_indicator_vectors(co2_lvl, nn_nodes=400, show_progress=Fa
     """Check if the indicator that gives the rocof and load share gives
     consistent results with the previous results."""
 
-    path_in = path_to_evaluation_results
+    path_in = path_to_evaluation_results_sclopf
 
     ## Load Data
     # Load indicator vector rocof
     fpath_rocof_in = (
-        path_in + f"/indicator_vector_rocof_Co2l{co2_lvl:.1f}_n{nn_nodes}.pklz"
+        path_in + f"/indicator_vector_rocof_Co2L{co2_lvl:.1f}_n{nn_nodes}.pklz"
     )
     with gzip.open(fpath_rocof_in, "rb") as fh_rocof_in:
         indi_vec_rocof = pickle.load(fh_rocof_in)[-1]
 
     # Load indicator vector lshare
     fpath_lshare_in = (
-        path_in + f"/indicator_vector_lshare_Co2l{co2_lvl:.1f}_n{nn_nodes}.pklz"
+        path_in + f"/indicator_vector_lshare_Co2L{co2_lvl:.1f}_n{nn_nodes}.pklz"
     )
     with gzip.open(fpath_lshare_in, "rb") as fh_lshare_in:
         indi_vec_lshare = pickle.load(fh_lshare_in)[-1]
 
     # Load indicator vector failed edges
     fpath_failed_edges = (
-        path_in + f"/indicator_vector_failed_edges_Co2l{co2_lvl:.1f}_n{nn_nodes}.pklz"
+        path_in + f"/indicator_vector_failed_edges_Co2L{co2_lvl:.1f}_n{nn_nodes}.pklz"
     )
     with gzip.open(fpath_failed_edges) as fh_edges_in:
         indi_vec_fedges = pickle.load(fh_edges_in)[-1]
@@ -462,7 +523,8 @@ def check_component_properties_indicatorvectors_all_co2lvl(
 
     if save_it:
         fpath_out = (
-            path_to_indicator_vectors + f"/check_rocof_allCo2lvls_nn{nn_nodes}.pklz"
+            path_to_indicator_vectors_sclopf
+            + f"/check_rocof_allCo2lvls_nn{nn_nodes}.pklz"
         )
         with gzip.open(fpath_out, "wb") as fh_out:
             pickle.dump(results, fh_out)
@@ -470,9 +532,10 @@ def check_component_properties_indicatorvectors_all_co2lvl(
     return results
 
 
-def get_indicator_vector_snapshot_weightings(co2lvl, n_nodes=400):
-    split_properties = pd.read_csv(
-        path_to_evaluation_results + f"split_properties_Co2L{co2lvl}_n{n_nodes}.csv",
-        index_col=0,
+def get_indicator_vector_snapshot_weightings(
+    co2lvl, n_nodes=400, use_sclopf: bool = True
+):
+    split_properties = load_split_props(
+        n_nodes=n_nodes, co2l=co2lvl, use_sclopf=use_sclopf
     )
     return split_properties.snapshot_weighting.values

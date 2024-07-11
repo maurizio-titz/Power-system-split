@@ -18,9 +18,10 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from utils.clustering import get_path_to_clustering_dir, load_clustering
 from utils.config import (
-    path_to_clustering_results,
-    path_to_evaluation_results,
-    path_to_indicator_vectors,
+    path_to_clustering_results_sclopf,
+    path_to_evaluation_results_lopf,
+    path_to_evaluation_results_sclopf,
+    path_to_indicator_vectors_sclopf,
 )
 
 
@@ -321,14 +322,14 @@ def load_lost_load_share_broken(
     n_nodes=400, mask=None, co2l_list=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
 ):
     if mask is None:
-        path = path_to_evaluation_results + f"masks_all_n400.pklz"
+        path = path_to_evaluation_results_sclopf + f"masks_all_n400.pklz"
         with gzip.open(path, "rb") as out:
             mask = pickle.load(out)
 
     vectors = []
     for co2l, mask in zip(co2l_list, mask):
         path = (
-            path_to_evaluation_results
+            path_to_evaluation_results_sclopf
             + f"/total_lost_load_share_Co2L{co2l}_n{n_nodes}.pklz"
         )
         with gzip.open(path, "rb") as out:
@@ -351,7 +352,8 @@ def get_lost_load_share(
     lost_load_all = []
     for co2l, mask in zip(co2l_list, masks):
         split_properties = pd.read_csv(
-            path_to_evaluation_results + f"split_properties_Co2L{co2l}_n{n_nodes}.csv",
+            path_to_evaluation_results_sclopf
+            + f"split_properties_Co2L{co2l}_n{n_nodes}.csv",
             index_col=0,
         )
         lost_load = split_properties[f"lost_load_{lost_load_type}_share"].values
@@ -374,6 +376,7 @@ def load_masked_indicator_vectors(
     transformation=None,
     n_nodes_split=None,
     lost_load_share=None,
+    use_sclopf=True,
 ):
     if (return_weights or masks is None) and sub_dir is None:
         sub_dir = get_path_to_clustering_dir(
@@ -393,10 +396,16 @@ def load_masked_indicator_vectors(
 
     vectors = []
     for co2l, mask in zip(co2l_list, masks):
-        path = (
-            path_to_indicator_vectors
-            + f"/indicator_vector_{indicator_type}_Co2l{co2l}_n{n_nodes}.pklz"
-        )
+        if use_sclopf:
+            path = (
+                path_to_evaluation_results_sclopf
+                + f"/{indicator_type}_indicator_vector_Co2L{co2l}_n{n_nodes}.pklz"
+            )
+        else:
+            path = (
+                path_to_evaluation_results_lopf
+                + f"/{indicator_type}_indicator_vector_Co2L{co2l}_n{n_nodes}.pklz"
+            )
         with gzip.open(path, "rb") as out:
             vectors.append(pickle.load(out)[-1][mask])
 
@@ -416,7 +425,7 @@ def map_components_to_original(values, original_ind_to_components_ind, n_nodes=4
         original_ind_to_components_ind (array): original index to component index mapping
     """
 
-    path = path_to_evaluation_results + f"masks_all_n{n_nodes}.pklz"
+    path = path_to_evaluation_results_sclopf + f"masks_all_n{n_nodes}.pklz"
     with gzip.open(path, "rb") as out:
         masks = pickle.load(out)
 
@@ -1002,7 +1011,7 @@ def plot_group_lost_load_hist_by_co2(
 def plot_clusters_wrapper(
     indicator_type: str,
     transformation: str,
-    n_nodes: str,
+    n_nodes: int,
     n_clusters: int,
     nx_graph: nx.Graph,
     masks: list,
@@ -1011,6 +1020,7 @@ def plot_clusters_wrapper(
     clustering_results_dir=None,
     save_dir=None,
     sort_by_sample_number=False,
+    use_sclopf=True,
 ):
     """plot all clusters for a given indicator type and transformation. Plots the node centroid and the corresponding edge centroid.
 
@@ -1063,6 +1073,7 @@ def plot_clusters_wrapper(
             indicator_type=indicator_type,
             load_dir=clustering_results_dir,
             transformation=transformation,
+            use_sclopf=use_sclopf,
         )
     )
     os.makedirs(save_dir, exist_ok=True)
@@ -1071,6 +1082,8 @@ def plot_clusters_wrapper(
         masks=masks,
         return_weights=True,
         sub_dir=clustering_results_dir,
+        use_sclopf=use_sclopf,
+        n_nodes=n_nodes,
     )
     edge_centroids = np.array(
         [

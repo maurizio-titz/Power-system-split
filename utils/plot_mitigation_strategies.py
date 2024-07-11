@@ -32,10 +32,15 @@ from tqdm import tqdm
 
 from utils import data_handling
 from utils.config import (
-    path_to_cascade_results,
-    path_to_evaluation_results,
-    path_to_inertia_mitigation_results,
-    path_to_line_extension_mitigation,
+    path_to_cascade_results_lopf,
+    path_to_cascade_results_sclopf,
+    path_to_evaluation_results_lopf,
+    path_to_evaluation_results_sclopf,
+    path_to_inertia_mitigation_results_lopf,
+    path_to_inertia_mitigation_results_sclopf,
+    path_to_line_extension_mitigation_lopf,
+    path_to_line_extension_mitigation_sclopf,
+    path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
 )
 
@@ -73,7 +78,7 @@ def plot_inertia_loss_mitigation_curve(
 
     if modified_comp_idx is None or inertia_placed_ls is None:
         fpath_in = (
-            path_to_inertia_mitigation_results
+            path_to_inertia_mitigation_results_sclopf
             + f"synthetic_inertia_placement_Co2{co2_lvl:g}"
             + f"_N{nn}_deltarotE{delta_Erot:g}_rocofthres{rocof_thres:g}"
             + f"_lshare{l_share:g}_maxiter{max_iter}_{resolve_strategy}.pklz"
@@ -153,6 +158,7 @@ def plot_map_inertia_placement_final(
     ref_loss_factor=1,
     color=color1,
     plot_curve=True,
+    use_sclopf=True,
 ):
     """Plot the results of the inertia placement"""
 
@@ -164,16 +170,20 @@ def plot_map_inertia_placement_final(
         raise ValueError(f"Unit '{unit}' not known!")
 
     # Load graph
-    fpath_pypsa = (
-        path_to_pypsa_network_sclopf
-        + "sclopf-elec_s_"
-        + f"{nn}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc"
-    )
-    pypsa_net = data_handling.load_pypsa_network(fpath_pypsa, use_sclopf=True)
+    pypsa_net = data_handling.load_pypsa_network_wrapper(co2_lvl, nn, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index=0)
     pos_nodes = networkx.get_node_attributes(nx_graph, "pos")
 
     # Load synthetic inertia placement
+    if use_sclopf:
+        path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_sclopf
+        path_to_evaluation_results = path_to_evaluation_results_sclopf
+    else:
+        path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_lopf
+        path_to_evaluation_results = path_to_evaluation_results_lopf
+
+    # os.mkdir(path_to_inertia_mitigation_results, exist_ok=True)
+
     fpath_in = (
         path_to_inertia_mitigation_results
         + f"synthetic_inertia_placement_Co2{co2_lvl:g}"
@@ -196,19 +206,14 @@ def plot_map_inertia_placement_final(
     # for each opitimization step holds: [idx_node, delta_rot_energy_factor]
 
     # get split properties
-    split_properties = pd.read_csv(
-        path_to_evaluation_results + f"split_properties_Co2L{co2_lvl}_n400.csv",
-        index_col=0,
-    )
+    split_properties = data_handling.load_split_props(co2_lvl, nn, use_sclopf)
+
     total_loss_share_rocof_lvl = (
-        split_properties.lost_load_rocof_share * split_properties.snapshot_weighting
+        split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
     ).sum()
-    split_properties = pd.read_csv(
-        path_to_evaluation_results + f"split_properties_Co2L{co2_lvl_ref}_n400.csv",
-        index_col=0,
-    )
+    split_properties = data_handling.load_split_props(co2_lvl_ref, nn, use_sclopf)
     total_loss_share_rocof_ref = (
-        split_properties.lost_load_rocof_share * split_properties.snapshot_weighting
+        split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
     ).sum()
 
     total_loss_share_rocof_ref_multiple = total_loss_share_rocof_ref * ref_loss_factor
@@ -382,7 +387,7 @@ def plot_map_inertia_placement_final(
     ax2.set_ylabel(y_label)
 
     if save_fig:
-        fig_path = f"{path_to_inertia_mitigation_results}/syn_inertia_map_co2lvl{co2_lvl:g}_nn{nn}_deltaErot{delta_Erot:g}_{resolve_strategy}.png"
+        fig_path = f"{path_to_inertia_mitigation_results_sclopf}/syn_inertia_map_co2lvl{co2_lvl:g}_nn{nn}_deltaErot{delta_Erot:g}_{resolve_strategy}.png"
 
         fig.savefig(fig_path, bbox_inches="tight")
         fig.clear()
@@ -420,7 +425,7 @@ def plot_map_inertia_placement(
 
     # Load synthetic inertia placement
     fpath_in = (
-        path_to_inertia_mitigation_results
+        path_to_inertia_mitigation_results_sclopf
         + f"synthetic_inertia_placement_Co2{co2_lvl:g}"
         + f"_N{nn}_deltarotE{delta_Erot:g}_rocofthres-1.00"
         + f"_lshare0.00_maxiter{max_iter}_{resolve_strategy}.pklz"
@@ -603,7 +608,7 @@ def plot_mitigate_load_loss_n_splits_over_time_diff_E0(
     for co2_idx, co2_lvl_r in enumerate(co2_lvl_ls):
         for E_idx, delta_Erot in enumerate(deltaE_ls):
             fpath_in = (
-                path_to_inertia_mitigation_results
+                path_to_inertia_mitigation_results_sclopf
                 + f"synthetic_inertia_placement_Co2{co2_lvl_r:.2f}"
                 + f"_N{nn}_deltarotE{delta_Erot:g}_rocofthres-1.00_lshare0.00"
                 + f"_maxiter{max_iter}_{resolve_method}.pklz"
@@ -696,6 +701,7 @@ def calc_inertia_placement_ref_loss(
     l_share=0.0,
     resolve_strategy="random",
     co2_lvls=(0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0),
+    use_sclopf=True,
 ):
     """calculates the synthetic inertia needed to reach the reference loss level for different CO2 levels.
 
@@ -714,16 +720,18 @@ def calc_inertia_placement_ref_loss(
         _type_: _description_
     """
 
-    split_properties = pd.read_csv(
-        path_to_evaluation_results + f"split_properties_Co2L{co2_lvl_ref}_n400.csv",
-        index_col=0,
-    )
+    split_properties = data_handling.load_split_props(co2_lvl_ref, n_nodes, use_sclopf)
+
     total_loss_share_rocof_ref = (
-        split_properties.lost_load_rocof_share * split_properties.snapshot_weighting
+        split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
     ).sum() * ref_loss_factor
 
     inertia_at_ref_loss_by_lvl = {}
 
+    if use_sclopf:
+        path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_sclopf
+    else:
+        path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_lopf
     for co2_lvl in co2_lvls:
         if co2_lvl == co2_lvl_ref:
             continue
@@ -745,12 +753,11 @@ def calc_inertia_placement_ref_loss(
 
         inertia_placed_res_arr = np.array(inertia_placed_ls)
 
-        split_properties = pd.read_csv(
-            path_to_evaluation_results + f"split_properties_Co2L{co2_lvl}_n400.csv",
-            index_col=0,
-        )
+        split_properties = data_handling.load_split_props(co2_lvl, n_nodes, use_sclopf)
+
         total_loss_share_rocof_lvl = (
-            split_properties.lost_load_rocof_share * split_properties.snapshot_weighting
+            split_properties.lost_load_share_blackout
+            * split_properties.snapshot_weighting
         ).sum()
 
         idx_reached_ref_loss = np.where(
@@ -807,9 +814,9 @@ def data_line_mitigation_diff_nnlines(
     """"""
 
     # Load file
-    meta_data_path = path_to_cascade_results
+    meta_data_path = path_to_cascade_results_sclopf
 
-    norm_path = meta_data_path + "system_splits_Co2L0.1_n400.pklz"
+    norm_path = meta_data_path + f"system_splits_Co2L0.1_n{nn}.pklz"
     with gzip.open(norm_path, "rb") as fh_in_norm:
         norm_dict = pickle.load(fh_in_norm)
 
@@ -821,7 +828,7 @@ def data_line_mitigation_diff_nnlines(
     for nn_lines in tqdm(n_lines_added):
         small_change_path = (
             meta_data_path
-            + "system_splits_Co2L0.1_n400_"
+            + f"system_splits_Co2L0.1_n{nn}_"
             + f"lineextension_nnlines{nn_lines}"
             + f"_deltanumpara{delta_para:.4g}_"
             + f"stopped_{stop_timestamp_str}.pklz"
@@ -835,7 +842,7 @@ def data_line_mitigation_diff_nnlines(
 
     if save_res:
         path_out = (
-            path_to_line_extension_mitigation
+            path_to_line_extension_mitigation_sclopf
             + f"/cascdes_par_months_deltanumpara{delta_para:.4g}_diffnn_lines.pklz"
         )
         with gzip.open(path_out, "wb") as fh_out:
@@ -848,9 +855,9 @@ def data_line_mitigation_diff_numpara(nn_lines=10, save_res=True):
     """"""
 
     # Load file
-    meta_data_path = path_to_cascade_results
+    meta_data_path = path_to_cascade_results_sclopf
 
-    norm_path = meta_data_path + "system_splits_Co2L0.1_n400.pklz"
+    norm_path = meta_data_path + f"system_splits_Co2L0.1_n{nn}.pklz"
     with gzip.open(norm_path, "rb") as fh_in_norm:
         norm_dict = pickle.load(fh_in_norm)
 
@@ -860,7 +867,7 @@ def data_line_mitigation_diff_numpara(nn_lines=10, save_res=True):
     for delta_para in tqdm([1, 5]):
         small_change_path = (
             meta_data_path
-            + "system_splits_Co2L0.1_n400_"
+            + f"system_splits_Co2L0.1_n{nn}_"
             + f"lineextension_nnlines{nn_lines}"
             + f"_deltanumpara{delta_para:.4f}_"
             + "stopped_2013-03-01 00:00.pklz"
@@ -874,7 +881,7 @@ def data_line_mitigation_diff_numpara(nn_lines=10, save_res=True):
 
     if save_res:
         path_out = (
-            path_to_line_extension_mitigation
+            path_to_line_extension_mitigation_sclopf
             + f"/cascdes_par_months_nnlines{nn_lines}_diffnumpara_lines.pklz"
         )
         print(path_out)
@@ -895,7 +902,7 @@ def plot_most_likely_lines_on_map(savefig=True):
 
     # Load file
     path_out = (
-        path_to_line_extension_mitigation
+        path_to_line_extension_mitigation_sclopf
         + f"/cascdes_par_months_deltanumpara{1:.4f}_diffnn_lines.pklz"
     )
 
@@ -959,7 +966,7 @@ def plot_most_likely_lines_on_map(savefig=True):
     ax.axis("off")
 
     if savefig:
-        fig_path = path_to_line_extension_mitigation + "/lines_on_map.png"
+        fig_path = path_to_line_extension_mitigation_sclopf + "/lines_on_map.png"
         fig.savefig(fig_path, bbox_inches="tight")
         fig.clear()
         plt.close(fig)
@@ -989,7 +996,7 @@ def plot_bar_histograms_diff_nnlines(
     for idx_para, delta_para in enumerate(delta_paras):
         if norm_month_diff_para_tuples is None:
             path_out = (
-                path_to_line_extension_mitigation
+                path_to_line_extension_mitigation_sclopf
                 + f"/cascdes_par_months_deltanumpara{delta_para:.4g}_diffnn_lines.pklz"
             )
             with gzip.open(path_out) as fh_in:
@@ -1040,7 +1047,9 @@ def plot_bar_histograms_diff_nnlines(
     plt.tight_layout()
 
     if save_fig:
-        fig_path = path_to_line_extension_mitigation + "/nr_of_cascades_diffnnlines.png"
+        fig_path = (
+            path_to_line_extension_mitigation_sclopf + "/nr_of_cascades_diffnnlines.png"
+        )
         fig.savefig(fig_path, bbox_inches="tight")
 
         fig.clear()
@@ -1058,7 +1067,7 @@ def plot_bar_histograms_diff_numpara(save_fig=False):
     fig, ax = plt.subplots(3, 1, figsize=(10, 10))
     for idx_li, nn_lines in enumerate([10, 20, 40]):
         path_out = (
-            path_to_line_extension_mitigation
+            path_to_line_extension_mitigation_sclopf
             + f"/cascdes_par_months_nnlines{nn_lines}_diffnumpara_lines.pklz"
         )
 
@@ -1102,7 +1111,8 @@ def plot_bar_histograms_diff_numpara(save_fig=False):
 
     if save_fig:
         fig_path = (
-            path_to_line_extension_mitigation + f"/nr_of_cascades_diffnumpara.png"
+            path_to_line_extension_mitigation_sclopf
+            + f"/nr_of_cascades_diffnumpara.png"
         )
         fig.savefig(fig_path, bbox_inches="tight")
 

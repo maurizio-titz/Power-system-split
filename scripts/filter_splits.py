@@ -11,8 +11,8 @@ from tqdm import tqdm
 
 from utils import data_handling
 from utils.config import (
-    path_to_evaluation_results,
-    path_to_indicator_vectors,
+    path_to_evaluation_results_sclopf,
+    path_to_indicator_vectors_sclopf,
     path_to_pypsa_network_sclopf,
 )
 
@@ -192,7 +192,8 @@ def calc_split_props(component_props, indicator_lshare_df, co2l, n_nodes=400):
     )
 
     split_properties_df.to_csv(
-        path_to_evaluation_results + f"split_properties_Co2L{co2l}_n{n_nodes}.csv"
+        path_to_evaluation_results_sclopf
+        + f"split_properties_Co2L{co2l}_n{n_nodes}.csv"
     )
 
     pbar.close()
@@ -244,7 +245,7 @@ if __name__ == "__main__":
         print(f"co2l: {co2l}")
         # load component_props
         component_props = pd.read_hdf(
-            path_to_evaluation_results
+            path_to_evaluation_results_sclopf
             + f"component_properties_Co2L{co2l}_n{n_nodes}.h5",
             key="df",
             #    , mode= 'w'
@@ -253,8 +254,8 @@ if __name__ == "__main__":
         component_props = add_lost_load_to_component_props(component_props)
 
         # load indicator vectors
-        file_name = f"indicator_vector_lshare_Co2l{co2l}_n{n_nodes}.pklz"
-        with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
+        file_name = f"indicator_vector_lshare_Co2L{co2l}_n{n_nodes}.pklz"
+        with gzip.open(path_to_indicator_vectors_sclopf + "/" + file_name, "rb") as out:
             index_tuple_time_split, indicator_vector_lshare = pickle.load(out)
 
         indicator_lshare_df = create_lshare_df(

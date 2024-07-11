@@ -13,12 +13,15 @@ import pandas as pd
 import pypsa
 
 from utils.cascade_simulation import calc_possible_double_line_failures
-from utils.config import path_to_evaluation_results, path_to_line_extension_mitigation
+from utils.config import (
+    path_to_evaluation_results_sclopf,
+    path_to_line_extension_mitigation_sclopf,
+)
 from utils.data_handling import get_matrices_from_nx_graph, nx_edges_to_matrix_indices
 from utils.visualization import calc_likelihood_failure
 
-if not os.path.exists(path_to_line_extension_mitigation):
-    os.mkdir(path_to_line_extension_mitigation)
+if not os.path.exists(path_to_line_extension_mitigation_sclopf):
+    os.mkdir(path_to_line_extension_mitigation_sclopf)
 
 
 def get_keys_of_largest_items_dict(dict_in: dict, nn: int) -> list:
@@ -90,7 +93,7 @@ def calc_impact_primary_links(
 
     if split_properties_df is None:
         split_properties_df = pd.read_csv(
-            path_to_evaluation_results
+            path_to_evaluation_results_sclopf
             + f"split_properties_Co2L{co2lvl}_n{n_nodes}.csv",
             index_col=0,
         )

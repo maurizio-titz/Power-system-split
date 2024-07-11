@@ -13,7 +13,8 @@ from utils.synthetic_inertia_placement import (
 )
 
 if __name__ == "__main__":
-    n_nodes = 400
+    n_nodes = 800
+    use_sclopf = False
     # resolve_strategies = [
     #     "random",
     #     # "concentrate",
@@ -21,38 +22,35 @@ if __name__ == "__main__":
     #     # "hindsight_concentrate",
     # ]
     resolve_strategy = "random"
-    # delta_rot_ls = [5000, 2500, 1000, 500, 100]
+    resolve_strategies = [resolve_strategy]
+    delta_rot_ls = [1000, 500, 200, 100]
     # delta_rot_ls = [5000]
-    delta_rot = 5000
-    for co2_lvl in [0.0]:
-        # for co2_lvl in [0.0, 0.2, 0.3, 0.4, 0.5]:
+    # delta_rot = 5000
+    for co2_lvl in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]:
         print(f"Running for co2_lvl: {co2_lvl}")
-        # run_different_parameters_for_co2lvl(
-        #     co2_lvl,
-        #     n_nodes,
-        #     delta_rot_ls,
-        #     max_iter=10000,
-        #     nr_processes=1,
-        #     revert_chrotE_fac=False,
-        #     resolve_equality_method_ls=resolve_strategies,
-        # )
-        # run_specific_co2lvl_n_size(
-        #     co2_lvl,
-        #     nn_nodes=n_nodes,
-        #     delta_rot_energy=delta_rot,
-        #     show_progress=False,
-        #     save_it=True,
-        #     max_iter=10000,
-        #     resolve_equality_method=resolve_strategy,
-        #     revert_ch_rotE_fac=False,
-        # )
-        plot_map_inertia_placement_final(
+        run_different_parameters_for_co2lvl(
             co2_lvl,
-            nn=400,
+            n_nodes,
+            use_sclopf,
+            delta_rot_ls,
             max_iter=10000,
-            max_node_size=800,
-            edge_width=0.2,
-            delta_Erot=delta_rot,
-            resolve_strategy=resolve_strategy,
-            save_fig=True,
+            nr_processes=1,
+            revert_chrotE_fac=False,
+            resolve_equality_method_ls=resolve_strategies,
         )
+    for co2_lvl in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]:
+        for delta_rot in delta_rot_ls:
+            try:
+                plot_map_inertia_placement_final(
+                    co2_lvl,
+                    nn=n_nodes,
+                    max_iter=10000,
+                    max_node_size=800,
+                    edge_width=0.2,
+                    delta_Erot=delta_rot,
+                    resolve_strategy=resolve_strategy,
+                    save_fig=True,
+                    use_sclopf=use_sclopf,
+                )
+            except ZeroDivisionError as e:
+                pass

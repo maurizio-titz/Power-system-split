@@ -1,18 +1,23 @@
-import numpy as np
-from sklearn.cluster import KMeans
-import pickle
 import gzip
-from sklearn.metrics import silhouette_score
-from tqdm import tqdm
+import pickle
 import sys
-from filter_splits import split_mask, split_mask_component_vectors
-from utils.config import path_to_evaluation_results
-from utils.indicator_utils import *
-import pandas as pd
 from collections import Counter
 
+import numpy as np
+import pandas as pd
+from filter_splits import split_mask, split_mask_component_vectors
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from tqdm import tqdm
+
+from utils.config import path_to_evaluation_results_sclopf
+from utils.indicator_utils import *
+
 sys.path.append("./")
-from utils.config import path_to_clustering_results, path_to_indicator_vectors
+from utils.config import (
+    path_to_clustering_results_sclopf,
+    path_to_indicator_vectors_sclopf,
+)
 
 
 def cluster_kmeans(
@@ -37,12 +42,17 @@ def cluster_kmeans(
         path_to_clustering_results (string): ....
     """
 
-    results = load_indicator_vectors(n_nodes, co2l, indicator_type, path_to_indicator_vectors=path_to_indicator_vectors, mask=mask)
+    results = load_indicator_vectors(
+        n_nodes,
+        co2l,
+        indicator_type,
+        path_to_indicator_vectors=path_to_indicator_vectors,
+        mask=mask,
+    )
 
     indicator_vectors = results
     if test:
         indicator_vectors = indicator_vectors[:100]
-        
 
     # transform indicator vector
     if transformation == "sign":
@@ -65,7 +75,9 @@ def cluster_kmeans(
             raise ValueError(
                 "is_main_component transformation only works for lshare indicator"
             )
-        indicator_vectors = calc_is_main_component_indicator_vectors(indicator_vectors, main_component_by="main_comp_most_frequent_lshare")
+        indicator_vectors = calc_is_main_component_indicator_vectors(
+            indicator_vectors, main_component_by="main_comp_most_frequent_lshare"
+        )
     elif transformation == "not_zero":
         indicator_vectors = np.array(indicator_vectors != 0, dtype=int)
 
@@ -95,7 +107,7 @@ def cluster_kmeans(
         transformation_string = ""
 
     with gzip.open(
-        f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2l{co2l}_n{n_nodes}_kmeans{n_clusters}.pkl",
+        f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2L{co2l}_n{n_nodes}_kmeans{n_clusters}.pkl",
         "wb",
     ) as fh_out:
         pickle.dump(
@@ -109,7 +121,6 @@ def cluster_kmeans(
             ],
             fh_out,
         )
-
 
 
 def mean_distance_to_centroid(indicator_vectors, centroids, i_centroid, cluster_labels):
@@ -136,8 +147,10 @@ def mean_distance_to_centroid(indicator_vectors, centroids, i_centroid, cluster_
 
     return np.mean(distances)
 
+
 if __name__ == "__main__":
     from matplotlib import pyplot as plt
+
     # create_component_indicator_vectors(400, 0.1, "lshare", path_to_indicator_vectors, mask)
     types = [
         "rocof_component",
@@ -152,18 +165,18 @@ if __name__ == "__main__":
     co2l = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 
     # get masks
-    path = path_to_evaluation_results + f"/masks_all_n{n_nodes}.pklz"
-    with gzip.open(path, 'rb') as out:
+    path = path_to_evaluation_results_sclopf + f"/masks_all_n{n_nodes}.pklz"
+    with gzip.open(path, "rb") as out:
         masks = pickle.load(out)
-    
+
     component_masks = []
-    
+
     print("creating component masks")
-    for co2,mask in zip(co2l,masks):
+    for co2, mask in zip(co2l, masks):
         #  get rocof indicator vectors
         # get rocof component indicator vectors
-        file_name = f"indicator_vector_{indicator_type}_Co2l{co2}_n{n_nodes}.pklz"
-        with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
+        file_name = f"indicator_vector_{indicator_type}_Co2L{co2}_n{n_nodes}.pklz"
+        with gzip.open(path_to_indicator_vectors_sclopf + "/" + file_name, "rb") as out:
             split_ind_to_component_ind, component_rocof_vectors = pickle.load(out)
         n_component_vectors = len(component_rocof_vectors)
         # all_inds = [
@@ -181,17 +194,23 @@ if __name__ == "__main__":
         plt.savefig(f"hist_{co2}.png")
         plt.close()
         print("saved fig")
-        
+
         print(len(split_ind_to_component_ind))
         # load_indicator_vectors(n_nodes, co2, indicator_type, path_to_indicator_vectors, mask=None)
-        split_properties_df = pd.read_csv(path_to_evaluation_results + f'split_properties_Co2L{co2}_n{n_nodes}.csv', index_col=0)
-        component_mask = split_mask_component_vectors(mask, split_ind_to_component_ind, n_component_vectors)
+        split_properties_df = pd.read_csv(
+            path_to_evaluation_results_sclopf
+            + f"split_properties_Co2L{co2}_n{n_nodes}.csv",
+            index_col=0,
+        )
+        component_mask = split_mask_component_vectors(
+            mask, split_ind_to_component_ind, n_component_vectors
+        )
         component_masks.append(component_mask)
 
-    path = path_to_evaluation_results + f"/components_masks_all_n{n_nodes}.pklz"
-    with gzip.open(path, 'wb') as out:
+    path = path_to_evaluation_results_sclopf + f"/components_masks_all_n{n_nodes}.pklz"
+    with gzip.open(path, "wb") as out:
         pickle.dump(component_masks, out)
-        
+
     # for indicator_type in types:
     #     print(indicator_type)
     #     for n_nodes in [400]:
@@ -220,19 +239,19 @@ if __name__ == "__main__":
     n_nodes = 400
     # indicator_type = "lshare"
     transformations = ["tanh", "not_zero"]
-    
+
     print("start clustering")
     for transformation in transformations:
         for n_clusters in tqdm(n_clusters_list):
-                        print(n_clusters)
-                        cluster_kmeans(
-                            n_nodes,
-                            co2l,
-                            n_clusters,
-                            indicator_type,
-                            path_to_indicator_vectors,
-                            path_to_clustering_results,
-                            transformation=transformation,
-                            test=False,
-                            mask = component_masks,
-                        )
+            print(n_clusters)
+            cluster_kmeans(
+                n_nodes,
+                co2l,
+                n_clusters,
+                indicator_type,
+                path_to_indicator_vectors_sclopf,
+                path_to_clustering_results_sclopf,
+                transformation=transformation,
+                test=False,
+                mask=component_masks,
+            )

@@ -11,7 +11,10 @@ from sklearn.metrics import silhouette_score
 
 sys.path.append("./")
 
-from utils.config import path_to_clustering_results
+from utils.config import (
+    path_to_clustering_results_lopf,
+    path_to_clustering_results_sclopf,
+)
 from utils.indicator_utils import (
     calc_is_main_component_indicator_vectors,
     load_indicator_vectors,
@@ -220,7 +223,7 @@ def mean_distance_to_centroid(indicator_vectors, centroids, i_centroid, cluster_
         np.linalg.norm(indicator_vector - centroid)
         for indicator_vector in indicator_vectors[cluster_labels == i_centroid]
     ]
-    assert np.isnan(distances).any() is False, "NaN in distances"
+    assert bool(np.isnan(distances).any()) is False, "NaN in distances"
 
     return np.mean(distances)
 
@@ -234,6 +237,7 @@ def load_clustering(
     transformation=None,
     n_nodes_split=None,
     lost_load_share=None,
+    use_sclopf=True
 ):
     """load clustering results from zip pickle file. Provide either load_dir or all clustering parameters
 
@@ -249,7 +253,7 @@ def load_clustering(
     """
 
     if load_dir is None:
-        load_dir = get_path_to_clustering_dir(n_nodes=n_nodes, co2l=co2l, indicator_type=indicator_type, transformation=transformation, n_nodes_split=n_nodes_split, lost_load_share=lost_load_share)
+        load_dir = get_path_to_clustering_dir(n_nodes=n_nodes, co2l=co2l, indicator_type=indicator_type, transformation=transformation, n_nodes_split=n_nodes_split, lost_load_share=lost_load_share, use_sclopf=use_sclopf)
     
     with gzip.open(
         f"{load_dir}/kmeans{n_clusters}.pklz",
@@ -272,7 +276,7 @@ def load_clustering(
         silhouette_avg,
     )
 
-def get_path_to_clustering_dir(n_nodes, co2l, indicator_type, transformation, n_nodes_split, lost_load_share):
+def get_path_to_clustering_dir(n_nodes, co2l, indicator_type, transformation, n_nodes_split, lost_load_share, use_sclopf=True):
     assert n_nodes is not None, "n_nodes must not be None"
     assert co2l is not None, "co2l must not be None"
     assert indicator_type is not None, "indicator_type must not be None"
@@ -284,4 +288,8 @@ def get_path_to_clustering_dir(n_nodes, co2l, indicator_type, transformation, n_
         transformation_string = "_" + transformation
     else:
         transformation_string = ""
+    if use_sclopf:
+        path_to_clustering_results = path_to_clustering_results_sclopf
+    else:
+        path_to_clustering_results = path_to_clustering_results_lopf
     return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2{str(co2l).replace(", ", "_")[1:-1]}_n{n_nodes}_ns{n_nodes_split}_lls{lost_load_share}/"

@@ -10,11 +10,27 @@ import numpy as np
 from shapely.geometry import Point
 
 from utils import data_handling, subgraph_evaluation
-from utils.config import path_to_pre_outage, path_to_pypsa_network_sclopf
+from utils.config import (
+    path_to_pre_outage_lopf,
+    path_to_pre_outage_sclopf,
+    path_to_pypsa_network_lopf,
+    path_to_pypsa_network_sclopf,
+)
 
 # Load arguments
 n_nodes = int(sys.argv[1])
+print(sys.argv[2])
+use_sclopf = bool(int(sys.argv[2]))
+print(f"use_sclopf: {use_sclopf}")
 
+if use_sclopf:
+    print("Using SCLOPF data")
+    path_to_pre_outage = path_to_pre_outage_sclopf
+    path_to_pypsa_network = path_to_pypsa_network_sclopf
+else:
+    print("Using LOPF data")
+    path_to_pre_outage = path_to_pre_outage_lopf
+    path_to_pypsa_network = path_to_pypsa_network_lopf
 # Setup paths
 os.makedirs(path_to_pre_outage, exist_ok=True)
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
@@ -25,9 +41,7 @@ snet_index = 0
 co2l_list = np.arange(0.0, 0.81, 0.1).round(1)
 
 # Get number of time steps and graph
-network = data_handling.load_pypsa_network_wrapper(
-    0.0, n_nodes, path_to_pypsa_network_sclopf
-)
+network = data_handling.load_pypsa_network_wrapper(0.0, n_nodes, use_sclopf=use_sclopf)
 nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 n_time_steps = network.snapshots.shape[0]
 
@@ -40,7 +54,7 @@ for i, co2l in enumerate(co2l_list):
     print("Co2 level %.2f" % co2l)
 
     network = data_handling.load_pypsa_network_wrapper(
-        co2l, n_nodes, path_to_pypsa_network_sclopf
+        co2l, n_nodes, use_sclopf=use_sclopf
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 
@@ -89,7 +103,7 @@ for i, co2l in enumerate(co2l_list):
     print("Co2 level %.2f" % co2l)
 
     network = data_handling.load_pypsa_network_wrapper(
-        co2l, n_nodes, path_to_pypsa_network_sclopf
+        co2l, n_nodes, use_sclopf=use_sclopf
     )
 
     ### NOTE: Here, the mean position is subtracted from the coordinates

@@ -75,7 +75,7 @@ import pickle
 import networkx as nx
 
 from utils import data_handling
-from utils.config import path_to_cascade_results, path_to_pypsa_network_sclopf
+from utils.config import path_to_cascade_results_sclopf, path_to_pypsa_network_sclopf
 
 snet_index = 0
 network = data_handling.load_pypsa_network(
@@ -87,7 +87,7 @@ I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
     nx_graph
 )
 
-meta_data_path = path_to_cascade_results
+meta_data_path = path_to_cascade_results_sclopf
 for delta_num_parallel in delta_paras:
     for nn_lines in n_lines_added:
         stop_timestamp_str = "2013-01-01 00:00"
