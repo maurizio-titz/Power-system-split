@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Evaluation of observables in subgraphs of PyPSA network 
+Evaluation of observables in subgraphs of PyPSA network
 """
 import warnings
 
@@ -148,7 +148,7 @@ def get_indicator_vectors_of_subgraphs(subgraphs, nx_graph):
 
 
 def evaluate_observables_for_subgraphs(
-    subgraphs: list, network, timestamp: str, snet=0
+    subgraphs: list, network, timestamp: str, snet=0, flows=None
 ) -> np.array:
     """Evaluate power imbalance, rotational energy and load of subgraphs for a time stamp.
 
@@ -159,8 +159,14 @@ def evaluate_observables_for_subgraphs(
         snet (int, optional): Index of subnetwork under investigation. Defaults to 0.
 
     Returns:
-        np.array: array, first dimension iterates over subgraphs, second holds observables in the order [rot_energy, power_imbalance, load, rocof, load_share]
+        np.array: array, first dimension iterates over subgraphs, second holds observables in the order [rot_energy, power_imbalance, load, rocof, load_share, line_momentum]
     """
+
+    if flows is None:
+        warnings.warn(
+            "Flows not provided",
+            UserWarning,
+        )
 
     # Extract current power injections
     current_generation = (
@@ -228,4 +234,71 @@ def evaluate_observables_for_subgraphs(
 
         results_arr[ii, 4] = results_arr[ii, 2] / total_current_load_subgraph
 
+        results_arr[ii, 5] = get_inertia_flow_subgraph(
+            subgraph=subgraph, lines=network.lines, flows=flows
+        )
+
     return results_arr
+
+
+import networkx as nx
+
+from utils import data_handling
+from utils.cascade_simulation import solve_lpf
+
+
+def get_flows(
+    network,
+    snapshot,
+    snet_index: int = 0,
+):
+    """Run the cascade simulation for single line failures.
+
+    Args:
+        co2l (float): CO2 level of the previously simulated PyPSA networks.
+        n_nodes (int): Number of nodes fo the PyPSA networks.
+        epsilon (float): Limit above smax needed for a line to fail. Default 1e-4.
+        save_all_cascades (bool, optional): If ''. Defaults to False.
+        snet_index (int, optional): _description_. Defaults to 0.
+        use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to False.
+        initial_remove_all (bool): If 'True' remove all initial circuits and not use look_up_table.
+    """
+
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
+        nx_graph
+    )
+    P_0 = data_handling.get_effective_injections(network, snapshot, nx_graph)
+
+    flows = solve_lpf(P_0, B_d, I_m)
+
+    return flows
+
+
+def get_inertia_flow_subgraph(
+    subgraph,
+    lines,
+    flows,
+):
+    """Calculate total rotational energy (in GWs) in the subgraph.
+
+    Args:
+        subgraph (networkx graph): Subgraph of power system.
+        generators (pandas.DataFrame): PyPSA generators
+        current_generation (pandas.Series): Entry of PyPSA generation time series
+        storages (pandas.DataFrame): PyPSA storages
+        current_storage (pandas.Series):  Entry of PyPSA storage time series
+        participation_threshold (float, optional): Share of nominal power. Above the threshold, a
+        generator is considered to be online. Defaults to 0.05.
+
+    Returns:
+        float: rotational energy
+    """
+
+    # Get lines that are in subgraph and online in current timestamp
+    in_subgraph = lines["bus"].isin(subgraph.edges())
+    line_lengths = lines.lines
+    line_momentum = flows * line_lengths
+    line_momentum = line_momentum[in_subgraph]
+
+    return line_momentum

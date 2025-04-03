@@ -147,6 +147,7 @@ def evaluate_cascade(
             "shedding_load_loss_share",
             "blackout_load_loss_share",
             "total_load_loss_share",
+            "line_momentum",
         ]
     else:
         comp_cols = [
@@ -161,6 +162,7 @@ def evaluate_cascade(
             "shedding_load_loss_share",
             "blackout_load_loss_share",
             "total_load_loss_share",
+            "line_momentum",
         ]
 
     # """component_props = pd.DataFrame(columns=['time_stamp', 'init_failure_0','init_failure_1',
@@ -225,9 +227,18 @@ def evaluate_cascade(
     component_props_dict = dict()
     out_dict_key = 0
     # idx_indi_vec = 0
+
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
+        nx_graph
+    )
+
     for timestamp, splits in tqdm(
         splitting_cascades_dtkeys.items(), disable=not show_progress
     ):
+
+        P_0 = data_handling.get_effective_injections(network, timestamp, nx_graph)
+        flows = solve_lpf(P_0, B_d, I_m)
 
         for ii, (init_failure, cascade) in enumerate(
             tqdm(splits.items(), leave=False, disable=not show_progress)
@@ -237,7 +248,7 @@ def evaluate_cascade(
 
             observables_split_components = (
                 subgraph_evaluation.evaluate_observables_for_subgraphs(
-                    subgraphs, network, timestamp
+                    subgraphs, network, timestamp, flows
                 )
             )
             # each entry holds: [rot_energy, power_imbalance, load, rocof, load_share]
