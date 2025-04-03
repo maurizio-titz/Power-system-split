@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
-from utils.config_local import root_path
+root_path = (
+    "/media/data/system_split/"  # add the root path for your data and results here
+)
 
 data_path = root_path + "/data/"
 results_path = root_path + "/results/"
