@@ -28,7 +28,7 @@ from utils.config import (
     path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
 )
-from utils.data_handling import load_pypsa_network, load_pypsa_network_wrapper
+from utils.data_handling import load_pypsa_network_from_path, load_pypsa_network
 
 # if use_sclopf:
 #     path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_sclopf
@@ -526,7 +526,7 @@ def run_specific_co2lvl_n_size(
         path_to_pypsa_network
         + f"sclopf-elec_s_{nn_nodes}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc"
     )
-    pypsa_net = load_pypsa_network_wrapper(co2_lvl, nn_nodes, use_sclopf=use_sclopf)
+    pypsa_net = load_pypsa_network(co2_lvl, nn_nodes, use_sclopf=use_sclopf)
     snapshot_weightings_generators = pypsa_net.snapshot_weightings.generators
 
     res_tuple = run_greedy_inertia_placement(

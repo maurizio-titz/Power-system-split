@@ -68,7 +68,7 @@ co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 # co2l_list = [0.7, 0.8]
 print(sorted(co2l_list))
 # Load PyPSA network and the graph of the subnetwork
-network = data_handling.load_pypsa_network_wrapper(
+network = data_handling.load_pypsa_network(
     co2lvl=0.0, n_nodes=n_nodes, use_sclopf=use_sclopf
 )
 nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)

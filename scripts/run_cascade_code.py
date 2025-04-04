@@ -75,7 +75,7 @@ def run_cascade_single_line_failures(
             path_to_pypsa_network + f"elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-3H.nc"
         )
 
-    network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
+    network = data_handling.load_pypsa_network_from_path(full_path_to_file, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
         nx_graph
@@ -203,7 +203,7 @@ def run_cascade_dual_line_failures(
         fpath_out += "_lopf"
 
     # Load PyPSA network, the graph of the subnetwork and its matrices
-    network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
+    network = data_handling.load_pypsa_network_from_path(full_path_to_file, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 
     # Check if line extension mitigation is supposed to be run.

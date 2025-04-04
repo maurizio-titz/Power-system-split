@@ -170,7 +170,7 @@ def plot_map_inertia_placement_final(
         raise ValueError(f"Unit '{unit}' not known!")
 
     # Load graph
-    pypsa_net = data_handling.load_pypsa_network_wrapper(co2_lvl, nn, use_sclopf)
+    pypsa_net = data_handling.load_pypsa_network(co2_lvl, nn, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index=0)
     pos_nodes = networkx.get_node_attributes(nx_graph, "pos")
 
@@ -419,7 +419,7 @@ def plot_map_inertia_placement(
         + "sclopf-elec_s_"
         + f"{nn}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc"
     )
-    pypsa_net = data_handling.load_pypsa_network(fpath_pypsa, use_sclopf=True)
+    pypsa_net = data_handling.load_pypsa_network_from_path(fpath_pypsa, use_sclopf=True)
     nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index=0)
     pos_nodes = networkx.get_node_attributes(nx_graph, "pos")
 
@@ -894,7 +894,7 @@ def data_line_mitigation_diff_numpara(nn_lines=10, save_res=True):
 def plot_most_likely_lines_on_map(savefig=True):
 
     # Load network
-    pypsa_net = data_handling.load_pypsa_network(
+    pypsa_net = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf + "sclopf-elec_s_400_ec_lv1.0_Co2L0.1-2920SEG.nc",
         use_sclopf=True,
     )

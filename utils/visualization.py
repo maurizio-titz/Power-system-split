@@ -148,7 +148,7 @@ def cluster_indicator_vectors_combined(
     n_nodes = 400
     # data_path = "/media/data/system_split/data/European_networks_sclopf/"
     # path_to_pypsa_network = data_path + 'European_networks_sclopf/'
-    network = data_handling.load_pypsa_network(
+    network = data_handling.load_pypsa_network_from_path(
         0.5, n_nodes, path_to_pypsa_network_sclopf
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)

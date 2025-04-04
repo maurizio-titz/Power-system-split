@@ -17,6 +17,7 @@ from tqdm import tqdm
 
 sys.path.append("./")
 # Post messages to mattermost
+from utils.cascade_simulation import solve_lpf
 import utils.config as cfg
 from utils import data_handling, send_mattermost_messages, subgraph_evaluation
 from utils.alternative_split_indicator_vectors import (  # run_all_co2_lvl_node_based,
@@ -211,14 +212,14 @@ def evaluate_cascade(
             rocof_indicator_vectors_ls = list()
             lshare_indicator_vectors_ls = list()
 
-            path_to_cascade_results_file = (
-                path_to_cascade_results
-                + "/system_splits_Co2L"
-                + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
-            )
-            with gzip.open(path_to_cascade_results_file, "rb") as fh_in_casc:
-                cascade_dict = pickle.load(fh_in_casc)
-            total_nr_splits = sum(len(vv) for vv in cascade_dict.values())
+            # path_to_cascade_results_file = (
+            #     path_to_cascade_results
+            #     + "/system_splits_Co2L"
+            #     + "{0:.1f}_n{1}.pklz".format(co2l, n_nodes)
+            # )
+            # with gzip.open(path_to_cascade_results_file, "rb") as fh_in_casc:
+            #     cascade_dict = pickle.load(fh_in_casc)
+            total_nr_splits = sum(len(vv) for vv in splitting_cascades.values())
 
             indicator_vector_rocof = np.full(
                 (total_nr_splits, nx_graph.number_of_nodes), np.nan, dtype=float
@@ -368,14 +369,16 @@ def evaluate_cascade(
 
 if __name__ == "__main__":
     # Load arguments
-    co2l_in = float(sys.argv[1])
-    n_nodes_in = int(sys.argv[2])
+    co2l_in = 0.6
+    # co2l_in = float(sys.argv[1])
+    n_nodes_in = 400
+    # n_nodes_in = int(sys.argv[2])
     # n_nodes_in = 800
     # for co2l_in in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
     evaluate_cascade(
         co2l_in,
         n_nodes_in,
-        use_sclopf=False,
+        use_sclopf=True,
         eval_indicator_vectors=True,
     )
     # find_failed_edge_indicator_vector_for_cascade_results(

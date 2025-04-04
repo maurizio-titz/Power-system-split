@@ -5,7 +5,9 @@
 Preparation and conversion of data for system split simulation and evaluation  
 """
 
+import gzip
 import os
+import pickle
 
 import networkx as nx
 import numpy as np
@@ -19,7 +21,7 @@ from utils.config import (
     path_to_vis_results_lopf,
     path_to_vis_results_sclopf,
 )
-
+from config import path_to_cascade_results_sclopf, path_to_cascade_results_lopf
 
 def build_networkx_graph(pypsa_network, snet_index=None):
     """Build a networkx graph from the pypsa networks"""
@@ -111,23 +113,23 @@ def get_effective_injections(network, snapshot, nx_graph):
     return P0
 
 
-def load_pypsa_network_wrapper(co2lvl, n_nodes, use_sclopf: bool = True):
+def load_pypsa_network(co2lvl, n_nodes, use_sclopf: bool = True):
     if not use_sclopf:
-        return load_pypsa_network(
+        return load_pypsa_network_from_path(
             path_to_pypsa_network_lopf
             + f"elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-3H.nc",
             use_sclopf,
         )
 
     else:
-        return load_pypsa_network(
+        return load_pypsa_network_from_path(
             path_to_pypsa_network_sclopf
             + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-2920SEG.nc",
             use_sclopf,
         )
 
 
-def load_pypsa_network(path_to_pypsa_network: str, use_sclopf: bool):
+def load_pypsa_network_from_path(path_to_pypsa_network: str, use_sclopf: bool):
     """Load PyPSA network from path with certain Co2 constraint and aggregation level of n_nodes.
 
     Args:
@@ -174,6 +176,19 @@ def load_pypsa_network(path_to_pypsa_network: str, use_sclopf: bool):
 
     return network
 
+def load_cascades(co2lvl, n_nodes, use_sclopf: bool = True):
+    if use_sclopf:
+        path_to_cascade_results = path_to_cascade_results_sclopf
+    else:
+        path_to_cascade_results = path_to_cascade_results_lopf
+        
+    full_path_to_cascades = (
+            path_to_cascade_results + f"system_splits_Co2L{co2lvl}_n{n_nodes}.pklz"
+        )
+    with gzip.open(full_path_to_cascades, "rb") as fh_casc:
+        splitting_cascades = pickle.load(fh_casc)
+        
+    return splitting_cascades
 
 def get_subgraphs_from_edges(edge_indices, nx_graph):
     """Generate subgraphs that result from removing the edges.

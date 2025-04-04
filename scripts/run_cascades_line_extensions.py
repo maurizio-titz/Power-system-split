@@ -78,7 +78,7 @@ from utils import data_handling
 from utils.config import path_to_cascade_results_sclopf, path_to_pypsa_network_sclopf
 
 snet_index = 0
-network = data_handling.load_pypsa_network(
+network = data_handling.load_pypsa_network_from_path(
     path_to_pypsa_network_sclopf + "sclopf-elec_s_400_ec_lv1.0_Co2L0.1-2920SEG.nc", True
 )
 nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)

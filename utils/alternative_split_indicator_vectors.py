@@ -29,8 +29,8 @@ from utils.config import (  # path_to_cascade_results_lopf,
 )
 from utils.data_handling import (  # nx_edges_to_matrix_indices,
     build_networkx_graph,
+    load_pypsa_network_from_path,
     load_pypsa_network,
-    load_pypsa_network_wrapper,
     load_split_props,
 )
 
@@ -296,7 +296,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(
 
     ## PyPSA network
 
-    pypsa_net = load_pypsa_network_wrapper(co2_lvl, n_nodes, use_sclopf=use_sclopf)
+    pypsa_net = load_pypsa_network(co2_lvl, n_nodes, use_sclopf=use_sclopf)
     graph_nx = build_networkx_graph(pypsa_net, snet_index=snet_idx)
 
     edge_names_ls = list(graph_nx.edges())
@@ -440,7 +440,7 @@ def check_rocof_lshare_indicator_vectors(co2_lvl, nn_nodes=400, show_progress=Fa
         indi_vec_fedges = pickle.load(fh_edges_in)[-1]
 
     # PyPSA network + graph_nx
-    pypsa_net = load_pypsa_network(co2_lvl, nn_nodes, "data/European_networks_sclopf/")
+    pypsa_net = load_pypsa_network_from_path(co2_lvl, nn_nodes, "data/European_networks_sclopf/")
     # translate to network for CE
     graph_nx = build_networkx_graph(pypsa_net, snet_index=0)
 

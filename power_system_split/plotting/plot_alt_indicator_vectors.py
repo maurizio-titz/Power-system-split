@@ -19,7 +19,7 @@ from tqdm import tqdm
 import cartopy.crs as cartopy_crs
 import networkx as nx
 
-from utils.data_handling import (load_pypsa_network, build_networkx_graph,
+from utils.data_handling import (load_pypsa_network_from_path, build_networkx_graph,
                                  matrix_indices_to_nx_edges, nx_edges_to_matrix_indices,
                                  get_matrices_from_nx_graph)
 from utils.cascade_simulation import calc_possible_double_line_failures
@@ -71,7 +71,7 @@ def calc_likelihood_failure_alt_indicator(co2_lvl: float, n_nodes: int, save_it:
     """Find the likelihood of a link failing by using the indicators vectors"""
     
     # Load PyPSA and generate networkx graph
-    pypsa_net = load_pypsa_network(co2_lvl, n_nodes,
+    pypsa_net = load_pypsa_network_from_path(co2_lvl, n_nodes,
                                    'data/European_networks_sclopf/')
     nx_graph = build_networkx_graph(pypsa_net, snet_index=0)# snet_idx is Europe
     
@@ -164,7 +164,7 @@ def plot_probability_secondary_edge_failures(co2_lvl_list: tuple = (.8, .6, .4, 
     cmap_diff.set_under('gainsboro', 1.0)
     cmap_diff.set_over('red', 1.0)
     
-    pypsa_net = load_pypsa_network(0.1, 400,
+    pypsa_net = load_pypsa_network_from_path(0.1, 400,
                                    'data/European_networks_sclopf/')
     nx_graph = build_networkx_graph(pypsa_net, snet_index=0)
     node_pos = nx.get_node_attributes(nx_graph, 'pos')

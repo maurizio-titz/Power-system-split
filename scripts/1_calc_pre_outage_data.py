@@ -41,7 +41,7 @@ snet_index = 0
 co2l_list = np.arange(0.0, 0.81, 0.1).round(1)
 
 # Get number of time steps and graph
-network = data_handling.load_pypsa_network_wrapper(0.0, n_nodes, use_sclopf=use_sclopf)
+network = data_handling.load_pypsa_network(0.0, n_nodes, use_sclopf=use_sclopf)
 nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 n_time_steps = network.snapshots.shape[0]
 
@@ -53,7 +53,7 @@ nodal_inertia_min_max = np.zeros((co2l_list.shape[0], 2, nx_graph.number_of_node
 for i, co2l in enumerate(co2l_list):
     print("Co2 level %.2f" % co2l)
 
-    network = data_handling.load_pypsa_network_wrapper(
+    network = data_handling.load_pypsa_network(
         co2l, n_nodes, use_sclopf=use_sclopf
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
@@ -102,7 +102,7 @@ for i, co2l in enumerate(co2l_list):
 
     print("Co2 level %.2f" % co2l)
 
-    network = data_handling.load_pypsa_network_wrapper(
+    network = data_handling.load_pypsa_network(
         co2l, n_nodes, use_sclopf=use_sclopf
     )
 

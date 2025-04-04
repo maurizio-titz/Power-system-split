@@ -102,7 +102,7 @@ for indicator_type, transformation in indicator_type_transformation:
         pickle.dump(masks, out)
 
     snet_index = 0
-    network = data_handling.load_pypsa_network_wrapper(
+    network = data_handling.load_pypsa_network(
         co2lvl=0.0, n_nodes=n_nodes, use_sclopf=use_sclopf
     )
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 root_path = (
-    "/media/data/system_split/"  # add the root path for your data and results here
+    "/srv/data/jlange/power-system-split"  # add the root path for your data and results here
 )
 
 data_path = root_path + "/data/"

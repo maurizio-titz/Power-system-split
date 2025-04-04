@@ -181,7 +181,7 @@ def calc_split_props(component_props, indicator_lshare_df, co2l, n_nodes=400):
     )
     split_properties_df["co2l"] = co2l
 
-    network = data_handling.load_pypsa_network(
+    network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf + "sclopf-elec_s_400_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
