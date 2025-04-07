@@ -237,7 +237,7 @@ def load_clustering(
     transformation=None,
     n_nodes_split=None,
     lost_load_share=None,
-    use_sclopf=True
+    use_sclopf=True,
 ):
     """load clustering results from zip pickle file. Provide either load_dir or all clustering parameters
 
@@ -253,8 +253,16 @@ def load_clustering(
     """
 
     if load_dir is None:
-        load_dir = get_path_to_clustering_dir(n_nodes=n_nodes, co2l=co2l, indicator_type=indicator_type, transformation=transformation, n_nodes_split=n_nodes_split, lost_load_share=lost_load_share, use_sclopf=use_sclopf)
-    
+        load_dir = get_path_to_clustering_dir(
+            n_nodes=n_nodes,
+            co2l=co2l,
+            indicator_type=indicator_type,
+            transformation=transformation,
+            n_nodes_split=n_nodes_split,
+            lost_load_share=lost_load_share,
+            use_sclopf=use_sclopf,
+        )
+
     with gzip.open(
         f"{load_dir}/kmeans{n_clusters}.pklz",
         "rb",
@@ -276,7 +284,16 @@ def load_clustering(
         silhouette_avg,
     )
 
-def get_path_to_clustering_dir(n_nodes, co2l, indicator_type, transformation, n_nodes_split, lost_load_share, use_sclopf=True):
+
+def get_path_to_clustering_dir(
+    n_nodes,
+    co2l,
+    indicator_type,
+    transformation,
+    n_nodes_split,
+    lost_load_share,
+    use_sclopf=True,
+):
     assert n_nodes is not None, "n_nodes must not be None"
     assert co2l is not None, "co2l must not be None"
     assert indicator_type is not None, "indicator_type must not be None"
