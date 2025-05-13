@@ -292,4 +292,4 @@ def get_path_to_clustering_dir(n_nodes, co2l, indicator_type, transformation, n_
         path_to_clustering_results = path_to_clustering_results_sclopf
     else:
         path_to_clustering_results = path_to_clustering_results_lopf
-    return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2{str(co2l).replace(", ", "_")[1:-1]}_n{n_nodes}_ns{n_nodes_split}_lls{lost_load_share}/"
+    return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2{str(co2l).replace(', ', '_')[1:-1]}_n{n_nodes}_ns{n_nodes_split}_lls{lost_load_share}/"
