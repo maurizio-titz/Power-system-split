@@ -20,8 +20,9 @@ from utils.config import (
     path_to_pypsa_network_sclopf,
     path_to_vis_results_lopf,
     path_to_vis_results_sclopf,
+    path_to_cascade_results_sclopf, 
+    path_to_cascade_results_lopf
 )
-from config import path_to_cascade_results_sclopf, path_to_cascade_results_lopf
 
 def build_networkx_graph(pypsa_network, snet_index=None):
     """Build a networkx graph from the pypsa networks"""
@@ -52,12 +53,41 @@ def build_networkx_graph(pypsa_network, snet_index=None):
                 s_nom=line["s_nom"],
                 num_parallel=line["num_parallel"],
             )
+            assert line["bus0"] < line["bus1"], f"Line {line_index} is not ordered"
         else:
             raise (RuntimeError("There duplicated edges in the PyPSA network"))
 
     nx.set_node_attributes(F, pos, "pos")
     return F
 
+def check_order_networkx_line_order_equals_pypsa(nx_graph:nx.Graph, pypsa_network:pypsa.Network, snet=None):
+    """
+    Check if the edges in the networkx graph are sorted in ascending order
+    """
+    if snet:
+        lines_subnet = pypsa_network.lines[pypsa_network.lines.sub_network.astype(int) == snet]
+    else:
+        lines_subnet = pypsa_network.lines
+
+    # return np.array(list(nx.get_edge_attributes(nx_graph, "orientation").values())) == np.array(list(list(zip(lines_subnet.bus0.astype(str), lines_subnet.bus1.astype(str)))))
+
+    for i, (u, v) in enumerate(nx.get_edge_attributes(nx_graph, "orientation").values()):
+        if (u,v) != (lines_subnet.bus0[i], lines_subnet.bus1[i]):
+            raise (RuntimeError(f"Edge {i} in networkx ({u}, {v}) does not match pypsa ({lines_subnet.bus0[i]}, {lines_subnet.bus1[i]})"))
+    return True
+
+    # zip(nx.get_edge_attributes(nx_graph, "orientation").values(), list(zip(pypsa_network.lines.bus0, pypsa_network.lines.bus1)))
+
+def check_if_edges_sorted(nx_graph:nx.Graph):
+    """
+    Check if the edges in the networkx graph are sorted in ascending order
+    """
+    
+    for i, (u, v) in enumerate(nx.get_edge_attributes(nx_graph, "orientation").values()
+):
+        if u > v:
+            raise (RuntimeError(f"Edge {i} ({u}, {v}) is not sorted"))
+    return True
 
 def construct_incidencematrix_from_orientation(Graph, return_np_array=True):
     """Construct incidence matrix for a graph with edge keyword orientation specifying the edge order
@@ -145,6 +175,7 @@ def load_pypsa_network_from_path(path_to_pypsa_network: str, use_sclopf: bool):
     # For our data set, "0" indicates the Continental European AC grid. -> snet doc
 
     # Load PyPSA network
+    print(path_to_pypsa_network)
 
     assert (
         os.path.isfile(path_to_pypsa_network) == True
@@ -201,11 +232,16 @@ def get_subgraphs_from_edges(edge_indices, nx_graph):
         list: List of networkx graphs
     """
 
+    check_if_edges_sorted(nx_graph)
+    
     nx_edges = matrix_indices_to_nx_edges(edge_indices, nx_graph)
 
     F = nx_graph.copy()
     F.remove_edges_from(nx_edges)
     subgraphs = list((F.subgraph(c).copy() for c in nx.connected_components(F)))
+    
+    for subgraph in subgraphs:
+        check_if_edges_sorted(subgraph)
 
     return subgraphs
 

@@ -10,6 +10,7 @@ import pickle
 import re
 import sys
 from datetime import datetime as dt
+import networkx
 
 import numpy as np
 import pandas as pd
@@ -102,22 +103,11 @@ def evaluate_cascade(
         print("Loading PyPSA Network and converting it to NetworkX Graph.\n")
 
     if use_sclopf:
-        path_to_pypsa_network = path_to_pypsa_network_sclopf
-        full_path_to_file = (
-            path_to_pypsa_network
-            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.1f}-2920SEG.nc"
-        )
-
         full_path_to_cascades = (
             path_to_cascade_results_sclopf + f"system_splits_Co2L{co2l}_n{n_nodes}.pklz"
         )
         save_path = save_path_sclopf
     else:
-        path_to_pypsa_network = path_to_pypsa_network_lopf
-        full_path_to_file = (
-            path_to_pypsa_network + f"elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-3H.nc"
-        )
-
         full_path_to_cascades = (
             path_to_cascade_results_lopf
             + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}_lopf.pklz"
@@ -126,8 +116,10 @@ def evaluate_cascade(
 
     os.makedirs(save_path, exist_ok=True)
 
-    network = data_handling.load_pypsa_network(full_path_to_file, use_sclopf)
+    network = data_handling.load_pypsa_network(co2l, n_nodes, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    
+    data_handling.check_if_edges_sorted(nx_graph)
 
     # Load cascade results
     with gzip.open(full_path_to_cascades, "rb") as fh_casc:
@@ -230,6 +222,7 @@ def evaluate_cascade(
     # idx_indi_vec = 0
 
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    data_handling.check_if_edges_sorted(nx_graph)
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
         nx_graph
     )
@@ -239,7 +232,11 @@ def evaluate_cascade(
     ):
 
         P_0 = data_handling.get_effective_injections(network, timestamp, nx_graph)
+        # lines_in_subnet0 = network.lines[(network.buses.sub_network.loc[network.lines.bus0].astype(int)==0).values & (network.buses.sub_network.loc[network.lines.bus1].astype(int)==0).values]
+        # list(zip(lines_in_subnet  0.bus0, lines_in_subnet0.bus1)) == networkx.get_edge_attributes(network, "orientation").values()
+        
         flows = solve_lpf(P_0, B_d, I_m)
+        flows_dict = dict(zip(networkx.get_edge_attributes(nx_graph, "orientation").values(), flows))
 
         for ii, (init_failure, cascade) in enumerate(
             tqdm(splits.items(), leave=False, disable=not show_progress)
@@ -249,7 +246,7 @@ def evaluate_cascade(
 
             observables_split_components = (
                 subgraph_evaluation.evaluate_observables_for_subgraphs(
-                    subgraphs, network, timestamp, flows
+                    subgraphs=subgraphs, network=network, timestamp=timestamp, flows=flows_dict
                 )
             )
             # each entry holds: [rot_energy, power_imbalance, load, rocof, load_share]

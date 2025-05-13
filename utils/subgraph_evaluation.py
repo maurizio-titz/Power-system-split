@@ -207,7 +207,7 @@ def evaluate_observables_for_subgraphs(
 
     # results array with columns
     # [rot_energy', 'power_imbalance', 'load', 'rocof', 'load_share']
-    results_arr = np.empty((len(subgraphs), 5), dtype=float)
+    results_arr = np.empty((len(subgraphs), 6), dtype=float)
 
     for ii, subgraph in enumerate(subgraphs):
 
@@ -294,11 +294,27 @@ def get_inertia_flow_subgraph(
     Returns:
         float: rotational energy
     """
+    raise NotImplementedError(
+        "electro-magnetic inertia not implemented yet")
+    
+    if subgraph.number_of_edges() == 0:
+        return 0
 
     # Get lines that are in subgraph and online in current timestamp
-    in_subgraph = lines["bus"].isin(subgraph.edges())
-    line_lengths = lines.lines
-    line_momentum = flows * line_lengths
-    line_momentum = line_momentum[in_subgraph]
+    data_handling.check_if_edges_sorted(subgraph)
+    
+    lines["from_to"] = list(zip(lines["bus0"], lines["bus1"]))
+    lines_snet = lines[lines.sub_network.astype(int) == 0]
+    edge_orientations = nx.get_edge_attributes(subgraph, "orientation").values()
+    lines_subgraph = lines_snet[lines_snet["from_to"].isin(edge_orientations)]
+    # lines_in_subnet0 = network.lines[(network.buses.sub_network.loc[network.lines.bus0].astype(int)==0).values & (network.buses.sub_network.loc[network.lines.bus1].astype(int)==0).values]
+
+    line_lengths = lines_subgraph.length
+    from operator import itemgetter
+    line_momentum = np.sum(abs(np.array(itemgetter(*lines_subgraph.from_to.values)(flows)) * line_lengths))
+    
+    # assert subgraph.number_of_edges() == len(line_momentum), (
+    #     "Number of edges in subgraph does not match number of caculated line_momentums subgraph"
+    # )
 
     return line_momentum
