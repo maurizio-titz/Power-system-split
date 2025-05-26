@@ -162,11 +162,11 @@ def evaluate_observables_for_subgraphs(
         np.array: array, first dimension iterates over subgraphs, second holds observables in the order [rot_energy, power_imbalance, load, rocof, load_share, line_momentum]
     """
 
-    if flows is None:
-        warnings.warn(
-            "Flows not provided",
-            UserWarning,
-        )
+    # if flows is None:
+    #     warnings.warn(
+    #         "Flows not provided",
+    #         UserWarning,
+    #     )
 
     # Extract current power injections
     current_generation = (
@@ -207,7 +207,7 @@ def evaluate_observables_for_subgraphs(
 
     # results array with columns
     # [rot_energy', 'power_imbalance', 'load', 'rocof', 'load_share']
-    results_arr = np.empty((len(subgraphs), 6), dtype=float)
+    results_arr = np.empty((len(subgraphs), 5), dtype=float)
 
     for ii, subgraph in enumerate(subgraphs):
 
@@ -234,9 +234,9 @@ def evaluate_observables_for_subgraphs(
 
         results_arr[ii, 4] = results_arr[ii, 2] / total_current_load_subgraph
 
-        results_arr[ii, 5] = get_inertia_flow_subgraph(
-            subgraph=subgraph, lines=network.lines, flows=flows
-        )
+        # results_arr[ii, 5] = get_line_inertia_subgraph(
+        #     subgraph=subgraph, lines=network.lines, flows=flows
+        # )
 
     return results_arr
 
@@ -275,7 +275,7 @@ def get_flows(
     return flows
 
 
-def get_inertia_flow_subgraph(
+def get_line_inertia_subgraph(
     subgraph,
     lines,
     flows,

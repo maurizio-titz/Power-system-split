@@ -140,7 +140,7 @@ def evaluate_cascade(
             "shedding_load_loss_share",
             "blackout_load_loss_share",
             "total_load_loss_share",
-            "line_momentum",
+            # "line_momentum",
         ]
     else:
         comp_cols = [
@@ -155,13 +155,8 @@ def evaluate_cascade(
             "shedding_load_loss_share",
             "blackout_load_loss_share",
             "total_load_loss_share",
-            "line_momentum",
+            # "line_momentum",
         ]
-
-    # """component_props = pd.DataFrame(columns=['time_stamp', 'init_failure_0','init_failure_1',
-    #                                         'split_number','rot_energy', 'power_imbalance',
-    #                                         'load', 'rocof', 'load_share'],
-    #                             index=[], dtype=float)"""
 
     splitting_cascades_dtkeys = {
         dt.strptime(key, "%Y-%m-%d %H:%M"): value
@@ -204,13 +199,6 @@ def evaluate_cascade(
             rocof_indicator_vectors_ls = list()
             lshare_indicator_vectors_ls = list()
 
-            # path_to_cascade_results_file = (
-            #     path_to_cascade_results
-            #     + "/system_splits_Co2L"
-            #     + "{0:.1f}_n{1}.pklz".format(co2l, n_nodes)
-            # )
-            # with gzip.open(path_to_cascade_results_file, "rb") as fh_in_casc:
-            #     cascade_dict = pickle.load(fh_in_casc)
             total_nr_splits = sum(len(vv) for vv in splitting_cascades.values())
 
             indicator_vector_rocof = np.full(
@@ -235,8 +223,8 @@ def evaluate_cascade(
         # lines_in_subnet0 = network.lines[(network.buses.sub_network.loc[network.lines.bus0].astype(int)==0).values & (network.buses.sub_network.loc[network.lines.bus1].astype(int)==0).values]
         # list(zip(lines_in_subnet  0.bus0, lines_in_subnet0.bus1)) == networkx.get_edge_attributes(network, "orientation").values()
         
-        flows = solve_lpf(P_0, B_d, I_m)
-        flows_dict = dict(zip(networkx.get_edge_attributes(nx_graph, "orientation").values(), flows))
+        # flows = solve_lpf(P_0, B_d, I_m)
+        # flows_dict = dict(zip(networkx.get_edge_attributes(nx_graph, "orientation").values(), flows))
 
         for ii, (init_failure, cascade) in enumerate(
             tqdm(splits.items(), leave=False, disable=not show_progress)
@@ -246,7 +234,7 @@ def evaluate_cascade(
 
             observables_split_components = (
                 subgraph_evaluation.evaluate_observables_for_subgraphs(
-                    subgraphs=subgraphs, network=network, timestamp=timestamp, flows=flows_dict
+                    subgraphs=subgraphs, network=network, timestamp=timestamp, #flows=flows_dict
                 )
             )
             # each entry holds: [rot_energy, power_imbalance, load, rocof, load_share]
@@ -365,33 +353,43 @@ def evaluate_cascade(
 
 
 if __name__ == "__main__":
+    from utils.config import path_to_sclopf_data
+    import os
     # Load arguments
-    co2l_in = 0.6
+    # co2l_in = 0.6
     # co2l_in = float(sys.argv[1])
-    n_nodes_in = 400
+    
+    n_nodes_in = 600
+    # List all files in the path_to_sclopf_data directory
+    sclopf_files = os.listdir(path_to_sclopf_data)
+    sclopf_files = [file for file in sclopf_files if f"_{n_nodes_in}_" in file]
+    co2l_in = [float(file.split("Co2L")[-1].split("-")[0]) for file in sclopf_files]
+    print(co2l_in)
+
+    # co2l_in = 0.6
     # n_nodes_in = int(sys.argv[2])
     # n_nodes_in = 800
-    # for co2l_in in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
-    evaluate_cascade(
-        co2l_in,
-        n_nodes_in,
-        use_sclopf=True,
-        eval_indicator_vectors=True,
-    )
-    # find_failed_edge_indicator_vector_for_cascade_results(
-    #     co2l_in,
-    #     n_nodes_in,
-    #     save_res=True,
-    #     verbose=True,
-    #     overwrite=True,
-    #     use_sclopf=False,
-    # )
-    # extract_nodal_rocof_and_load_share_in_split_from_old_results(
-    #     co2l_in,
-    #     n_nodes_in,
-    #     save_res=True,
-    #     verbose=True,
-    #     overwrite=True,
-    #     use_sclopf=False,
-    # )
-    # # run_all_co2_lvl_edge_based(n_nodes_in, use_sclopf=False)
+    for co2l_in in co2l_in:
+        evaluate_cascade(
+            co2l_in,
+            n_nodes_in,
+            use_sclopf=True,
+            eval_indicator_vectors=True,
+        )
+        find_failed_edge_indicator_vector_for_cascade_results(
+            co2l_in,
+            n_nodes_in,
+            save_res=True,
+            verbose=True,
+            overwrite=True,
+            use_sclopf=False,
+        )
+        # extract_nodal_rocof_and_load_share_in_split_from_old_results(
+        #     co2l_in,
+        #     n_nodes_in,
+        #     save_res=True,
+        #     verbose=True,
+        #     overwrite=True,
+        #     use_sclopf=False,
+        # )
+        # # run_all_co2_lvl_edge_based(n_nodes_in, use_sclopf=False)

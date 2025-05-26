@@ -6,6 +6,9 @@ root_path = (
 
 data_path = root_path + "/data/"
 results_path = root_path + "/results/"
+path_to_sclopf_data = root_path + "/data/European_networks_sclopf/"
+path_to_lopf_data = root_path + "/data/European_networks_lopf/"
+
 
 # sclopf paths
 path_to_indicator_vectors_sclopf = root_path + "/results/sclopf/indicator_vectors/"
