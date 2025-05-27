@@ -5,6 +5,7 @@ import sys
 
 import numpy as np
 import scipy
+from sklearn.preprocessing import normalize
 
 sys.path.append("./")
 
@@ -12,7 +13,7 @@ sys.path.append("./")
 def calc_nodewise_uncertainties(
     laplacian: np.matrix,
     node_class_vectors: np.array,
-    squared_distance=True,
+    smothin_order=1,
     save_dir=None,
 ) -> np.array:
     """calculates the nodewise uncertainty, i.e. how close the node is to nodes of the opposite class.
@@ -20,6 +21,7 @@ def calc_nodewise_uncertainties(
     Args:
         laplacian (np.matrix): graph laplacian
         node_class_vector (np.array): binary vector of length n_nodes holding the class [0,1] of each node.
+        order
 
     Returns:
         np.array: uncertainty vector
@@ -33,12 +35,16 @@ def calc_nodewise_uncertainties(
     shortest_path_distances = scipy.sparse.csgraph.dijkstra(
         graph, directed=False, return_predecessors=False
     )
-    if squared_distance:
-        shortest_path_distances = np.square(shortest_path_distances)
+    if smothin_order > 1:
+        # smooth the shortest path distances
+        shortest_path_distances = np.power(
+            shortest_path_distances.to_dense(), smothin_order
+        )
+
     closeness = 1 / shortest_path_distances
     np.fill_diagonal(closeness, 0)
 
-    uncertainties = node_class_vectors @ closeness
+    uncertainties = closeness * node_class_vectors
     uncertainties = np.abs(uncertainties)
 
     # save uncertainties to file
@@ -52,6 +58,72 @@ def calc_nodewise_uncertainties(
     return uncertainties
 
 
+def typed_katz_centrality_single_vector(
+    adjecency_matrix: np.matrix,
+    node_class_vectors: np.array,
+    decay_factor: float = 0.1,
+    max_distance: int = 10,
+) -> np.array:
+    """calculates the nodewise uncertainty, i.e. how close the node is to nodes of the opposite class."""
+    if set(node_class_vectors) == {0, 1}:
+        node_class_vectors = 2 * node_class_vectors - 1
+    elif set(node_class_vectors) == {-1, 1}:
+        pass
+    else:
+        raise ValueError("node_class_vectors must be binary or -1,1")
+
+    c = np.sum(
+        np.array(
+            [
+                np.linalg.matrix_power(adjecency_matrix, d)
+                @ node_class_vectors
+                * decay_factor**d
+                for d in range(1, max_distance + 1)
+            ]
+        ),
+        axis=0,
+    )
+    assert c.shape == node_class_vectors.shape, "c.shape != node_class_vectors.shape"
+
+    return c
+
+def typed_katz_centrality_multiple(
+    adjecency_matrix: np.matrix,
+    node_class_vectors: np.array,
+    decay_factor: float = 0.1,
+    max_distance: int = 10,
+) -> np.array:
+    """calculates the nodewise uncertainty, i.e. how close the node is to nodes of the opposite class."""
+    if set(node_class_vectors) == {0, 1}:
+        node_class_vectors = 2 * node_class_vectors - 1
+    elif set(node_class_vectors) == {-1, 1}:
+        pass
+    else:
+        raise ValueError("node_class_vectors must be binary or -1,1")
+    
+    decay_factors = np.array([decay_factor**d for d in range(1, max_distance + 1)])
+    
+    adjecency_matrix_powers = np.array([np.linalg.matrix_power(adjecency_matrix, d) for d in range(1, max_distance + 1)])
+    
+    # k hop normalization
+    adjecency_matrix_powers_norm = np.array([normalize(A_k, axis=1, norm='l1') for A_k in adjecency_matrix_powers])
+    
+    # full neighborhood normalization
+    # full_neighborhood_weight = [np.sum(A_k, axis=1)*decay_factor_k for decay_factor_k, A_k in zip(decay_factors,adjecency_matrix_powers)]
+    full_neighborhood_weights = np.sum(adjecency_matrix_powers, axis=1)*decay_factors
+
+    c = np.sum(
+            np.linalg.matrix_power(adjecency_matrix, d)
+            @ node_class_vectors
+            * decay_factor**d
+            for d in range(1, max_distance + 1),
+        axis=0,
+    )
+    assert c.shape == node_class_vectors.shape, "c.shape != node_class_vectors.shape"
+
+    return c
+
+
 def uncertainty_distance(
     node_classes0,
     node_classes1,
@@ -61,7 +133,7 @@ def uncertainty_distance(
 ) -> float:
     """calculates the distance between two indicator vectors."""
 
-    divs = node_classes0 - node_classes1
+    divs = node_classes0 != node_classes1
     return np.linalg.norm(
         (node_uncertainties0[divs].dot(node_uncertainties1[divs])), ord=order
     )
@@ -96,13 +168,16 @@ def binning_uncertainty_distance(
         )
 
 
-def binning_uncertainty_distance(
+def binning_uncertainty_distance_wrapper(
     node_classes_tuple,
     node_uncertainties_tuple,
     order: int = 1,
     max_relative_blackout_size_difference: float = 0.1,
 ) -> float:
-    """calculates the distance between two indicator vectors."""
+    """
+    Not used!
+    calculates the distance between two indicator vectors. takes a tuple of the node classes and uncertainties for each samples, so it can be used as a distance function in the clustering algorithm.
+    """
 
     node_classes0 = node_classes_tuple[0]
     node_classes1 = node_classes_tuple[1]
@@ -129,6 +204,15 @@ def get_order_by_blackout_size(indicator_vectors: np.ndarray):
     blackout_sizes_sorted = blackout_sizes[order]
 
     return blackout_sizes_sorted, indicator_vectors_sorted, order
+
+
+def get_neighbour_candidates(
+    indicator_vectors: np.ndarray,
+    max_relative_blackout_size_difference: float,
+):
+    blackout_sizes_sorted, indicator_vectors_sorted, order = get_order_by_blackout_size(
+        indicator_vectors
+    )
 
 
 def calculate_distance_matrix(
@@ -171,3 +255,32 @@ def calculate_distance_matrix(
                 distance_matrix[i, j] = distance_matrix[j, i]
 
     return distance_matrix
+
+
+def find_duplicate_rows(binary_array: np.ndarray) -> list:
+    """
+    Finds all duplicate row vectors in a binary array and returns their indices as a list of tuples.
+
+    Args:
+        binary_array (np.ndarray): A binary nxm array.
+
+    Returns:
+        list: A list of tuples, where each tuple contains the indices of duplicate rows.
+    """
+    duplicates = {}
+    for idx, row in enumerate(binary_array):
+        row_tuple = tuple(row)
+        if row_tuple in duplicates:
+            duplicates[row_tuple].append(idx)
+        else:
+            duplicates[row_tuple] = [idx]
+
+    # Filter out rows that are not duplicates
+    duplicate_indices = {
+        row: indices for row, indices in duplicates.items() if len(indices) > 1
+    }
+
+    return duplicate_indices
+
+def graph_based_clustering():
+    https://graph-tool.skewed.de/
