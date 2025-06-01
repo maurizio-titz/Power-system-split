@@ -95,14 +95,15 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
     if save_res:
         fpath_indi_vec_rocof_out = (
             path_to_evaluation_results
-            + "/rocof_indicator_vector_Co2L"
-            + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+            + "/indicator_vector_rocof_Co2L"
+            + f"{co2_lvl}_n{n_nodes}.pklz"
         )
         fpath_indi_vec_lshare_out = (
             path_to_evaluation_results
-            + "/lshare_indicator_vector_Co2L"
-            + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+            + "/indicator_vector_lshare_Co2L"
+            + f"{co2_lvl}_n{n_nodes}.pklz"
         )
+        print(fpath_indi_vec_rocof_out)
 
         if (
             os.path.exists(fpath_indi_vec_rocof_out)

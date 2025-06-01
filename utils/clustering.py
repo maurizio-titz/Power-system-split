@@ -44,14 +44,15 @@ def cluster_kmeans(
     """
 
     if weights is None:
-        indicator_vectors = load_indicator_vectors(
-            n_nodes,
-            co2l,
-            indicator_type,
-            path_to_indicator_vectors=path_to_indicator_vectors,
-            mask=mask,
-            weights=None,
-        )
+        # indicator_vectors = load_indicator_vectors(
+        #     n_nodes,
+        #     co2l,
+        #     indicator_type,
+        #     path_to_indicator_vectors=path_to_indicator_vectors,
+        #     mask=mask,
+        #     weights=None,
+        # )
+        raise NotImplementedError("weights must not be None for clustering")
     else:
         indicator_vectors, weights = load_indicator_vectors(
             n_nodes,
