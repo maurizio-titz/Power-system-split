@@ -45,7 +45,7 @@ def run_cascade_single_line_failures(
     co2l: float,
     n_nodes: int,
     epsilon: float = 1e-4,
-    save_all_cascades: bool = False,
+    save_whole_cascades: bool = False,
     snet_index: int = 0,
     use_sclopf: bool = False,
     initial_remove_all: bool = False,
@@ -56,7 +56,7 @@ def run_cascade_single_line_failures(
         co2l (float): CO2 level of the previously simulated PyPSA networks.
         n_nodes (int): Number of nodes fo the PyPSA networks.
         epsilon (float): Limit above smax needed for a line to fail. Default 1e-4.
-        save_all_cascades (bool, optional): If ''. Defaults to False.
+        save_all_cascades (bool, optional): If False, only the cascade trigger is saved. Defaults to False.
         snet_index (int, optional): _description_. Defaults to 0.
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to False.
         initial_remove_all (bool): If 'True' remove all initial circuits and not use look_up_table.
@@ -112,7 +112,7 @@ def run_cascade_single_line_failures(
             if use_sclopf and len(failing_links) > 1:
                 raise RuntimeError("PyPSA networks are not N-1 stable!")
 
-            if save_all_cascades:
+            if save_whole_cascades:
                 res_dict[tuple(initial_failure)] = failing_links, system_split
 
             elif system_split:
@@ -134,7 +134,7 @@ def run_cascade_single_line_failures(
     if not use_sclopf:
         fpath_out += "_lopf"
 
-    if save_all_cascades:
+    if save_whole_cascades:
         fpath_out += "_allcascades"
 
     if initial_remove_all:
@@ -443,7 +443,7 @@ if __name__ == "__main__":
     run_cascade_single_line_failures(
         co2l_in,
         n_nodes_in,
-        save_all_cascades=save_all_cascades_in,
+        save_whole_cascades=save_all_cascades_in,
         use_sclopf=False,
         # check_n1_security=False,
         # line_mitigation_dict=None,
