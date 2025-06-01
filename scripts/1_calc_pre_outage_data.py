@@ -15,12 +15,23 @@ from utils.config import (
     path_to_pre_outage_sclopf,
     path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
+    path_to_sclopf_data
 )
 
-# Load arguments
-n_nodes = int(sys.argv[1])
-print(sys.argv[2])
-use_sclopf = bool(int(sys.argv[2]))
+n_nodes = 600
+# List all files in the path_to_sclopf_data directory
+sclopf_files = os.listdir(path_to_sclopf_data)
+sclopf_files = [file for file in sclopf_files if f"_{n_nodes}_" in file]
+co2l_list = [float(file.split("Co2L")[-1].split("-")[0]) for file in sclopf_files]
+print(co2l_list)
+use_sclopf = True
+
+
+
+# # Load arguments
+# n_nodes = int(sys.argv[1])
+# print(sys.argv[2])
+# use_sclopf = bool(int(sys.argv[2]))
 print(f"use_sclopf: {use_sclopf}")
 
 if use_sclopf:
@@ -38,7 +49,7 @@ os.makedirs(path_to_pre_outage, exist_ok=True)
 snet_index = 0
 
 # Setup co2 levels
-co2l_list = np.arange(0.0, 0.81, 0.1).round(1)
+# co2l_list = np.arange(0.0, 0.81, 0.1).round(1)
 
 # Get number of time steps and graph
 network = data_handling.load_pypsa_network(0.0, n_nodes, use_sclopf=use_sclopf)
@@ -47,8 +58,8 @@ n_time_steps = network.snapshots.shape[0]
 
 ### Extract pre-outage inertia data #####
 
-inertia_time_series = np.zeros((co2l_list.shape[0], n_time_steps))
-nodal_inertia_min_max = np.zeros((co2l_list.shape[0], 2, nx_graph.number_of_nodes()))
+inertia_time_series = np.zeros((len(co2l_list), n_time_steps))
+nodal_inertia_min_max = np.zeros((len(co2l_list), 2, nx_graph.number_of_nodes()))
 
 for i, co2l in enumerate(co2l_list):
     print("Co2 level %.2f" % co2l)
@@ -62,7 +73,8 @@ for i, co2l in enumerate(co2l_list):
         obs = subgraph_evaluation.evaluate_observables_for_subgraphs(
             [nx_graph], network, timestamp, snet=0
         )
-        inertia_time_series[i, t_count] = obs[:, 0]
+        assert obs.shape[0] == 1, "Expected one subgraph"
+        inertia_time_series[i, t_count] = obs[0, 0]
 
     # Select timestamps with min and max total inertia
     t_largest = network.snapshots[np.argmax(inertia_time_series[i])]

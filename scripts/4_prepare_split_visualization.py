@@ -30,7 +30,7 @@ from utils.config import (
     path_to_vis_results_sclopf,
 )
 
-use_sclopf = False
+use_sclopf = True
 # Setup paths
 if use_sclopf:
     save_path = path_to_vis_results_sclopf
@@ -55,7 +55,7 @@ snet_index = 0
 # min_cluster_dist_nodes = 9
 
 # Load arguments
-n_nodes = 800
+n_nodes = 600
 
 # Setup co2 levels
 # glob_pypsa_search_str = ("data/European_networks_sclopf/" +
@@ -63,9 +63,17 @@ n_nodes = 800
 # pypsa_file_ls = glob(glob_pypsa_search_str)
 # co2l_list = [float(xx.split("Co2L")[-1].split("-")[0])
 #              for xx in pypsa_file_ls if float(xx.split("Co2L")[-1].split("-")[0]) > 0]
+from utils.config import path_to_sclopf_data
+import datetime
+
 print("Available CO2 Levels:")
-co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-# co2l_list = [0.7, 0.8]
+# List all files in the path_to_sclopf_data directory
+sclopf_files = os.listdir(path_to_sclopf_data)
+sclopf_files = [file for file in sclopf_files if f"_{n_nodes}_" in file]
+co2l_list = [float(file.split("Co2L")[-1].split("-")[0]) for file in sclopf_files]
+# co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+# co2l_list = [0.6]
+
 print(sorted(co2l_list))
 # Load PyPSA network and the graph of the subnetwork
 network = data_handling.load_pypsa_network(
@@ -98,7 +106,18 @@ for co2l in tqdm(co2l_list):
             path_to_evaluation_results_lopf
             + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
         )
-
+        
+    # # fixing shedding load loss share
+    # component_props_level.shedding_load_loss_share = component_props_level.load_share * component_props_level.shedding_load_loss_share / component_props_level.load
+    # component_props_level.total_load_loss_share = component_props_level[["shedding_load_loss_share", "blackout_load_loss_share"]].max(axis=1)
+    # component_props_level.to_hdf(
+    #     path_to_evaluation_results_sclopf
+    #     + f"component_properties_Co2L{co2l}_n{n_nodes}.h5",
+    #     key="df", mode="w")
+    
+    # for testing purposes, limit the number of components
+    # component_props_level = component_props_level.iloc[:10000,:]
+    
     # indicator_vectors = np.concatenate([indicator_vectors, indicator_vec_level])
     component_props_level.loc[:, "co2l"] = co2l
     component_props = pd.concat(
@@ -113,6 +132,7 @@ for co2l in tqdm(co2l_list):
 
 #### Cluster splits ####
 print("\n### Extracting splits ###\n")
+print("Current time:", datetime.datetime.now())
 
 split_groups = component_props.groupby(["co2l", "time_stamp", "split_number"])
 split_props = pd.DataFrame(
@@ -140,27 +160,29 @@ split_props.index = split_props.index.rename(["co2l", "time_stamp", "split_numbe
 #     else:
 #         split_props.loc[name, "category"] = "no_blackout"
 
-triggers_0 = split_groups.init_failure.unique()
-triggers_0 = [ii[0][0] for ii in triggers_0.values]
 if use_sclopf:
-    triggers_1 = split_groups.trigger_failure.unique()
-    triggers_1 = [ii[0][1] for ii in triggers_1.values]
+    triggers_0 = split_groups.init_failure_0.unique()
+    triggers_0 = [ii[0] for ii in triggers_0.values]
+    triggers_1 = split_groups.init_failure_1.unique()
+    triggers_1 = [ii[0] for ii in triggers_1.values]
 
     split_props["init_failure_0"] = triggers_0
     split_props["init_failure_1"] = triggers_1
 else:
-    split_props["init_failure"] = triggers_0
+    triggers = split_groups.init_failure.unique()
+    triggers = [ii[0] for ii in triggers.values]
+    split_props["init_failure"] = triggers
 
-split_props["lost_load_share_shedding"] = split_groups.shedding_load_loss_share.sum()
-split_props["lost_load_share_blackout"] = split_groups.blackout_load_loss_share.sum()
-split_props["lost_load_share_total"] = split_groups.total_load_loss_share.sum()
-split_props["n_components"] = split_groups.size()
+split_props["lost_load_share_shedding"] = split_groups.shedding_load_loss_share.sum().astype(float)
+split_props["lost_load_share_blackout"] = split_groups.blackout_load_loss_share.sum().astype(float)
+split_props["lost_load_share_total"] = split_groups.total_load_loss_share.sum().astype(float)
+split_props["n_components"] = split_groups.size().astype(int)
 # split_props["load_share_split_off"] = 1 - split_groups.load_share.max()
-split_props["largest_component_load_share"] = split_groups.load_share.max()
-split_props["load"] = split_groups.load.sum()
+split_props["largest_component_load_share"] = split_groups.load_share.max().astype(float)
+split_props["load"] = split_groups.load.sum().astype(float)
 split_props["snapshot_weighting"] = network.snapshot_weightings.generators.loc[
     split_props.index.get_level_values("time_stamp")
-].values
+].values.astype(int)
 
 # selected_splits = np.full((len(split_props), 1), True)
 # split_props["category"] = ""
@@ -183,8 +205,8 @@ component_props.to_hdf(
     save_path + f"component_properties_all_n{n_nodes}.h5", key="df", mode="w"
 )
 # np.save(save_path + f"split_vectors_all_n{n_nodes}.npy", split_vectors)
-split_props = split_props.astype(
-    dtype=dict(zip(split_props.columns, [int, float, float, str]))
+# split_props = split_props.astype(
+#     dtype=dict(zip(split_props.columns, [int, float, float, str]))
 )
 split_props.to_hdf(
     save_path + f"split_properties_all_n{n_nodes}.h5", key="df", mode="w"
