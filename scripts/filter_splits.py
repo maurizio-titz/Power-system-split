@@ -76,8 +76,8 @@ def create_lshare_df(index_tuple_time_split, indicator_vector_lshare):
 
 def split_mask(
     split_properties_df: pd.DataFrame,
-    n_nodes: int,
     lost_load_share: float,
+    n_nodes:int=None,
     ignore_shedding: bool = False,
 ):
     """create mask for filtering insignificant splits
@@ -86,16 +86,23 @@ def split_mask(
         n_nodes (int): minimal number of nodes in split-off component for split to be considered significant
         lost_load_share (float): minimal lost load share due to RoCoF and shedding for split to be considered significant
     """
+    if not n_nodes is None:
+        raise NotImplementedError
+
+    # if ignore_shedding:
+    #     index_mask = (split_properties_df.n_nodes_split_off > n_nodes) | (
+    #         split_properties_df.lost_load_share_total > lost_load_share
+    #     )
+    # else:
+    #     index_mask = (split_properties_df.n_nodes_split_off > n_nodes) | (
+    #         split_properties_df.lost_load_rocof_share > lost_load_share
+    #     )
 
     if ignore_shedding:
-        index_mask = (split_properties_df.n_nodes_split_off > n_nodes) | (
-            split_properties_df.lost_load_total_share > lost_load_share
-        )
+        index_mask = split_properties_df.lost_load_share_total > lost_load_share
     else:
-        index_mask = (split_properties_df.n_nodes_split_off > n_nodes) | (
-            split_properties_df.lost_load_rocof_share > lost_load_share
-        )
-
+        index_mask = split_properties_df.lost_load_rocof_share > lost_load_share
+    
     return np.array(index_mask)
 
 
@@ -176,7 +183,7 @@ def calc_split_props(component_props, indicator_lshare_df, co2l, n_nodes=400):
     split_properties_df["lost_load_shedding_share"] = (
         split_properties_df.lost_load_shedding / split_properties_df.total_load
     )
-    split_properties_df["lost_load_total_share"] = (
+    split_properties_df["lost_load_share_total"] = (
         split_properties_df.lost_load_total / split_properties_df.total_load
     )
     split_properties_df["co2l"] = co2l
