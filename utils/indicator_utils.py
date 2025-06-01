@@ -17,7 +17,7 @@ def load_indicator_vectors(
     path_to_indicator_vectors=path_to_indicator_vectors_sclopf,
     mask=None,
     weights=None,
-):
+)-> np.ndarray:
     if (isinstance(co2l, list) or isinstance(co2l, np.ndarray)) and not isinstance(
         mask, list
     ):
@@ -60,7 +60,7 @@ def load_indicator_vectors_weighted_multiple_lvl(
     all_vectors = []
     all_weights = []
     for i, co2 in enumerate(co2l):
-        file_name = f"{indicator_type}_indicator_vector_Co2L{co2}_n{n_nodes}.pklz"
+        file_name = f"indicator_vector_{indicator_type}_Co2L{co2}_n{n_nodes}.pklz"
         with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
             vectors_lvl = pickle.load(out)
         weights_lvl = np.array(
