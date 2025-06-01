@@ -2,29 +2,31 @@ import gzip
 import os
 import pickle
 import sys
+from typing import Callable
 
 import numpy as np
 import scipy
 from sklearn.preprocessing import normalize
+from tqdm import tqdm
 
 sys.path.append("./")
 
 
 def calc_nodewise_uncertainties(
     laplacian: np.matrix,
-    node_class_vectors: np.array,
+    node_class_vectors: np.ndarray,
     smothin_order=1,
     save_dir=None,
-) -> np.array:
+) -> np.ndarray:
     """calculates the nodewise uncertainty, i.e. how close the node is to nodes of the opposite class.
 
     Args:
         laplacian (np.matrix): graph laplacian
-        node_class_vector (np.array): binary vector of length n_nodes holding the class [0,1] of each node.
+        node_class_vector (np.ndarray): binary vector of length n_nodes holding the class [0,1] of each node.
         order
 
     Returns:
-        np.array: uncertainty vector
+        np.ndarray: uncertainty vector
     """
     assert (
         laplacian.shape[0] == laplacian.shape[1] == node_class_vectors.shape[1]
@@ -60,10 +62,10 @@ def calc_nodewise_uncertainties(
 
 def typed_katz_centrality_single_vector(
     adjecency_matrix: np.matrix,
-    node_class_vectors: np.array,
+    node_class_vectors: np.ndarray,
     decay_factor: float = 0.1,
     max_distance: int = 10,
-) -> np.array:
+) -> np.ndarray:
     """calculates the nodewise uncertainty, i.e. how close the node is to nodes of the opposite class."""
     if set(node_class_vectors) == {0, 1}:
         node_class_vectors = 2 * node_class_vectors - 1
@@ -87,36 +89,37 @@ def typed_katz_centrality_single_vector(
 
     return c
 
-def typed_katz_centrality_multiple(
-    adjecency_matrix: np.matrix,
-    node_class_vectors: np.array,
-    decay_factor: float = 0.1,
+def typed_katz_centrality_batch(
+    adjacency_matrix: np.matrix,
+    node_class_vectors: np.ndarray,
+    decay_factor: float = 1.5,
     max_distance: int = 10,
-) -> np.array:
+) -> np.ndarray:
     """calculates the nodewise uncertainty, i.e. how close the node is to nodes of the opposite class."""
-    if set(node_class_vectors) == {0, 1}:
+    if set(np.unique(node_class_vectors)) == {0, 1}:
         node_class_vectors = 2 * node_class_vectors - 1
     elif set(node_class_vectors) == {-1, 1}:
         pass
     else:
         raise ValueError("node_class_vectors must be binary or -1,1")
     
-    decay_factors = np.array([decay_factor**d for d in range(1, max_distance + 1)])
+    if scipy.sparse.issparse(adjacency_matrix):
+        adjacency_matrix = adjacency_matrix.toarray()
+    # decay_factors = np.array([decay_factor**d for d in range(1, max_distance + 1)])
     
-    adjecency_matrix_powers = np.array([np.linalg.matrix_power(adjecency_matrix, d) for d in range(1, max_distance + 1)])
+    # adjecency_matrix_powers = np.array([np.linalg.matrix_power(adjacency_matrix, d) for d in range(1, max_distance + 1)])
     
     # k hop normalization
-    adjecency_matrix_powers_norm = np.array([normalize(A_k, axis=1, norm='l1') for A_k in adjecency_matrix_powers])
+    # adjecency_matrix_powers_norm = np.array([normalize(A_k, axis=1, norm='l1') for A_k in adjecency_matrix_powers])
     
     # full neighborhood normalization
     # full_neighborhood_weight = [np.sum(A_k, axis=1)*decay_factor_k for decay_factor_k, A_k in zip(decay_factors,adjecency_matrix_powers)]
-    full_neighborhood_weights = np.sum(adjecency_matrix_powers, axis=1)*decay_factors
+    # full_neighborhood_weights = np.sum(adjecency_matrix_powers, axis=1)*decay_factors
 
     c = np.sum(
-            np.linalg.matrix_power(adjecency_matrix, d)
-            @ node_class_vectors
+            [node_class_vectors @ np.linalg.matrix_power(adjacency_matrix, d)
             * decay_factor**d
-            for d in range(1, max_distance + 1),
+            for d in range(1, max_distance + 1)],
         axis=0,
     )
     assert c.shape == node_class_vectors.shape, "c.shape != node_class_vectors.shape"
@@ -197,6 +200,7 @@ def binning_uncertainty_distance_wrapper(
 def get_order_by_blackout_size(indicator_vectors: np.ndarray):
     """returns the order of the indicator vectors by blackout size"""
 
+    indicator_vectors = np.atleast_2d(indicator_vectors)
     blackout_sizes = indicator_vectors.sum(axis=1)
     # sort the blackout sizes in descending order
     order = np.argsort(blackout_sizes)[::-1]
@@ -216,14 +220,14 @@ def get_neighbour_candidates(
 
 
 def calculate_distance_matrix(
-    indicator_vectors: np.array,
-    distance_function: callable,
+    indicator_vectors: np.ndarray,
+    distance_function: Callable,
     max_relative_blackout_size_difference: float,
 ):
     """ "calculates the distance matrix for the indicator vectors
     Args:
-        indicator_vectors (np.array): indicator vectors
-        distance_function (callable): function to calculate the distance between two indicator vectors
+        indicator_vectors (np.ndarray): indicator vectors
+        distance_function (Callable): function to calculate the distance between two indicator vectors
         max_relative_blackout_size_difference (float): maximum relative blackout size difference to calculate the distance. If the blackout size of the second indicator vector is smaller the two indicator vectors treated as neighbours in the clustering algorithm, so we don't calculate the distance between them.
 
     Returns:
@@ -257,7 +261,7 @@ def calculate_distance_matrix(
     return distance_matrix
 
 
-def find_duplicate_rows(binary_array: np.ndarray) -> list:
+def find_duplicate_rows(binary_array: np.ndarray) -> dict:
     """
     Finds all duplicate row vectors in a binary array and returns their indices as a list of tuples.
 
@@ -268,7 +272,7 @@ def find_duplicate_rows(binary_array: np.ndarray) -> list:
         list: A list of tuples, where each tuple contains the indices of duplicate rows.
     """
     duplicates = {}
-    for idx, row in enumerate(binary_array):
+    for idx, row in tqdm(enumerate(binary_array)):
         row_tuple = tuple(row)
         if row_tuple in duplicates:
             duplicates[row_tuple].append(idx)
@@ -282,5 +286,5 @@ def find_duplicate_rows(binary_array: np.ndarray) -> list:
 
     return duplicate_indices
 
-def graph_based_clustering():
-    https://graph-tool.skewed.de/
+# def graph_based_clustering():
+#     https://graph-tool.skewed.de/
