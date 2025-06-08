@@ -8,6 +8,7 @@ import numpy as np
 import scipy
 from sklearn.preprocessing import normalize
 from tqdm import tqdm
+from collections import OrderedDict
 
 sys.path.append("./")
 
@@ -89,6 +90,7 @@ def typed_katz_centrality_single_vector(
 
     return c
 
+
 def typed_katz_centrality_batch(
     adjacency_matrix: np.matrix,
     node_class_vectors: np.ndarray,
@@ -102,35 +104,56 @@ def typed_katz_centrality_batch(
         pass
     else:
         raise ValueError("node_class_vectors must be binary or -1,1")
-    
+
     if scipy.sparse.issparse(adjacency_matrix):
         adjacency_matrix = adjacency_matrix.toarray()
     # decay_factors = np.array([decay_factor**d for d in range(1, max_distance + 1)])
-    
+
     # adjecency_matrix_powers = np.array([np.linalg.matrix_power(adjacency_matrix, d) for d in range(1, max_distance + 1)])
-    
+
     # k hop normalization
     # adjecency_matrix_powers_norm = np.array([normalize(A_k, axis=1, norm='l1') for A_k in adjecency_matrix_powers])
-    
+
     # full neighborhood normalization
     # full_neighborhood_weight = [np.sum(A_k, axis=1)*decay_factor_k for decay_factor_k, A_k in zip(decay_factors,adjecency_matrix_powers)]
     # full_neighborhood_weights = np.sum(adjecency_matrix_powers, axis=1)*decay_factors
 
     c = np.sum(
-            [node_class_vectors @ np.linalg.matrix_power(adjacency_matrix, d)
-            * decay_factor**d
-            for d in range(1, max_distance + 1)],
+        [
+            node_class_vectors
+            @ normalize(np.linalg.matrix_power(adjacency_matrix, d), axis=0, norm="l1")
+            * decay_factor ** (-d)
+            for d in range(
+                max_distance + 1
+            )  # +1 because 0 would be the identity matrix
+        ],
         axis=0,
     )
-    assert c.shape == node_class_vectors.shape, "c.shape != node_class_vectors.shape"
+    # assert c.shape == node_class_vectors.shape, "c.shape != node_class_vectors.shape"
 
-    return c
+    return abs(c)
+    # return c
 
 
 def uncertainty_distance(
     node_classes0,
     node_classes1,
     node_uncertainties0,
+    node_uncertainties1,
+    order: int = 1,
+) -> float:
+    """calculates the distance between two indicator vectors."""
+
+    divs = node_classes0 != node_classes1
+    return np.linalg.norm(
+        np.multiply(node_uncertainties0[divs], node_uncertainties1[divs]), ord=order
+    )
+
+
+def uncertainty_distance_from_tuple(
+    node_classes0,
+    node_uncertainties0,
+    node_classes1,
     node_uncertainties1,
     order: int = 1,
 ) -> float:
@@ -150,7 +173,7 @@ def binning_uncertainty_distance(
     order: int = 1,
     max_relative_blackout_size_difference: float = 0.1,
 ) -> float:
-    """calculates the distance between two indicator vectors."""
+    """calculates the distance between two indicator vectors, if the relative black out size difference is below max_relative_blackout_size_difference, otherwise returns infinity."""
 
     if node_classes0.sum() > node_classes1.sum():
         node_classes0, node_classes1 = (
@@ -194,6 +217,57 @@ def binning_uncertainty_distance_wrapper(
         node_uncertainties1,
         order=order,
         max_relative_blackout_size_difference=max_relative_blackout_size_difference,
+    )
+
+
+def uncertainty_distance_wrapper_tuple(
+    blackout_centrality_tuple_0,
+    blackout_centrality_tuple_1,
+    order: int = 1,
+) -> float:
+    """
+    calculates the distance between two indicator vectors. takes a tuple of the node classes and uncertainties for each samples, so it can be used as a distance function in the clustering algorithm.
+    """
+
+    node_classes0 = blackout_centrality_tuple_0[0]
+    node_uncertainties0 = blackout_centrality_tuple_0[1]
+    node_classes1 = blackout_centrality_tuple_1[0]
+    node_uncertainties1 = blackout_centrality_tuple_1[1]
+
+    return uncertainty_distance(
+        node_classes0,
+        node_classes1,
+        node_uncertainties0,
+        node_uncertainties1,
+        order=order,
+    )
+
+
+def uncertainty_distance_wrapper_concat(
+    blackout_centrality_tuple_0,
+    blackout_centrality_tuple_1,
+    order: int = 1,
+) -> float:
+    """
+    calculates the distance between two indicator vectors. takes a tuple of the node classes and uncertainties for each samples, so it can be used as a distance function in the clustering algorithm.
+    """
+    assert (
+        blackout_centrality_tuple_0.shape == blackout_centrality_tuple_1.shape
+    ), "blackout_centrality_tuple_0 and blackout_centrality_tuple_1 must have the same shape"
+    n_nodes = int(blackout_centrality_tuple_0.shape[0] / 2)
+    assert n_nodes % 2 == 0
+
+    node_classes0 = blackout_centrality_tuple_0[:n_nodes]
+    node_uncertainties0 = blackout_centrality_tuple_0[n_nodes:]
+    node_classes1 = blackout_centrality_tuple_1[:n_nodes]
+    node_uncertainties1 = blackout_centrality_tuple_1[n_nodes:]
+
+    return uncertainty_distance(
+        node_classes0,
+        node_classes1,
+        node_uncertainties0,
+        node_uncertainties1,
+        order=order,
     )
 
 
@@ -261,7 +335,7 @@ def calculate_distance_matrix(
     return distance_matrix
 
 
-def find_duplicate_rows(binary_array: np.ndarray) -> dict:
+def get_unique_vectors(binary_array: np.ndarray) -> dict:
     """
     Finds all duplicate row vectors in a binary array and returns their indices as a list of tuples.
 
@@ -269,22 +343,24 @@ def find_duplicate_rows(binary_array: np.ndarray) -> dict:
         binary_array (np.ndarray): A binary nxm array.
 
     Returns:
-        list: A list of tuples, where each tuple contains the indices of duplicate rows.
+        dict: A dictionary where keys are unique row vectors (as tuples) and values are lists of indices where these vectors occur in the binary array.
     """
-    duplicates = {}
+    unique_to_idx = OrderedDict()
     for idx, row in tqdm(enumerate(binary_array)):
         row_tuple = tuple(row)
-        if row_tuple in duplicates:
-            duplicates[row_tuple].append(idx)
+        if row_tuple in unique_to_idx:
+            unique_to_idx[row_tuple].append(idx)
         else:
-            duplicates[row_tuple] = [idx]
+            unique_to_idx[row_tuple] = [idx]
 
     # Filter out rows that are not duplicates
-    duplicate_indices = {
-        row: indices for row, indices in duplicates.items() if len(indices) > 1
-    }
+    # duplicate_indices = {
+    #     row: indices for row, indices in duplicates.items() if len(indices) > 1
+    # }
+    unique_to_idx = OrderedDict(sorted(unique_to_idx.items()))
 
-    return duplicate_indices
+    return unique_to_idx
+
 
 # def graph_based_clustering():
 #     https://graph-tool.skewed.de/

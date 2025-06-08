@@ -164,6 +164,62 @@ def plot_clusters_old(
         )
 
 
+def plot_grid(
+    nx_graph,
+    pos,
+    indicator_vector,
+    ax=None,
+    save_dir=None,
+    cmap="seismic",
+    vmax=1,
+    vmin=0,
+    node_size=150,
+):
+
+    plt.rc("text", usetex=False)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+    nodes = nx.draw_networkx_nodes(
+        nx_graph,
+        pos=pos,
+        ax=ax,
+        node_color=indicator_vector,
+        cmap=cmap,
+        vmax=vmax,
+        vmin=vmin,
+        node_size=node_size,
+    )
+    nodes.set_edgecolor("black")
+    nodes.set_linewidth(0.2)
+
+    edges = nx.draw_networkx_edges(
+        nx_graph,
+        pos=pos,
+        ax=ax,
+        edge_color="black",
+        width=0.5,
+        edge_cmap=cmap,
+        # edge_color=failed_edges_prob,
+        # edge_vmin=np.log10(vmin),
+        # edge_vmax=np.log10(vmax)
+    )
+
+    # cbar_ax = fig.add_axes([0.95, 0.375, 0.005, 0.25])
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+    # sm = plt.cm.ScalarMappable(cmap=cmap)
+    # cb = fig.colorbar(sm, cax=cbar_ax)
+    cb = plt.colorbar(sm, ax=ax)
+    # if save_dir != None:
+    #     fig.savefig(
+    #         save_dir + f"split_plots_{indicator_name}_co2l{co2l_string}.pdf",
+    #         bbox_inches="tight",
+    #     )
+
+    return ax.figure
+
+
 def plot_indicator_vectors(
     nx_graph,
     pos,
@@ -174,14 +230,13 @@ def plot_indicator_vectors(
     cmap="seismic",
     n_subplots=16,
     shuffle=False,
+    vmax=1,
+    vmin=0,
 ):
     if co2l == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
         co2l_string = "all"
     else:
         co2l_string = co2l
-
-    vmax = 1
-    vmin = 0
 
     if "clipped_tanh" in indicator_name:
         vmax = 0
@@ -213,6 +268,9 @@ def plot_indicator_vectors(
     fig.subplots_adjust(hspace=-0.1, wspace=0.0)
     plt.rc("text", usetex=False)
 
+    cmap = mpl.cm.get_cmap(cmap)
+    cmap.set_under("gainsboro", 0.0)
+
     plot_count = 0
     for ind, gs_iter in enumerate(gs):
         if plot_count == n_subplots:
@@ -221,7 +279,7 @@ def plot_indicator_vectors(
 
         if shuffle:
             ind = rand_inds[ind]
-        indicator_vector = indicator_vectors[ind]
+        indicator_vector = indicator_vectors[ind, :]
 
         ax = fig.add_subplot(gs_iter)
 
