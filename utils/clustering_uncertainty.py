@@ -335,7 +335,9 @@ def calculate_distance_matrix(
     return distance_matrix
 
 
-def get_unique_vectors(binary_array: np.ndarray) -> dict:
+def get_unique_vectors_with_weights(
+    binary_array: np.ndarray, weights: np.ndarray = np.array([])
+) -> dict:
     """
     Finds all duplicate row vectors in a binary array and returns their indices as a list of tuples.
 
@@ -346,20 +348,39 @@ def get_unique_vectors(binary_array: np.ndarray) -> dict:
         dict: A dictionary where keys are unique row vectors (as tuples) and values are lists of indices where these vectors occur in the binary array.
     """
     unique_to_idx = OrderedDict()
-    for idx, row in tqdm(enumerate(binary_array)):
+    for idx, (row, weight) in tqdm(enumerate(zip(binary_array, weights))):
         row_tuple = tuple(row)
         if row_tuple in unique_to_idx:
-            unique_to_idx[row_tuple].append(idx)
+            unique_to_idx[row_tuple]["idxs"].append(idx)
+            unique_to_idx[row_tuple]["weight"] += weight
         else:
-            unique_to_idx[row_tuple] = [idx]
+            unique_to_idx[row_tuple] = {"idxs": [idx], "weight": weight}
 
     # Filter out rows that are not duplicates
     # duplicate_indices = {
     #     row: indices for row, indices in duplicates.items() if len(indices) > 1
     # }
-    unique_to_idx = OrderedDict(sorted(unique_to_idx.items()))
-
     return unique_to_idx
+
+
+def idx_to_unique_vector_idx(unique_to_idx: dict) -> dict:
+    """
+    Converts a dictionary of unique vectors to a dictionary mapping indices to unique vector indices.
+
+    Args:
+        unique_to_idx (dict): A dictionary where keys are unique row vectors (as tuples) and values are lists of indices where these vectors occur in the binary array.
+
+    Returns:
+        dict: A dictionary mapping each index in the original array to its corresponding unique vector index.
+    """
+    idx_to_unique_vector_idx = {}
+    for unique_vector_idx, (vector, data) in enumerate(unique_to_idx.items()):
+        idxs = np.array(data["idxs"])
+        idx_to_unique_vector_idx.update(
+            dict(zip(idxs, [unique_vector_idx] * len(idxs)))
+        )
+
+    return idx_to_unique_vector_idx
 
 
 # def graph_based_clustering():

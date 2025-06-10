@@ -299,7 +299,7 @@ def get_path_to_clustering_dir(
     assert co2l is not None, "co2l must not be None"
     assert indicator_type is not None, "indicator_type must not be None"
     assert transformation is not None, "transformation must not be None"
-    assert n_nodes_split is not None, "n_nodes_split must not be None"
+    # assert n_nodes_split is not None, "n_nodes_split must not be None"
     assert lost_load_share is not None, "lost_load_share must not be None"
 
     if transformation is not None:
@@ -310,4 +310,9 @@ def get_path_to_clustering_dir(
         path_to_clustering_results = path_to_clustering_results_sclopf
     else:
         path_to_clustering_results = path_to_clustering_results_lopf
-    return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2{str(co2l).replace(', ', '_')[1:-1]}_n{n_nodes}_ns{n_nodes_split}_lls{lost_load_share}/"
+    if n_nodes_split is None:
+        n_nodes_split_str = ""
+    else:
+        n_nodes_split_str = f"_ns{n_nodes_split}"
+
+    return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2{str(co2l).replace(', ', '_')[1:-1]}_n{n_nodes}{n_nodes_split_str}_lls{lost_load_share}/"
