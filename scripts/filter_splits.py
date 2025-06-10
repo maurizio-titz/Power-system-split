@@ -77,7 +77,7 @@ def create_lshare_df(index_tuple_time_split, indicator_vector_lshare):
 def split_mask(
     split_properties_df: pd.DataFrame,
     lost_load_share: float,
-    n_nodes:int=None,
+    n_nodes: int = None,
     ignore_shedding: bool = False,
 ):
     """create mask for filtering insignificant splits
@@ -99,10 +99,11 @@ def split_mask(
     #     )
 
     if ignore_shedding:
-        index_mask = split_properties_df.lost_load_share_total > lost_load_share
+        # index_mask = split_properties_df.lost_load_share_rocof > lost_load_share
+        index_mask = split_properties_df.lost_load_share_blackout > lost_load_share
     else:
-        index_mask = split_properties_df.lost_load_rocof_share > lost_load_share
-    
+        index_mask = split_properties_df.lost_load_share_total > lost_load_share
+
     return np.array(index_mask)
 
 
