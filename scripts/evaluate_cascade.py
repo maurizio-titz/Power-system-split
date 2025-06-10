@@ -27,6 +27,7 @@ from utils.alternative_split_indicator_vectors import (  # run_all_co2_lvl_node_
     run_all_co2_lvl_edge_based,
 )
 from utils.config import (
+    get_co2_levels,
     path_to_cascade_results_lopf,
     path_to_cascade_results_sclopf,
     path_to_evaluation_results_lopf,
@@ -113,12 +114,13 @@ def evaluate_cascade(
             + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}_lopf.pklz"
         )
         save_path = save_path_lopf
+    print(f"saving results to {save_path}")
 
     os.makedirs(save_path, exist_ok=True)
 
     network = data_handling.load_pypsa_network(co2l, n_nodes, use_sclopf)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
-    
+
     data_handling.check_if_edges_sorted(nx_graph)
 
     # Load cascade results
@@ -220,32 +222,43 @@ def evaluate_cascade(
     ):
 
         P_0 = data_handling.get_effective_injections(network, timestamp, nx_graph)
+
+        # the following lines are were added when implementing line momentum, which is not used yet
         # lines_in_subnet0 = network.lines[(network.buses.sub_network.loc[network.lines.bus0].astype(int)==0).values & (network.buses.sub_network.loc[network.lines.bus1].astype(int)==0).values]
         # list(zip(lines_in_subnet  0.bus0, lines_in_subnet0.bus1)) == networkx.get_edge_attributes(network, "orientation").values()
-        
         # flows = solve_lpf(P_0, B_d, I_m)
         # flows_dict = dict(zip(networkx.get_edge_attributes(nx_graph, "orientation").values(), flows))
 
         for ii, (init_failure, cascade) in enumerate(
-            tqdm(splits.items(), leave=False, disable=not show_progress)
+            # tqdm(splits.items(), leave=False, disable=not show_progress)
+            splits.items()
         ):
 
             subgraphs = data_handling.get_subgraphs_from_edges(cascade, nx_graph)
 
             observables_split_components = (
                 subgraph_evaluation.evaluate_observables_for_subgraphs(
-                    subgraphs=subgraphs, network=network, timestamp=timestamp, #flows=flows_dict
+                    subgraphs=subgraphs,
+                    network=network,
+                    timestamp=timestamp,  # flows=flows_dict
                 )
             )
             # each entry holds: [rot_energy, power_imbalance, load, rocof, load_share]
 
             for observables_single_component in observables_split_components:
                 load_shedded = abs(min(0, observables_single_component[1]))
+                shedding_load_loss_share = (
+                    load_shedded
+                    / observables_single_component[2]
+                    * observables_single_component[-4]
+                )
                 blackout_load_loss_share = (
                     int(observables_single_component[3] < -1)
                     * observables_single_component[4]
                 )
-                total_load_loss_share = max(load_shedded, blackout_load_loss_share)
+                total_load_loss_share = max(
+                    shedding_load_loss_share, blackout_load_loss_share
+                )
                 if use_sclopf:
                     dict_out_ele = [
                         timestamp,
@@ -253,7 +266,7 @@ def evaluate_cascade(
                         init_failure[1],
                         ii,
                         *observables_single_component,
-                        load_shedded,
+                        shedding_load_loss_share,
                         blackout_load_loss_share,
                         total_load_loss_share,
                     ]
@@ -263,7 +276,7 @@ def evaluate_cascade(
                         init_failure,
                         ii,
                         *observables_single_component,
-                        load_shedded,
+                        shedding_load_loss_share,
                         blackout_load_loss_share,
                         total_load_loss_share,
                     ]
@@ -291,6 +304,10 @@ def evaluate_cascade(
                 for ii in range(len(subgraphs)):
                     lshare_vector[indi_vec_r[ii]] = observables_split_components[ii][4]
                 lshare_indicator_vectors_ls.append(lshare_vector)
+
+            # only one timestamp for testing
+            # break
+        # break
 
     # Convert dictionary to component props pdDataFrame and save
     cut_path_str = ""
@@ -355,41 +372,57 @@ def evaluate_cascade(
 if __name__ == "__main__":
     from utils.config import path_to_sclopf_data
     import os
+
     # Load arguments
     # co2l_in = 0.6
     # co2l_in = float(sys.argv[1])
-    
-    n_nodes_in = 600
-    # List all files in the path_to_sclopf_data directory
-    sclopf_files = os.listdir(path_to_sclopf_data)
-    sclopf_files = [file for file in sclopf_files if f"_{n_nodes_in}_" in file]
-    co2l_in = [float(file.split("Co2L")[-1].split("-")[0]) for file in sclopf_files]
-    print(co2l_in)
 
-    # co2l_in = 0.6
-    # n_nodes_in = int(sys.argv[2])
-    # n_nodes_in = 800
+    n_nodes_in = 600
+    co2l_in = get_co2_levels(n_nodes_in)
+
+    if isinstance(co2l_in, float):
+        co2l_in = [co2l_in]
     for co2l_in in co2l_in:
+        # if co2l_in > 0.1:
+        #     continue
+        print(f"###############################################################")
+        print(f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}")
+        print(f"###############################################################")
         evaluate_cascade(
             co2l_in,
             n_nodes_in,
             use_sclopf=True,
             eval_indicator_vectors=True,
         )
+        print(f"###############################################################")
+        print(
+            f"Getting edge indicator vecs for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
+        )
+        print(f"###############################################################")
         find_failed_edge_indicator_vector_for_cascade_results(
             co2l_in,
             n_nodes_in,
             save_res=True,
             verbose=True,
             overwrite=True,
-            use_sclopf=False,
+            use_sclopf=True,
         )
-        # extract_nodal_rocof_and_load_share_in_split_from_old_results(
-        #     co2l_in,
-        #     n_nodes_in,
-        #     save_res=True,
-        #     verbose=True,
-        #     overwrite=True,
-        #     use_sclopf=False,
-        # )
-        # # run_all_co2_lvl_edge_based(n_nodes_in, use_sclopf=False)
+        print(f"###############################################################")
+        print(
+            f"Extracting nodal RoCoF and load share for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
+        )
+        print(f"###############################################################")
+        extract_nodal_rocof_and_load_share_in_split_from_old_results(
+            co2l_in,
+            n_nodes_in,
+            save_res=True,
+            verbose=True,
+            overwrite=True,
+            use_sclopf=True,
+        )
+        print(f"###############################################################")
+        print(
+            f"Running all CO2 level edge based for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
+        )
+        print(f"###############################################################")
+        run_all_co2_lvl_edge_based(n_nodes_in, use_sclopf=True, overwrite=True)
