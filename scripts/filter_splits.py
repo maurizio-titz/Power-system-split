@@ -78,7 +78,7 @@ def split_mask(
     split_properties_df: pd.DataFrame,
     lost_load_share: float,
     n_nodes: int = None,
-    ignore_shedding: bool = False,
+    ignore_shedding: bool = True,
 ):
     """create mask for filtering insignificant splits
 
