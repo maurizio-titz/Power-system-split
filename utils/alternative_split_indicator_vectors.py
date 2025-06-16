@@ -125,13 +125,13 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
         path_to_cascade_results_file = (
             path_to_cascade_results
             + "/system_splits_Co2L"
-            + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+            + f"{co2_lvl}_n{n_nodes}.pklz"
         )
     else:
         path_to_cascade_results_file = (
             path_to_cascade_results
             + "/system_splits_singlelinefailures_Co2L"
-            + "{0:.1f}_n{1}_lopf.pklz".format(co2_lvl, n_nodes)
+            + f"{co2_lvl}_n{n_nodes}_lopf.pklz"
         )
 
     with gzip.open(path_to_cascade_results_file, "rb") as fh_in_casc:
@@ -139,14 +139,16 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
 
     indicator_vectors_file_path = (
         path_to_evaluation_results
-        + "component_indicator_vectors_Co2L{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+        + f"component_indicator_vectors_Co2L{co2_lvl}_n{n_nodes}.pklz".format(
+            co2_lvl, n_nodes
+        )
     )
     with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
         indicator_vector_arr = pickle.load(fh_in_indi)
 
     df_comp_props = pd.read_hdf(
         path_to_evaluation_results
-        + "component_properties_Co2L{0:.1f}_n{1}.h5".format(co2_lvl, n_nodes),
+        + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
         key="df",
     )
     if verbose:
@@ -260,13 +262,13 @@ def find_failed_edge_indicator_vector_for_cascade_results(
             fpath_out_edge_base = (
                 path_to_evaluation_results_sclopf
                 + "/failed_edges_indicator_vector_Co2l"
-                + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+                + f"{co2_lvl}_n{n_nodes}.pklz"
             )
         else:
             fpath_out_edge_base = (
                 path_to_evaluation_results_lopf
                 + "/failed_edges_indicator_vector_Co2l"
-                + "{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+                + f"{co2_lvl}_n{n_nodes}.pklz"
             )
         if os.path.exists(fpath_out_edge_base) and not overwrite:
             raise IOError(
@@ -282,14 +284,12 @@ def find_failed_edge_indicator_vector_for_cascade_results(
     if use_sclopf:
         path_to_cascade_results_file = (
             path_to_cascade_results_sclopf
-            + "system_splits_Co2L{0:.1f}_n{1}.pklz".format(co2_lvl, n_nodes)
+            + f"system_splits_Co2L{co2_lvl}_n{n_nodes}.pklz"
         )
     else:
         path_to_cascade_results_file = (
             path_to_cascade_results_lopf
-            + "system_splits_singlelinefailures_Co2L{0:.1f}_n{1}_lopf.pklz".format(
-                co2_lvl, n_nodes
-            )
+            + f"system_splits_singlelinefailures_Co2L{co2_lvl}_n{n_nodes}_lopf.pklz"yy
         )
 
     with gzip.open(path_to_cascade_results_file, "rb") as fh:
@@ -421,27 +421,29 @@ def check_rocof_lshare_indicator_vectors(co2_lvl, nn_nodes=400, show_progress=Fa
     ## Load Data
     # Load indicator vector rocof
     fpath_rocof_in = (
-        path_in + f"/indicator_vector_rocof_Co2L{co2_lvl:.1f}_n{nn_nodes}.pklz"
+        path_in + f"/indicator_vector_rocof_Co2L{co2_lvl}_n{nn_nodes}.pklz"
     )
     with gzip.open(fpath_rocof_in, "rb") as fh_rocof_in:
         indi_vec_rocof = pickle.load(fh_rocof_in)[-1]
 
     # Load indicator vector lshare
     fpath_lshare_in = (
-        path_in + f"/indicator_vector_lshare_Co2L{co2_lvl:.1f}_n{nn_nodes}.pklz"
+        path_in + f"/indicator_vector_lshare_Co2L{co2_lvl}_n{nn_nodes}.pklz"
     )
     with gzip.open(fpath_lshare_in, "rb") as fh_lshare_in:
         indi_vec_lshare = pickle.load(fh_lshare_in)[-1]
 
     # Load indicator vector failed edges
     fpath_failed_edges = (
-        path_in + f"/indicator_vector_failed_edges_Co2L{co2_lvl:.1f}_n{nn_nodes}.pklz"
+        path_in + f"/indicator_vector_failed_edges_Co2L{co2_lvl}_n{nn_nodes}.pklz"
     )
     with gzip.open(fpath_failed_edges) as fh_edges_in:
         indi_vec_fedges = pickle.load(fh_edges_in)[-1]
 
     # PyPSA network + graph_nx
-    pypsa_net = load_pypsa_network_from_path(co2_lvl, nn_nodes, "data/European_networks_sclopf/")
+    pypsa_net = load_pypsa_network_from_path(
+        co2_lvl, nn_nodes, "data/European_networks_sclopf/"
+    )
     # translate to network for CE
     graph_nx = build_networkx_graph(pypsa_net, snet_index=0)
 

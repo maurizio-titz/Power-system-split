@@ -649,7 +649,7 @@ def plot_mitigate_load_loss_n_splits_over_time_diff_E0(
 
     [
         ax[0].plot(
-            [], [], color="k", linestyle=linestyle_ls[idx], label=f"CO$_2$={co2_r:.1f}"
+            [], [], color="k", linestyle=linestyle_ls[idx], label=f"CO$_2$={co2_r}"
         )
         for idx, co2_r in enumerate(co2_lvl_ls)
     ]
@@ -720,7 +720,9 @@ def calc_inertia_placement_ref_loss(
         _type_: _description_
     """
 
-    split_properties = data_handling.load_split_props(co2_lvl_ref, n_nodes, use_sclopf)
+    split_properties = data_handling.load_split_props(n_nodes, use_sclopf)
+    # split_properties = split_properties[split_properties.co2_level == co2_lvl_ref]
+    # split_properties
 
     total_loss_share_rocof_ref = (
         split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
