@@ -415,7 +415,7 @@ def run_cascade_dual_line_failures(
         splitting_cascades[key_now] = res_dict
 
         if snapshot in checkpoint_snaphots:
-            with gzip.open(fpath_out + str(snapshot) + "_.pklz", "wb") as handle:
+            with gzip.open(fpath_out + "_" + str(snapshot) + "_.pklz", "wb") as handle:
                 if line_mitigation_dict is None:
                     pickle.dump(
                         splitting_cascades, handle, protocol=pickle.HIGHEST_PROTOCOL
@@ -427,10 +427,15 @@ def run_cascade_dual_line_failures(
                         protocol=pickle.HIGHEST_PROTOCOL,
                     )
                 if last_checkpoint_snapshot:
-                    os.remove(fpath_out + str(last_checkpoint_snapshot) + "_.pklz")
+                    os.remove(
+                        fpath_out + "_" + str(last_checkpoint_snapshot) + "_.pklz"
+                    )
                 print(
                     f"######### Savepoint {i}, at snapshot {snapshot}. saved to",
-                    fpath_out + str(snapshot) + "_.pklz #########",
+                    fpath_out
+                    + "_"
+                    + str(last_checkpoint_snapshot)
+                    + "_.pklz #########",
                 )
                 last_checkpoint_snapshot = snapshot
 
@@ -480,6 +485,6 @@ if __name__ == "__main__":
         save_whole_cascades=save_whole_cascades_in,
         use_sclopf=True,
         n_checkpoints=20,
-        check_n1_security=True,
+        check_n1_security=False,
         # line_mitigation_dict=None,
     )
