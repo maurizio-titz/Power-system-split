@@ -22,6 +22,7 @@ sys.path.append("./")
 from utils import cascade_simulation, data_handling
 from utils import visualization as vis
 from utils.config import (
+    get_co2_levels,
     path_to_cascade_results_lopf,
     path_to_cascade_results_sclopf,
     path_to_evaluation_results_lopf,
@@ -68,9 +69,10 @@ import datetime
 
 print("Available CO2 Levels:")
 # List all files in the path_to_sclopf_data directory
-sclopf_files = os.listdir(path_to_sclopf_data)
-sclopf_files = [file for file in sclopf_files if f"_{n_nodes}_" in file]
-co2l_list = [float(file.split("Co2L")[-1].split("-")[0]) for file in sclopf_files]
+# sclopf_files = os.listdir(path_to_sclopf_data)
+# sclopf_files = [file for file in sclopf_files if f"_{n_nodes}_" in file]
+# co2l_list = [float(file.split("Co2L")[-1].split("-")[0]) for file in sclopf_files]
+co2l_list = get_co2_levels(n_nodes)
 # co2l_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 # co2l_list = [0.6]
 
@@ -106,7 +108,7 @@ for co2l in tqdm(co2l_list):
             path_to_evaluation_results_lopf
             + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
         )
-        
+
     # # fixing shedding load loss share
     # component_props_level.shedding_load_loss_share = component_props_level.load_share * component_props_level.shedding_load_loss_share / component_props_level.load
     # component_props_level.total_load_loss_share = component_props_level[["shedding_load_loss_share", "blackout_load_loss_share"]].max(axis=1)
@@ -114,10 +116,10 @@ for co2l in tqdm(co2l_list):
     #     path_to_evaluation_results_sclopf
     #     + f"component_properties_Co2L{co2l}_n{n_nodes}.h5",
     #     key="df", mode="w")
-    
+
     # for testing purposes, limit the number of components
     # component_props_level = component_props_level.iloc[:10000,:]
-    
+
     # indicator_vectors = np.concatenate([indicator_vectors, indicator_vec_level])
     component_props_level.loc[:, "co2l"] = co2l
     component_props = pd.concat(
@@ -139,7 +141,9 @@ split_props = pd.DataFrame(
     index=split_groups.groups.keys(),
     # columns=["n_components"],
 )
-split_props.index = split_props.index.rename(["co2l", "time_stamp", "split_number"])
+split_props.index = split_props.index.rename(
+    ["co2l", "time_stamp", "split_number_snapshot"]
+)
 # split_vectors = np.empty((split_groups.ngroups, nx_graph.number_of_nodes()), float)
 
 # for i, (name, split) in enumerate(tqdm(split_groups)):
@@ -173,16 +177,25 @@ else:
     triggers = [ii[0] for ii in triggers.values]
     split_props["init_failure"] = triggers
 
-split_props["lost_load_share_shedding"] = split_groups.shedding_load_loss_share.sum().astype(float)
-split_props["lost_load_share_blackout"] = split_groups.blackout_load_loss_share.sum().astype(float)
-split_props["lost_load_share_total"] = split_groups.total_load_loss_share.sum().astype(float)
+split_props["lost_load_share_shedding"] = (
+    split_groups.shedding_load_loss_share.sum().astype(float)
+)
+split_props["lost_load_share_blackout"] = (
+    split_groups.blackout_load_loss_share.sum().astype(float)
+)
+split_props["lost_load_share_total"] = split_groups.total_load_loss_share.sum().astype(
+    float
+)
 split_props["n_components"] = split_groups.size().astype(int)
 # split_props["load_share_split_off"] = 1 - split_groups.load_share.max()
-split_props["largest_component_load_share"] = split_groups.load_share.max().astype(float)
+split_props["largest_component_load_share"] = split_groups.load_share.max().astype(
+    float
+)
 split_props["load"] = split_groups.load.sum().astype(float)
 split_props["snapshot_weighting"] = network.snapshot_weightings.generators.loc[
     split_props.index.get_level_values("time_stamp")
 ].values.astype(int)
+split_props["co2l"] = split_props.index.get_level_values("co2l")
 
 # selected_splits = np.full((len(split_props), 1), True)
 # split_props["category"] = ""
@@ -207,10 +220,13 @@ component_props.to_hdf(
 # np.save(save_path + f"split_vectors_all_n{n_nodes}.npy", split_vectors)
 # split_props = split_props.astype(
 #     dtype=dict(zip(split_props.columns, [int, float, float, str]))
-)
+# )
 split_props.to_hdf(
     save_path + f"split_properties_all_n{n_nodes}.h5", key="df", mode="w"
 )
+for lvl in split_props["co2l"].unique():
+    split_props_lvl = split_props[split_props["co2l"] == lvl]
+    split_props_lvl.to_csv(save_path + f"split_props_Co2L{lvl}_n{n_nodes}.csv")
 
 
 #### Calculate likelihoods #####

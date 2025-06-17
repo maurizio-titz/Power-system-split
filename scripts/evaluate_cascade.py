@@ -167,31 +167,6 @@ def evaluate_cascade(
 
     if verbose:
         print("Starting evaluation of System Splits.\n")
-    did_cut_dict = False
-    if start_time_str is not None or end_time_str is not None:
-        if start_time_str is not None and end_time_str is not None:
-            splitting_cascades_cut = {
-                key: value
-                for key, value in splitting_cascades_dtkeys.items()
-                if key >= start_time_dt and key <= end_time_dt
-            }
-
-        elif start_time_str is not None:
-            splitting_cascades_cut = {
-                key: value
-                for key, value in splitting_cascades_dtkeys.items()
-                if key >= start_time_dt
-            }
-
-        elif end_time_str is not None:
-            splitting_cascades_cut = {
-                key: value
-                for key, value in splitting_cascades_dtkeys.items()
-                if key <= end_time_dt
-            }
-
-        splitting_cascades_dtkeys = splitting_cascades_cut
-        did_cut_dict = True
 
     if eval_indicator_vectors:
         component_indicator_vectors_ls = list()
@@ -216,11 +191,12 @@ def evaluate_cascade(
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
         nx_graph
     )
+    split_number_total = 0
+    split_numbers = []
 
     for timestamp, splits in tqdm(
         splitting_cascades_dtkeys.items(), disable=not show_progress
     ):
-
         P_0 = data_handling.get_effective_injections(network, timestamp, nx_graph)
 
         # the following lines are were added when implementing line momentum, which is not used yet
@@ -229,10 +205,11 @@ def evaluate_cascade(
         # flows = solve_lpf(P_0, B_d, I_m)
         # flows_dict = dict(zip(networkx.get_edge_attributes(nx_graph, "orientation").values(), flows))
 
-        for ii, (init_failure, cascade) in enumerate(
+        for split_number_snapshot, (init_failure, cascade) in enumerate(
             # tqdm(splits.items(), leave=False, disable=not show_progress)
             splits.items()
         ):
+            split_number_total += 1
 
             subgraphs = data_handling.get_subgraphs_from_edges(cascade, nx_graph)
 
@@ -247,41 +224,36 @@ def evaluate_cascade(
 
             for observables_single_component in observables_split_components:
                 load_shedded = abs(min(0, observables_single_component[1]))
-                shedding_load_loss_share = (
-                    load_shedded
-                    / observables_single_component[2]
-                    * observables_single_component[-4]
-                )
-                blackout_load_loss_share = (
+                blackout_load_loss = (
                     int(observables_single_component[3] < -1)
                     * observables_single_component[4]
                 )
-                total_load_loss_share = max(
-                    shedding_load_loss_share, blackout_load_loss_share
-                )
+                total_load_loss_share = max(load_shedded, blackout_load_loss)
                 if use_sclopf:
                     dict_out_ele = [
                         timestamp,
                         init_failure[0],
                         init_failure[1],
-                        ii,
+                        split_number_snapshot,
                         *observables_single_component,
-                        shedding_load_loss_share,
-                        blackout_load_loss_share,
+                        load_shedded,
+                        blackout_load_loss,
                         total_load_loss_share,
                     ]
                 else:
                     dict_out_ele = [
                         timestamp,
                         init_failure,
-                        ii,
+                        split_number_snapshot,
                         *observables_single_component,
-                        shedding_load_loss_share,
-                        blackout_load_loss_share,
+                        load_shedded,
+                        blackout_load_loss,
                         total_load_loss_share,
                     ]
                 component_props_dict[out_dict_key] = dict_out_ele
                 out_dict_key += 1
+
+                split_numbers.append(split_number_total)
 
             # Component indicator vectors:
             # Append properties and vectors such that component_props.iloc[ii] refers to
@@ -296,13 +268,17 @@ def evaluate_cascade(
             # Split-wise indicator vectors
             if calc_split_indicator_vectors:
                 rocof_vector = np.empty((n_nodes, 1), dtype=float)
-                for ii in range(len(subgraphs)):
-                    rocof_vector[indi_vec_r[ii]] = observables_split_components[ii][3]
+                for split_number_snapshot in range(len(subgraphs)):
+                    rocof_vector[indi_vec_r[split_number_snapshot]] = (
+                        observables_split_components[split_number_snapshot][3]
+                    )
                 rocof_indicator_vectors_ls.append(rocof_vector)
 
                 lshare_vector = np.empty((n_nodes, 1), dtype=float)
-                for ii in range(len(subgraphs)):
-                    lshare_vector[indi_vec_r[ii]] = observables_split_components[ii][4]
+                for split_number_snapshot in range(len(subgraphs)):
+                    lshare_vector[indi_vec_r[split_number_snapshot]] = (
+                        observables_split_components[split_number_snapshot][4]
+                    )
                 lshare_indicator_vectors_ls.append(lshare_vector)
 
             # only one timestamp for testing
@@ -310,19 +286,9 @@ def evaluate_cascade(
         # break
 
     # Convert dictionary to component props pdDataFrame and save
-    cut_path_str = ""
-    if did_cut_dict:
-        start_time_str_df = dt.strftime(
-            min(component_props.time_stamp), "%Y-%m-%d_%H:%M"
-        )
-        end_time_str_df = dt.strftime(max(component_props.time_stamp), "%Y-%m-%d_%H:%M")
-
-        cut_path_str = f"_from{start_time_str_df}" + f"to{end_time_str_df}"
-
     if eval_indicator_vectors:
         indi_vec_save_path = (
-            save_path
-            + f"component_indicator_vectors_Co2L{co2l}_n{n_nodes}{cut_path_str}.pklz"
+            save_path + f"component_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
         )
         with gzip.open(indi_vec_save_path, "wb") as fh_vec_out:
             pickle.dump(np.array(component_indicator_vectors_ls, dtype=int), fh_vec_out)
@@ -330,8 +296,7 @@ def evaluate_cascade(
         if calc_split_indicator_vectors:
 
             rocof_indi_vec_save_path = (
-                save_path
-                + f"rocof_indicator_vectors_Co2L{co2l}_n{n_nodes}{cut_path_str}.pklz"
+                save_path + f"rocof_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
             )
             with gzip.open(rocof_indi_vec_save_path, "wb") as fh_vec_out:
                 pickle.dump(
@@ -340,8 +305,7 @@ def evaluate_cascade(
                 )
 
             lshare_indi_vec_save_path = (
-                save_path
-                + f"load_share_indicator_vectors_Co2L{co2l}_n{n_nodes}{cut_path_str}.pklz"
+                save_path + f"load_share_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
             )
             with gzip.open(lshare_indi_vec_save_path, "wb") as fh_vec_out:
                 pickle.dump(
@@ -354,9 +318,9 @@ def evaluate_cascade(
     component_props["snapshot_weighting"] = network.snapshot_weightings.generators.loc[
         component_props.time_stamp
     ].values
+    component_props["split_number"] = split_numbers
 
     save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
-    save_df_path += cut_path_str
 
     component_props.to_hdf(save_df_path + ".h5", key="df", mode="w")
 
@@ -378,13 +342,12 @@ if __name__ == "__main__":
     # co2l_in = float(sys.argv[1])
 
     n_nodes_in = 600
-    co2l_in = get_co2_levels(n_nodes_in)
+    # co2l_in = get_co2_levels(n_nodes_in)
+    co2l_in = [0.1]
 
     if isinstance(co2l_in, float):
         co2l_in = [co2l_in]
     for co2l_in in co2l_in:
-        # if co2l_in > 0.1:
-        #     continue
         print(f"###############################################################")
         print(f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}")
         print(f"###############################################################")
@@ -393,6 +356,7 @@ if __name__ == "__main__":
             n_nodes_in,
             use_sclopf=True,
             eval_indicator_vectors=True,
+            # end_time_str="2013-01-02 00:00",
         )
         print(f"###############################################################")
         print(
@@ -404,7 +368,7 @@ if __name__ == "__main__":
             n_nodes_in,
             save_res=True,
             verbose=True,
-            overwrite=True,
+            overwrite=False,
             use_sclopf=True,
         )
         print(f"###############################################################")
@@ -417,7 +381,7 @@ if __name__ == "__main__":
             n_nodes_in,
             save_res=True,
             verbose=True,
-            overwrite=True,
+            overwrite=False,
             use_sclopf=True,
         )
         print(f"###############################################################")
@@ -425,4 +389,4 @@ if __name__ == "__main__":
             f"Running all CO2 level edge based for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
         )
         print(f"###############################################################")
-        run_all_co2_lvl_edge_based(n_nodes_in, use_sclopf=True, overwrite=True)
+        run_all_co2_lvl_edge_based(n_nodes_in, use_sclopf=True, overwrite=False)
