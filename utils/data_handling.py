@@ -313,9 +313,7 @@ def get_matrices_from_nx_graph(nx_graph):
 
 def get_adjacency_matrix_from_nx_graph(nx_graph):
     """returns the adjacency matrix of the nx graph"""
-    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
-        nx_graph
-    )
+    I_m, B_d, num_parallels, line_limits = get_matrices_from_nx_graph(nx_graph)
     I_m = np.absolute(I_m)
     adjacency_matrix = I_m @ I_m.T
     # Remove self-loops for sparse matrices

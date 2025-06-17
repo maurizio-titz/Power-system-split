@@ -289,7 +289,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(
     else:
         path_to_cascade_results_file = (
             path_to_cascade_results_lopf
-            + f"system_splits_singlelinefailures_Co2L{co2_lvl}_n{n_nodes}_lopf.pklz"yy
+            + f"system_splits_singlelinefailures_Co2L{co2_lvl}_n{n_nodes}_lopf.pklz"
         )
 
     with gzip.open(path_to_cascade_results_file, "rb") as fh:
@@ -420,9 +420,7 @@ def check_rocof_lshare_indicator_vectors(co2_lvl, nn_nodes=400, show_progress=Fa
 
     ## Load Data
     # Load indicator vector rocof
-    fpath_rocof_in = (
-        path_in + f"/indicator_vector_rocof_Co2L{co2_lvl}_n{nn_nodes}.pklz"
-    )
+    fpath_rocof_in = path_in + f"/indicator_vector_rocof_Co2L{co2_lvl}_n{nn_nodes}.pklz"
     with gzip.open(fpath_rocof_in, "rb") as fh_rocof_in:
         indi_vec_rocof = pickle.load(fh_rocof_in)[-1]
 
