@@ -45,7 +45,7 @@ def run_cascade_single_line_failures(
     co2l: float,
     n_nodes: int,
     epsilon: float = 1e-4,
-    save_whole_cascades: bool = False,
+    save_whole_cascades: bool = True,
     snet_index: int = 0,
     use_sclopf: bool = False,
     initial_remove_all: bool = False,
@@ -56,7 +56,7 @@ def run_cascade_single_line_failures(
         co2l (float): CO2 level of the previously simulated PyPSA networks.
         n_nodes (int): Number of nodes fo the PyPSA networks.
         epsilon (float): Limit above smax needed for a line to fail. Default 1e-4.
-        save_all_cascades (bool, optional): If False, only the cascade trigger is saved. Defaults to False.
+        save_whole_cascades (bool, optional): If False, only the cascade trigger is saved. Defaults to True.
         snet_index (int, optional): _description_. Defaults to 0.
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to False.
         initial_remove_all (bool): If 'True' remove all initial circuits and not use look_up_table.
@@ -67,7 +67,7 @@ def run_cascade_single_line_failures(
         path_to_pypsa_network = path_to_pypsa_network_sclopf
         full_path_to_file = (
             path_to_pypsa_network
-            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.1f}-2920SEG.nc"
+            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-2920SEG.nc"
         )
     else:
         path_to_pypsa_network = path_to_pypsa_network_lopf
@@ -159,32 +159,35 @@ def run_cascade_single_line_failures(
 def run_cascade_dual_line_failures(
     co2l: float,
     n_nodes: int,
-    save_all_cascades: bool = False,
+    save_whole_cascades: bool = True,
     snet_index: int = 0,
     check_n1_security: bool = True,
     use_sclopf: bool = True,
     line_mitigation_dict: dict = None,
     stop_timestamp_str: str = None,
+    n_save_points: int = 10,
 ):
     """Run cascade experiments by introducing dual line failures.
 
     Args:
         co2l (float): co2 level as float
         n_nodes (int): Number of nodes in PyPSA network.
-        save_all_cascades (bool, optional): _description_. Defaults to False.
+        save_whole_cascades (bool, optional): If False, only the cascade trigger is saved. Defaults to False.
         check_n1_security (bool, optional): If 'True', check if the networks are n-1 secure before starting the dual line failure experiments.
         snet_index (int, optional): Select a particular subnetwork for calculations (if the pypsa network has different ones).
                 For our data set, "0" indicates the Continental European AC grid. Defaults to 0.
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network and load this data set. Defaults to True.
         line_mitigation_dict (dict): Either 'None', which does not extend lines, or a dictionary that has information on how many lines to extend
         to mitigate the effect of dangerous system splits. Defaults to 'None'.
+        stop_timestamp_str (str, optional): If not 'None', the simulation will stop at this timestamp. Defaults to None.
+        n_save_points (int, optional): Number of save points to save the results. Defaults to 10.
     """
 
     if use_sclopf:
         path_to_pypsa_network = path_to_pypsa_network_sclopf
         full_path_to_file = (
             path_to_pypsa_network
-            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l:.1f}-2920SEG.nc"
+            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-2920SEG.nc"
         )
     else:
         path_to_pypsa_network = path_to_pypsa_network_lopf
@@ -356,10 +359,24 @@ def run_cascade_dual_line_failures(
             ):
                 break
 
+    if save_whole_cascades:
+        fpath_out += "_allcascades"
+
+    if line_mitigation_dict is not None:
+        fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4g}"
+
+    if stop_timestamp_str is not None:
+        fpath_out += f"_stopped_{stop_timestamp_str}"
+
     ### Simulation of N-2 failures ###
     print("\n#### N-2 failures: Co2 level", co2l, " | #Nodes:", n_nodes, " ####")
     splitting_cascades = dict()
-    for snapshot in tqdm(network.snapshots):
+
+    save_idxs = np.linspace(
+        0, len(network.snapshots) - 1, n_save_points, dtype=int
+    ).astype(int)
+
+    for i, snapshot in tqdm(enumerate(network.snapshots)):
         key_now = snapshot.strftime("%Y-%m-%d %H:00")
 
         if stop_timestamp_str is not None:
@@ -381,7 +398,7 @@ def run_cascade_dual_line_failures(
                 use_sclopf=use_sclopf,
             )
 
-            if save_all_cascades:
+            if save_whole_cascades:
                 # splitting_cascades[snapshot.strftime('%Y-%m-%d %H:00')][tuple(initial_failure)] = failing_links
                 res_dict[tuple(initial_failure)] = failing_links, system_split
 
@@ -391,20 +408,28 @@ def run_cascade_dual_line_failures(
 
         splitting_cascades[key_now] = res_dict
 
+        if i in save_idxs:
+            with gzip.open(fpath_out + ".pklz", "wb") as handle:
+                if line_mitigation_dict is None:
+                    pickle.dump(
+                        splitting_cascades, handle, protocol=pickle.HIGHEST_PROTOCOL
+                    )
+                else:
+                    pickle.dump(
+                        (importance_all_lines, selected_edges, splitting_cascades),
+                        handle,
+                        protocol=pickle.HIGHEST_PROTOCOL,
+                    )
+                print(
+                    f"######### Savepoint {i}, at snapshot {snapshot}. saved to",
+                    fpath_out + ".pklz #########",
+                )
+
         if (
             stop_timestamp_str is not None
             and dt.strptime(stop_timestamp_str, "%Y-%m-%d %H:00") <= snapshot
         ):
             break
-
-    if save_all_cascades:
-        fpath_out += "_allcascades"
-
-    if line_mitigation_dict is not None:
-        fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4g}"
-
-    if stop_timestamp_str is not None:
-        fpath_out += f"_stopped_{stop_timestamp_str}"
 
     with gzip.open(fpath_out + ".pklz", "wb") as handle:
         if line_mitigation_dict is None:
@@ -436,15 +461,16 @@ if __name__ == "__main__":
     n_nodes_in = int(sys.argv[2])
     # stop_timestamp_str = "2013-01-01 04:00:00"
     if len(sys.argv) > 3:
-        save_all_cascades_in = bool(sys.argv[3])
+        save_whole_cascades_in = bool(sys.argv[3])
     else:
-        save_all_cascades_in = False
+        save_whole_cascades_in = False
     print("Starting single line failures")
-    run_cascade_single_line_failures(
+    run_cascade_dual_line_failures(
         co2l_in,
         n_nodes_in,
-        save_whole_cascades=save_all_cascades_in,
-        use_sclopf=False,
+        save_whole_cascades=save_whole_cascades_in,
+        use_sclopf=True,
+        n_save_points=50,
         # check_n1_security=False,
         # line_mitigation_dict=None,
     )
