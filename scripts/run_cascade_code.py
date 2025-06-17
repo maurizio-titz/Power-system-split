@@ -11,6 +11,7 @@ import sys
 from datetime import datetime as dt
 
 import networkx as nx
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -165,7 +166,7 @@ def run_cascade_dual_line_failures(
     use_sclopf: bool = True,
     line_mitigation_dict: dict = None,
     stop_timestamp_str: str = None,
-    n_save_points: int = 10,
+    n_checkpoints: int = 500,
 ):
     """Run cascade experiments by introducing dual line failures.
 
@@ -180,7 +181,7 @@ def run_cascade_dual_line_failures(
         line_mitigation_dict (dict): Either 'None', which does not extend lines, or a dictionary that has information on how many lines to extend
         to mitigate the effect of dangerous system splits. Defaults to 'None'.
         stop_timestamp_str (str, optional): If not 'None', the simulation will stop at this timestamp. Defaults to None.
-        n_save_points (int, optional): Number of save points to save the results. Defaults to 10.
+        n_checkpoints (int, optional): Number of save points to save the results. If negative, results are saved after every snapshot. Defaults to 500.
     """
 
     if use_sclopf:
@@ -372,9 +373,14 @@ def run_cascade_dual_line_failures(
     print("\n#### N-2 failures: Co2 level", co2l, " | #Nodes:", n_nodes, " ####")
     splitting_cascades = dict()
 
-    save_idxs = np.linspace(
-        0, len(network.snapshots) - 1, n_save_points, dtype=int
-    ).astype(int)
+    if n_checkpoints < 0:
+        n_checkpoints = len(network.snapshots)
+    checkpoint_idxs = np.arange(
+        0, len(network.snapshots), len(network.snapshots) // n_checkpoints
+    )
+    print(checkpoint_idxs)
+    checkpoint_snaphots = network.snapshots[checkpoint_idxs]
+    last_checkpoint_snapshot = None
 
     for i, snapshot in tqdm(enumerate(network.snapshots)):
         key_now = snapshot.strftime("%Y-%m-%d %H:00")
@@ -408,8 +414,8 @@ def run_cascade_dual_line_failures(
 
         splitting_cascades[key_now] = res_dict
 
-        if i in save_idxs:
-            with gzip.open(fpath_out + ".pklz", "wb") as handle:
+        if snapshot in checkpoint_snaphots:
+            with gzip.open(fpath_out + str(snapshot) + "_.pklz", "wb") as handle:
                 if line_mitigation_dict is None:
                     pickle.dump(
                         splitting_cascades, handle, protocol=pickle.HIGHEST_PROTOCOL
@@ -420,10 +426,13 @@ def run_cascade_dual_line_failures(
                         handle,
                         protocol=pickle.HIGHEST_PROTOCOL,
                     )
+                if last_checkpoint_snapshot:
+                    os.remove(fpath_out + str(last_checkpoint_snapshot) + "_.pklz")
                 print(
                     f"######### Savepoint {i}, at snapshot {snapshot}. saved to",
-                    fpath_out + ".pklz #########",
+                    fpath_out + str(snapshot) + "_.pklz #########",
                 )
+                last_checkpoint_snapshot = snapshot
 
         if (
             stop_timestamp_str is not None
@@ -470,7 +479,7 @@ if __name__ == "__main__":
         n_nodes_in,
         save_whole_cascades=save_whole_cascades_in,
         use_sclopf=True,
-        n_save_points=50,
-        # check_n1_security=False,
+        n_checkpoints=20,
+        check_n1_security=True,
         # line_mitigation_dict=None,
     )
