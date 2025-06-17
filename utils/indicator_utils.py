@@ -12,71 +12,104 @@ from utils.config import path_to_indicator_vectors_sclopf
 
 def load_indicator_vectors(
     n_nodes,
-    co2l,
     indicator_type,
+    transformation,
     path_to_indicator_vectors=path_to_indicator_vectors_sclopf,
     mask=None,
     weights=None,
-)-> np.ndarray:
-    if (isinstance(co2l, list) or isinstance(co2l, np.ndarray)) and not isinstance(
-        mask, list
-    ):
-        raise TypeError("if co2l is a list mask has to be a list, too")
+    split_props=None,
+) -> "tuple[dict, dict, pd.DataFrame]":
+    # if (isinstance(co2l, list) or isinstance(co2l, np.ndarray)) and not isinstance(
+    #     mask, list
+    # ):
+    #     raise TypeError("if co2l is a list mask has to be a list, too")
 
-    if not (
-        (isinstance(co2l, list) or isinstance(co2l, np.ndarray))
-        or isinstance(co2l, float)
-    ):
-        Exception("co2l has to be float or list")
+    # if not (
+    #     (isinstance(co2l, list) or isinstance(co2l, np.ndarray))
+    #     or isinstance(co2l, float)
+    # ):
+    #     Exception("co2l has to be float or list")
 
-    if weights is None and isinstance(co2l, float):
-        all_vectors = load_indicator_vectors_unweighted_single_lvl(
-            n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask
+    # if weights is None and isinstance(co2l, float):
+    #     all_vectors = load_indicator_vectors_unweighted_single_lvl(
+    #         n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask
+    #     )
+    #     return all_vectors
+
+    # elif weights is None and isinstance(co2l, list):
+    #     all_vectors = load_indicator_vectors_unweighted_multiple_lvl(
+    #         n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask
+    #     )
+    #     return all_vectors
+
+    # elif weights is not None and isinstance(co2l, float):
+    #     all_vectors, all_weights = load_indicator_vectors_weighted_single_lvl(
+    #         n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights
+    #     )
+    #     return all_vectors, all_weights
+
+    assert isinstance(
+        weights, pd.Series
+    ), f"weights must be a Series but is {type(weights)}"
+    assert isinstance(
+        split_props, pd.DataFrame
+    ), f"split_props must be a DataFrame but is {type(split_props)}"
+
+    vectors_filtered, weights_filtered, split_props_filtered = (
+        load_indicator_vectors_weighted_multiple_lvl(
+            n_nodes,
+            indicator_type,
+            transformation,
+            path_to_indicator_vectors,
+            mask,
+            weights,
+            split_props,
         )
-        return all_vectors
-
-    elif weights is None and isinstance(co2l, list):
-        all_vectors = load_indicator_vectors_unweighted_multiple_lvl(
-            n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask
-        )
-        return all_vectors
-
-    elif weights is not None and isinstance(co2l, float):
-        all_vectors, all_weights = load_indicator_vectors_weighted_single_lvl(
-            n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights
-        )
-        return all_vectors, all_weights
-
-    elif weights is not None and isinstance(co2l, list):
-        all_vectors, all_weights = load_indicator_vectors_weighted_multiple_lvl(
-            n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights
-        )
-        return all_vectors, all_weights
+    )
+    return vectors_filtered, weights_filtered, split_props_filtered
 
 
 def load_indicator_vectors_weighted_multiple_lvl(
-    n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights
+    n_nodes,
+    indicator_type,
+    transformation,
+    path_to_indicator_vectors,
+    mask,
+    weights,
+    split_props: pd.DataFrame,
 ):
-    all_vectors = []
-    all_weights = []
-    for i, co2 in enumerate(co2l):
-        file_name = f"indicator_vector_{indicator_type}_Co2L{co2}_n{n_nodes}.pklz"
+    all_vectors_dict = {}
+    all_weights_dict = {}
+    all_split_props = []
+    for i, co2lvl in enumerate(split_props.co2l.unique()):
+        if isinstance(co2lvl, str):
+            co2lvl = float(co2lvl)
+        assert co2lvl <= 0.6 and co2lvl >= 0
+        file_name = f"indicator_vector_{indicator_type}_Co2L{co2lvl}_n{n_nodes}.pklz"
         with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
-            vectors_lvl = pickle.load(out)
+            vectors_tuple = pickle.load(out)
+        vectors_lvl = vectors_tuple[-1]
         weights_lvl = np.array(
-            [int(weights[time_stamp[0]]) for time_stamp in vectors_lvl[0]]
+            [int(weights[time_stamp[0]]) for time_stamp in vectors_tuple[0]]
         )
-        vectors_lvl = vectors_lvl[-1]
 
+        split_props_level = split_props[split_props.co2l == co2lvl]
+
+        vectors_lvl = transform_indicator_vectors(
+            vectors_lvl, transformation, indicator_type
+        )
         if mask is not None:
-            vectors_lvl = vectors_lvl[np.array(mask[i])]
-            weights_lvl = weights_lvl[np.array(mask[i])]
+            vectors_lvl = vectors_lvl[np.array(mask[co2lvl])]
+            weights_lvl = weights_lvl[np.array(mask[co2lvl])]
+            split_props_level = split_props_level.iloc[np.array(mask[co2lvl])]
 
-        all_weights.append(weights_lvl)
-        all_vectors.append(vectors_lvl)
-    all_weights = np.concatenate(all_weights)
-    all_vectors = np.concatenate(all_vectors)
-    return all_vectors, all_weights
+        all_weights_dict[co2lvl] = weights_lvl
+        all_vectors_dict[co2lvl] = vectors_lvl
+        all_split_props.append(split_props_level)
+
+    split_props_filtered = pd.concat(all_split_props, axis=0)
+
+    return all_vectors_dict, all_weights_dict, split_props_filtered
 
 
 def load_indicator_vectors_weighted_single_lvl(
@@ -213,3 +246,48 @@ def calc_is_main_component_indicator_vectors(
         )
 
     return np.array(indicator_vectors)
+
+
+def transform_indicator_vectors(indicator_vectors, transformation, indicator_type):
+    """transforms indicator vectors to allow better clustering
+
+    Args:
+        indicator_vectors (np.ndarray): indicator vectors
+        transformation (str): name of transformation
+
+    Returns:
+        np.ndarray: transformed indicator vectors
+    """
+    if transformation == "sign":
+        transformed_indicator_vectors = np.sign(indicator_vectors)
+    elif transformation == "tanh":
+        transformed_indicator_vectors = np.tanh(indicator_vectors)
+    elif transformation == "clipped_tanh":
+        transformed_indicator_vectors = np.tanh(indicator_vectors)
+        transformed_indicator_vectors = np.clip(indicator_vectors, None, 0)
+    elif transformation == "clipped":
+        transformed_indicator_vectors = np.clip(indicator_vectors, None, 0)
+    elif transformation == "main_comp_max_lshare":
+        if indicator_type != "lshare":
+            raise ValueError(
+                "is_main_component transformation only works for lshare indicator"
+            )
+        transformed_indicator_vectors = calc_is_main_component_indicator_vectors(
+            indicator_vectors
+        )
+    elif transformation == "main_comp_most_frequent_lshare":
+        if indicator_type != "lshare":
+            raise ValueError(
+                "is_main_component transformation only works for lshare indicator"
+            )
+        transformed_indicator_vectors = calc_is_main_component_indicator_vectors(
+            indicator_vectors, main_component_by="main_comp_most_frequent_lshare"
+        )
+    elif transformation == "blackout":
+        transformed_indicator_vectors = np.array(indicator_vectors < -1, dtype=int)
+    elif transformation == "not_zero":
+        transformed_indicator_vectors = np.array(indicator_vectors != 0, dtype=int)
+    else:
+        raise ValueError(f"transformation {transformation} not implemented")
+
+    return transformed_indicator_vectors
