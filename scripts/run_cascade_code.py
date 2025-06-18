@@ -201,6 +201,8 @@ def run_cascade_dual_line_failures(
     else:
         save_path = save_path_lopf
 
+    os.makedirs(save_path, exist_ok=True)
+
     fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
 
     if not use_sclopf:
