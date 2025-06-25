@@ -18,6 +18,7 @@ def load_indicator_vectors(
     mask=None,
     weights=None,
     split_props=None,
+    co2_list=(),
 ) -> "tuple[dict, dict, pd.DataFrame]":
     # if (isinstance(co2l, list) or isinstance(co2l, np.ndarray)) and not isinstance(
     #     mask, list
@@ -64,6 +65,7 @@ def load_indicator_vectors(
             mask,
             weights,
             split_props,
+            co2list=co2_list,
         )
     )
     return vectors_filtered, weights_filtered, split_props_filtered
@@ -77,11 +79,18 @@ def load_indicator_vectors_weighted_multiple_lvl(
     mask,
     weights,
     split_props: pd.DataFrame,
+    co2list=(),
 ):
+    if not co2list:
+        co2list = split_props.co2l.unique()
+
     all_vectors_dict = {}
     all_weights_dict = {}
     all_split_props = []
-    for i, co2lvl in enumerate(split_props.co2l.unique()):
+    for i, co2lvl in enumerate(co2list):
+        if co2lvl == 0.05:
+            continue  # skip 0.05 as simulation it still running
+
         if isinstance(co2lvl, str):
             co2lvl = float(co2lvl)
         assert co2lvl <= 0.6 and co2lvl >= 0

@@ -11,6 +11,7 @@ import multiprocessing
 import os
 import pickle
 from functools import partial
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -569,11 +570,11 @@ def run_specific_co2lvl_n_size(
 
 
 def single_call(
-    nn_nodes, co2_lvl, use_sclopf, max_iter, revert_fac, resolve_method_n_delta_rot_e
+    nn_nodes, use_sclopf, max_iter, revert_fac, resolve_method_n_delta_rot_e
 ):
     """Wrapper to be used in 'run_different_parameters_fo_co2lvl'"""
 
-    resolve_method, delta_rot_e = resolve_method_n_delta_rot_e
+    resolve_method, delta_rot_e, co2_lvl = resolve_method_n_delta_rot_e
 
     run_specific_co2lvl_n_size(
         co2_lvl,
@@ -591,7 +592,7 @@ def single_call(
 
 
 def run_different_parameters_for_co2lvl(
-    co2_lvl: float,
+    co2_lvl: Union[float, list],
     nn_nodes: int,
     use_sclopf: bool,
     delta_rot_ls: list,
@@ -616,13 +617,15 @@ def run_different_parameters_for_co2lvl(
         nr_processes (int, optional): How many processes are being used at the same time. Defaults to 5.
     """
 
+    if isinstance(co2_lvl, float):
+        co2_lvl = [co2_lvl]
     resolve_n_deltrotE_ls = list(
-        itertools.product(resolve_equality_method_ls, delta_rot_ls)
+        itertools.product(resolve_equality_method_ls, delta_rot_ls, co2_lvl)
     )
 
     with multiprocessing.get_context("spawn").Pool(processes=nr_processes) as pool:
         partial_func = partial(
-            single_call, nn_nodes, co2_lvl, use_sclopf, max_iter, revert_chrotE_fac
+            single_call, nn_nodes, use_sclopf, max_iter, revert_chrotE_fac
         )
 
         [

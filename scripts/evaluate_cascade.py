@@ -16,6 +16,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from utils.visualization import get_co2_levels
+
 sys.path.append("./")
 # Post messages to mattermost
 from utils.cascade_simulation import solve_lpf
@@ -27,7 +29,6 @@ from utils.alternative_split_indicator_vectors import (  # run_all_co2_lvl_node_
     run_all_co2_lvl_edge_based,
 )
 from utils.config import (
-    get_co2_levels,
     path_to_cascade_results_lopf,
     path_to_cascade_results_sclopf,
     path_to_evaluation_results_lopf,
@@ -348,16 +349,16 @@ if __name__ == "__main__":
     if isinstance(co2l_in, float):
         co2l_in = [co2l_in]
     for co2l_in in co2l_in:
-        print(f"###############################################################")
-        print(f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}")
-        print(f"###############################################################")
-        evaluate_cascade(
-            co2l_in,
-            n_nodes_in,
-            use_sclopf=True,
-            eval_indicator_vectors=True,
-            # end_time_str="2013-01-02 00:00",
-        )
+        # print(f"###############################################################")
+        # print(f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}")
+        # print(f"###############################################################")
+        # evaluate_cascade(
+        #     co2l_in,
+        #     n_nodes_in,
+        #     use_sclopf=True,
+        #     eval_indicator_vectors=True,
+        #     # end_time_str="2013-01-02 00:00",
+        # )
         print(f"###############################################################")
         print(
             f"Getting edge indicator vecs for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
@@ -389,4 +390,11 @@ if __name__ == "__main__":
             f"Running all CO2 level edge based for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
         )
         print(f"###############################################################")
-        run_all_co2_lvl_edge_based(n_nodes_in, use_sclopf=True, overwrite=False)
+        find_failed_edge_indicator_vector_for_cascade_results(
+            co2l_in,
+            n_nodes_in,
+            save_res=True,
+            verbose=True,
+            overwrite=False,
+            use_sclopf=True,
+        )

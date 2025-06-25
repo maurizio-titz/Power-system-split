@@ -342,6 +342,7 @@ def load_split_props(n_nodes: int, co2l=None, use_sclopf: bool = True):
     else:
         load_dir = path_to_vis_results_lopf
 
+    assert isinstance(n_nodes, int), "n_nodes must be an integer"
     # load hdf pandas
     split_properties = pd.read_hdf(load_dir + f"split_properties_all_n{n_nodes}.h5")
 

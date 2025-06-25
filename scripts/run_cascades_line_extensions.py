@@ -38,7 +38,7 @@ for nn_lines in n_lines_added:
             run_cascade_dual_line_failures(
                 co2l_in,
                 n_nodes_in,
-                save_all_cascades=save_all_cascades_in,
+                save_whole_cascades=save_all_cascades_in,
                 use_sclopf=True,
                 check_n1_security=True,
                 line_mitigation_dict=line_mitigation_dict,

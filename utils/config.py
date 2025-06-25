@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
-root_path = (
-    "/srv/data/jlange/power-system-split"  # add the root path for your data and results here
-)
+
+root_path = "/srv/data/jlange/power-system-split/no_extensions/"  # add the root path for your data and results here
 
 data_path = root_path + "/data/"
 results_path = root_path + "/results/"
@@ -11,6 +10,7 @@ path_to_lopf_data = root_path + "/data/European_networks_lopf/"
 
 
 # sclopf paths
+path_to_sclopf_results = root_path + "/results/sclopf/"
 path_to_indicator_vectors_sclopf = root_path + "/results/sclopf/indicator_vectors/"
 path_to_clustering_results_sclopf = root_path + "/results/sclopf/clustering/"
 path_to_cascade_results_sclopf = root_path + "/results/sclopf/cascade_results/"

@@ -7,6 +7,8 @@ import pickle
 import sys
 import warnings
 
+from utils.visualization import get_co2_levels
+
 # from glob import glob
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -22,7 +24,6 @@ sys.path.append("./")
 from utils import cascade_simulation, data_handling
 from utils import visualization as vis
 from utils.config import (
-    get_co2_levels,
     path_to_cascade_results_lopf,
     path_to_cascade_results_sclopf,
     path_to_evaluation_results_lopf,

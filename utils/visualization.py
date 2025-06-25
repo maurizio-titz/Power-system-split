@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*
 
-""" 
+"""
 Different functions to visualize system splits and their properties
 """
 
@@ -12,6 +12,7 @@ import sys
 
 import networkx as nx
 import numpy as np
+import pandas as pd
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.neighbors import RadiusNeighborsClassifier
 from tqdm import tqdm
@@ -19,7 +20,12 @@ from tqdm import tqdm
 sys.path.append("./")
 from utils import data_handling
 from utils.clustering_visualisation import plot_clusters_wrapper
-from utils.config import path_to_clustering_results_sclopf, path_to_pypsa_network_sclopf
+from utils.config import (
+    path_to_clustering_results_sclopf,
+    path_to_pypsa_network_sclopf,
+    path_to_sclopf_data,
+    path_to_sclopf_results,
+)
 
 
 def calc_likelihood_failure(
@@ -382,3 +388,40 @@ def val_at_risk(data, n_total, q, target="rocof", method="abs"):
 
 def calc_rocof(load_imbalance, inertia_proxy):
     return 50 * load_imbalance / (inertia_proxy * 2 * 6)
+
+
+def get_co2_levels(n_nodes, ignore_lvls=0.05):
+    sclopf_files = os.listdir(path_to_sclopf_data)
+    sclopf_files = [file for file in sclopf_files if f"_{n_nodes}_" in file]
+    co2l_list = [float(file.split("Co2L")[-1].split("-")[0]) for file in sclopf_files]
+    co2l_list = sorted(list(set(co2l_list)), reverse=True)
+
+    if isinstance(ignore_lvls, (float, int)):
+        ignore_lvls = [ignore_lvls]
+    for lvl in ignore_lvls:
+        if lvl in co2l_list:
+            co2l_list.remove(lvl)
+
+    return co2l_list
+
+
+def get_actual_co2_level(lvls, n_nodes=600, percent=False):
+    lvls_actual = (
+        pd.read_csv(path_to_sclopf_results + "actual_co2_levels.csv", index_col=0)
+        .loc[lvls]
+        .values.squeeze()
+    )
+
+    if percent:
+        lvls_actual = (lvls_actual * 100).astype(int)
+
+    if hasattr(lvls_actual, "shape") and lvls_actual.shape == ():
+        # lvls_actual is a scalar, do not index
+        pass
+    elif (
+        isinstance(lvls_actual, (list, tuple, pd.Series, pd.DataFrame))
+        and len(lvls_actual) == 1
+    ):
+        lvls_actual = lvls_actual[0]
+
+    return lvls_actual

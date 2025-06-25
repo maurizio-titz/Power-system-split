@@ -206,12 +206,12 @@ def plot_map_inertia_placement_final(
     # for each opitimization step holds: [idx_node, delta_rot_energy_factor]
 
     # get split properties
-    split_properties = data_handling.load_split_props(co2_lvl, nn, use_sclopf)
+    split_properties = data_handling.load_split_props(nn, co2_lvl, use_sclopf)
 
     total_loss_share_rocof_lvl = (
         split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
     ).sum()
-    split_properties = data_handling.load_split_props(co2_lvl_ref, nn, use_sclopf)
+    split_properties = data_handling.load_split_props(nn, co2_lvl_ref, use_sclopf)
     total_loss_share_rocof_ref = (
         split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
     ).sum()
@@ -755,7 +755,7 @@ def calc_inertia_placement_ref_loss(
 
         inertia_placed_res_arr = np.array(inertia_placed_ls)
 
-        split_properties = data_handling.load_split_props(co2_lvl, n_nodes, use_sclopf)
+        split_properties = data_handling.load_split_props(n_nodes, co2_lvl, use_sclopf)
 
         total_loss_share_rocof_lvl = (
             split_properties.lost_load_share_blackout

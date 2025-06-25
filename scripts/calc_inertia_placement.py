@@ -5,7 +5,7 @@ import sys
 sys.path.append("./")
 
 
-from utils.config import get_co2_levels
+from utils.visualization import get_co2_levels
 from utils.plot_mitigation_strategies import plot_map_inertia_placement_final
 from utils.synthetic_inertia_placement import (
     run_different_parameters_for_co2lvl,
@@ -31,7 +31,7 @@ if __name__ == "__main__":
         "random"  # performance is very similar, random gives the most intuitive results
     )
     resolve_strategies = [resolve_strategy]
-    delta_rot_ls = [1000, 500, 200, 100]
+    delta_rot_ls = [1000]
     for co2_lvl in co2l_list:
         print(f"Running for co2_lvl: {co2_lvl}")
         run_different_parameters_for_co2lvl(
@@ -40,7 +40,7 @@ if __name__ == "__main__":
             use_sclopf,
             delta_rot_ls,
             max_iter=10000,
-            nr_processes=1,
+            nr_processes=len(co2l_list),
             revert_chrotE_fac=False,
             resolve_equality_method_ls=resolve_strategies,
         )
