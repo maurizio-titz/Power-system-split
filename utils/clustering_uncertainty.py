@@ -103,7 +103,7 @@ def typed_katz_centrality_batch(
     elif set(node_class_vectors) == {-1, 1}:
         pass
     else:
-        raise ValueError("node_class_vectors must be binary or -1,1")
+        raise ValueError("node_class_vectors must be binary, either [0,1] or [-1,1]")
 
     if scipy.sparse.issparse(adjacency_matrix):
         adjacency_matrix = adjacency_matrix.toarray()
@@ -348,18 +348,26 @@ def get_unique_vectors_with_weights(
         dict: A dictionary where keys are unique row vectors (as tuples) and values are lists of indices where these vectors occur in the binary array.
     """
     unique_to_idx = OrderedDict()
-    for idx, (row, weight) in tqdm(enumerate(zip(binary_array, weights))):
-        row_tuple = tuple(row)
-        if row_tuple in unique_to_idx:
-            unique_to_idx[row_tuple]["idxs"].append(idx)
-            unique_to_idx[row_tuple]["weight"] += weight
-        else:
-            unique_to_idx[row_tuple] = {"idxs": [idx], "weight": weight}
+    if weights.size == binary_array.shape[0]:
+        for idx, (row, weight) in tqdm(enumerate(zip(binary_array, weights))):
+            row_tuple = tuple(row)
+            if row_tuple in unique_to_idx:
+                unique_to_idx[row_tuple]["idxs"].append(idx)
+                unique_to_idx[row_tuple]["weight"] += weight
+            else:
+                unique_to_idx[row_tuple] = {"idxs": [idx], "weight": weight}
+    elif weights.size == 0:
+        for idx, row in tqdm(enumerate(binary_array)):
+            row_tuple = tuple(row)
+            if row_tuple in unique_to_idx:
+                unique_to_idx[row_tuple]["idxs"].append(idx)
+            else:
+                unique_to_idx[row_tuple] = {"idxs": [idx]}
+    else:
+        raise ValueError(
+            "weights must be of the same length as the number of rows in the binary array or empty"
+        )
 
-    # Filter out rows that are not duplicates
-    # duplicate_indices = {
-    #     row: indices for row, indices in duplicates.items() if len(indices) > 1
-    # }
     return unique_to_idx
 
 
@@ -385,3 +393,74 @@ def idx_to_unique_vector_idx(unique_to_idx: dict) -> dict:
 
 # def graph_based_clustering():
 #     https://graph-tool.skewed.de/
+
+
+def prepare_clusters_for_analysis(
+    clustering_res_path,
+    unique_blackout_dict,
+    split_properties_filtered,
+    overwrite=False,
+):
+    path_labels_all = clustering_res_path.replace(".pklz", "_labels_all.npy")
+    path_goup_masks = clustering_res_path.replace(".pklz", "_group_masks.pklz")
+    # path_group_means = clustering_res_path.replace(".pklz", "_group_means.npy")
+
+    if (
+        os.path.exists(path_labels_all)
+        and os.path.exists(path_goup_masks)
+        and not overwrite
+    ):
+        print(f"Skipping because labels_all, goup_masks and group_means already exist.")
+        return
+
+    with gzip.open(clustering_res_path, "rb") as out:
+        clustering_res = pickle.load(out)
+
+    unique_idx_to_ids = [val["idxs"] for val in unique_blackout_dict.values()]
+    unique_blackout_vecs = np.array(list(unique_blackout_dict.keys()))
+
+    labels = clustering_res.labels_
+
+    # Number of clusters in labels, ignoring noise if present.
+    n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+    n_noise_ = list(labels).count(-1)
+
+    unique_labels = set(labels)
+    # core_samples_mask = np.zeros_like(labels, dtype=bool)
+    # core_samples_mask[clustering_res.core_sample_indices_] = True
+
+    class_member_masks = [labels == k for k in unique_labels]
+    # group_means = np.array(
+    #     [
+    #         np.mean(unique_blackout_vecs[labels == k], axis=0)
+    #         for k in unique_labels
+    #         if k != -1
+    #     ]
+    # )
+    groups = {
+        k: np.concatenate(
+            [
+                unique_idx_to_ids[i]
+                for i in range(len(unique_idx_to_ids))
+                if labels[i] == k
+            ]
+        )
+        for k in unique_labels
+        if k != -1
+    }
+
+    all_idxs = list(np.concatenate(list(groups.values())))
+    all_idxs.sort()
+    labels_all = np.array([None] * split_properties_filtered.shape[0])
+
+    for group, idxs in groups.items():
+        labels_all[idxs] = group
+
+    np.save(path_labels_all, labels_all)
+
+    group_masks = {k: np.array(labels_all == k) for k in unique_labels if k != -1}
+    with gzip.open(path_goup_masks, "wb") as out:
+        pickle.dump(group_masks, out)
+
+    # with open(path_group_means, "wb") as out:
+    # np.save(out, group_means)

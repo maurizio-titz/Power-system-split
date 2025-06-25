@@ -16,8 +16,8 @@ from utils.config import (
     path_to_clustering_results_sclopf,
 )
 from utils.indicator_utils import (
-    calc_is_main_component_indicator_vectors,
     load_indicator_vectors,
+    transform_indicator_vectors,
 )
 
 
@@ -103,51 +103,6 @@ def cluster_kmeans(
             ],
             fh_out,
         )
-
-
-def transform_indicator_vectors(indicator_vectors, transformation, indicator_type):
-    """transforms indicator vectors to allow better clustering
-
-    Args:
-        indicator_vectors (np.ndarray): indicator vectors
-        transformation (str): name of transformation
-
-    Returns:
-        np.ndarray: transformed indicator vectors
-    """
-    if transformation == "sign":
-        transformed_indicator_vectors = np.sign(indicator_vectors)
-    elif transformation == "tanh":
-        transformed_indicator_vectors = np.tanh(indicator_vectors)
-    elif transformation == "clipped_tanh":
-        transformed_indicator_vectors = np.tanh(indicator_vectors)
-        transformed_indicator_vectors = np.clip(indicator_vectors, None, 0)
-    elif transformation == "clipped":
-        transformed_indicator_vectors = np.clip(indicator_vectors, None, 0)
-    elif transformation == "main_comp_max_lshare":
-        if indicator_type != "lshare":
-            raise ValueError(
-                "is_main_component transformation only works for lshare indicator"
-            )
-        transformed_indicator_vectors = calc_is_main_component_indicator_vectors(
-            indicator_vectors
-        )
-    elif transformation == "main_comp_most_frequent_lshare":
-        if indicator_type != "lshare":
-            raise ValueError(
-                "is_main_component transformation only works for lshare indicator"
-            )
-        transformed_indicator_vectors = calc_is_main_component_indicator_vectors(
-            indicator_vectors, main_component_by="main_comp_most_frequent_lshare"
-        )
-    elif transformation == "blackout":
-        transformed_indicator_vectors = np.array(indicator_vectors < -1, dtype=int)
-    elif transformation == "not_zero":
-        transformed_indicator_vectors = np.array(indicator_vectors != 0, dtype=int)
-    else:
-        raise ValueError(f"transformation {transformation} not implemented")
-
-    return transformed_indicator_vectors
 
 
 def calculate_samples_per_cluster(

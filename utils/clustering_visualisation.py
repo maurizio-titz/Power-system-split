@@ -377,7 +377,7 @@ def plot_centroid_with_failures(
 
 
 def load_lost_load_share_broken(
-    n_nodes=400, mask=None, co2l_list=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
+    n_nodes=600, mask=None, co2l_list=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
 ):
     if mask is None:
         path = path_to_evaluation_results_sclopf + f"masks_all_n400.pklz"
@@ -398,7 +398,7 @@ def load_lost_load_share_broken(
 
 def get_lost_load_share(
     masks,
-    n_nodes=400,
+    n_nodes=600,
     co2l_list=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6),
     lost_load_type="total",
     dir=None,
@@ -427,33 +427,35 @@ def get_lost_load_share(
 def load_masked_indicator_vectors(
     indicator_type,
     sub_dir=None,
-    co2l_list=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6),
-    n_nodes=400,
-    masks=None,
+    n_nodes=600,
+    masks_dict={},
     return_weights=False,
     transformation=None,
     n_nodes_split=None,
     lost_load_share=None,
     use_sclopf=True,
 ):
-    if (return_weights or masks is None) and sub_dir is None:
-        sub_dir = get_path_to_clustering_dir(
-            n_nodes=n_nodes,
-            co2l=co2l,
-            indicator_type=indicator_type,
-            transformation=transformation,
-            n_nodes_split=n_nodes_split,
-            lost_load_share=lost_load_share,
-        )
+    if (return_weights or masks_dict is None) and sub_dir is None:
+        raise NotImplementedError
 
-    if masks is None:
-        path = sub_dir + "masks.pklz"
+        # sub_dir = get_path_to_clustering_dir(
+        #     n_nodes=n_nodes,
+        #     co2l=co2l,
+        #     indicator_type=indicator_type,
+        #     transformation=transformation,
+        #     n_nodes_split=n_nodes_split,
+        #     lost_load_share=lost_load_share,
+        # )
 
-        with gzip.open(path, "rb") as out:
-            masks = pickle.load(out)
+    if masks_dict is None:
+        raise NotImplementedError
+        # path = sub_dir + "masks.pklz"
+
+        # with gzip.open(path, "rb") as out:
+        #     masks = pickle.load(out)
 
     vectors = []
-    for co2l, mask in zip(co2l_list, masks):
+    for co2l, mask in masks_dict.items():
         if use_sclopf:
             path = (
                 path_to_evaluation_results_sclopf
@@ -475,7 +477,7 @@ def load_masked_indicator_vectors(
     return np.concatenate(vectors)
 
 
-def map_components_to_original(values, original_ind_to_components_ind, n_nodes=400):
+def map_components_to_original(values, original_ind_to_components_ind, n_nodes=600):
     """map values defined on splits to new indicator vectors defined on components
 
     Args:
@@ -1137,7 +1139,7 @@ def plot_clusters_wrapper(
     os.makedirs(save_dir, exist_ok=True)
     failed_edges_indicator_vectors, weights = load_masked_indicator_vectors(
         "failed_edges",
-        masks=masks,
+        masks_dict=masks,
         return_weights=True,
         sub_dir=clustering_results_dir,
         use_sclopf=use_sclopf,
