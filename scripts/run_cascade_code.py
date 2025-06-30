@@ -434,10 +434,7 @@ def run_cascade_dual_line_failures(
                     )
                 print(
                     f"######### Savepoint {i}, at snapshot {snapshot}. saved to",
-                    fpath_out
-                    + "_"
-                    + str(last_checkpoint_snapshot)
-                    + "_.pklz #########",
+                    fpath_out + "_" + str(snapshot) + "_.pklz #########",
                 )
                 last_checkpoint_snapshot = snapshot
 
