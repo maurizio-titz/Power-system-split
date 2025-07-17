@@ -81,16 +81,13 @@ def load_indicator_vectors_weighted_multiple_lvl(
     split_props: pd.DataFrame,
     co2list=(),
 ):
-    if not co2list:
+    if co2list is None or len(co2list) == 0:
         co2list = split_props.co2l.unique()
 
     all_vectors_dict = {}
     all_weights_dict = {}
     all_split_props = []
     for i, co2lvl in enumerate(co2list):
-        if co2lvl == 0.05:
-            continue  # skip 0.05 as simulation it still running
-
         if isinstance(co2lvl, str):
             co2lvl = float(co2lvl)
         assert co2lvl <= 0.6 and co2lvl >= 0
