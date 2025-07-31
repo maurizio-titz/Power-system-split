@@ -20,10 +20,7 @@ import matplotlib as mpl
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from cycler import cycler
 
-# Add root path and import utilities
-root_path = "../"
-os.chdir(root_path)
-sys.path.append(root_path)
+sys.path.append("./")
 
 from utils.visualization import get_actual_co2_level, get_co2_levels
 from utils.config import (
@@ -32,6 +29,14 @@ from utils.config import (
     path_to_vis_results_sclopf,
 )
 from utils import data_handling, cascade_simulation
+from utils.plot_style import (
+    setup_matplotlib_style,
+    AXIS_LABEL_FONTSIZE,
+    TICK_LABEL_FONTSIZE,
+    PANEL_LABEL_FONTSIZE,
+    add_panel_label,
+    save_figure,
+)
 
 
 def create_split_statistics_plot():
@@ -63,7 +68,7 @@ def create_split_statistics_plot():
 
     # Get CO2 levels
     co2ls = get_co2_levels(n_nodes)
-    selected_co2ls = np.array([0.1, 0.3, 0.6, 0.8])
+    selected_co2ls = np.array([0.0, 0.2, 0.6])
 
     # Load split component properties and split properties
     component_props = pd.read_hdf(
@@ -89,37 +94,40 @@ def create_split_statistics_plot():
         component_props.time_stamp
     ].values
 
-    # Calculate weighted split properties
-    weighted_split_props_dict = dict(
-        {
-            co2l: {
-                category: split_props.loc[
-                    (split_props.category == category)
-                    & (split_props.index.get_level_values(0) == co2l),
-                    "snapshot_weighting",
-                ].sum()
-                for category in split_props.category.unique()
-            }
-            for co2l in co2ls
-        }
-    )
+    # # Calculate weighted split properties
+    # weighted_split_props_dict = dict(
+    #     {
+    #         co2l: {
+    #             category: split_props.loc[
+    #                 (split_props.category == category)
+    #                 & (split_props.index.get_level_values(0) == co2l),
+    #                 "snapshot_weighting",
+    #             ].sum()
+    #             for category in split_props.category.unique()
+    #         }
+    #         for co2l in co2ls
+    #     }
+    # )
 
-    # Setup matplotlib
-    mpl.style.use("default")
-    plt.rc("text", usetex=True)
-    plt.rc("text.latex", preamble=r"\usepackage{amsmath}\usepackage{bm}")
+    # Setup matplotlib styling
+    setup_matplotlib_style()
 
-    fig = plt.figure(figsize=(9, 3.3))
+    fig = plt.figure(figsize=(12, 5))
     gs_vertical = GridSpec(2, 1, figure=fig, hspace=0.6, height_ratios=[1, 0.1])
 
     # Panel setup
-    n_cols = 3
+    n_cols = 4
     gsTop = GridSpecFromSubplotSpec(
-        1, n_cols, subplot_spec=gs_vertical[0, :], hspace=0, wspace=0.4
+        1,
+        n_cols,
+        subplot_spec=gs_vertical[0, :],
+        width_ratios=[1, 1, 1, 0.4],
+        hspace=0,
+        wspace=0.4,
     )
-    gs_bottom = GridSpecFromSubplotSpec(1, n_cols, subplot_spec=gs_vertical[1, :])
-    ax1 = fig.add_subplot(gsTop[2])
-    ax1_legend = fig.add_subplot(gs_bottom[1:])
+    # gs_bottom = GridSpecFromSubplotSpec(1, 1, subplot_spec=gs_vertical[1, :])
+    ax3_num_splits = fig.add_subplot(gsTop[2])
+    ax3_num_splits_legend = fig.add_subplot(gsTop[3])
 
     # Panel c: split number and categories (loss of load share distribution)
     cmap = plt.get_cmap("inferno_r")
@@ -137,7 +145,7 @@ def create_split_statistics_plot():
     data = np.stack(data)
     data = pd.DataFrame(data, index=co2ls[::-1], columns=bin_centers)
 
-    plt.sca(ax1)
+    plt.sca(ax3_num_splits)
     for i, bin_center in enumerate(bin_centers):
         color = cmap(i / (len(bin_centers) + 1) + (1 / (len(bin_centers) + 1)))
         counts = data.loc[:, bin_center]
@@ -151,36 +159,39 @@ def create_split_statistics_plot():
             markersize=10,
         )
 
-    ax1.set_xlabel(r"CO$_2$ level [\% of 1990]")
-    ax1.set_ylabel("Number of System Splits")
-    ax1.set_yscale("log")
-    ax1.invert_xaxis()
+    ax3_num_splits.set_xlabel(
+        r"CO$_2$ level [\% of 1990]", fontsize=AXIS_LABEL_FONTSIZE
+    )
+    ax3_num_splits.set_ylabel("Number of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
+    ax3_num_splits.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    ax3_num_splits.set_yscale("log")
+    ax3_num_splits.invert_xaxis()
 
     # Legend for panel c
-    h, l = ax1.get_legend_handles_labels()
-    ax1_legend.legend(
+    h, l = ax3_num_splits.get_legend_handles_labels()
+    ax3_num_splits_legend.legend(
         h,
         l,
-        title="Loss of load share",
+        title="Blackout size",
         loc="center",
-        ncols=len(bin_centers),
+        ncols=1,
         columnspacing=0.5,
     )
-    ax1_legend.axis("off")
+    ax3_num_splits_legend.axis("off")
 
     # Filter out very small components
-    component_props_filtered = component_props
+    component_props_filtered = component_props[component_props.load_share > 0.1]
 
     # Panel b: Inertia histograms
     cmap = plt.get_cmap("cividis")
 
-    ax2 = fig.add_subplot(gsTop[1])
-    ax2_legend = fig.add_subplot(gs_bottom[0])
+    ax2_inertia = fig.add_subplot(gsTop[1])
+    ax2_inertia_legend = fig.add_subplot(gs_vertical[1, :])
     rot_energy = component_props_filtered.rot_energy / 1000
     bins = np.linspace(rot_energy.min(), rot_energy.max(), 15)
 
     for co2l in selected_co2ls:
-        vals = ax2.hist(
+        vals = ax2_inertia.hist(
             rot_energy[component_props_filtered.co2l == co2l],
             weights=component_props_filtered.snapshot_weighting[
                 component_props_filtered.co2l == co2l
@@ -194,17 +205,18 @@ def create_split_statistics_plot():
             density=False,
         )
 
-    ax2.set_yscale("log")
-    ax2.set_xlabel("Rotational energy [GWs]")
-    ax2.set_ylabel("Number of split components")
+    ax2_inertia.set_yscale("log")
+    ax2_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax2_inertia.set_ylabel("Number of split components", fontsize=AXIS_LABEL_FONTSIZE)
+    ax2_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
 
     # Panel a: power imbalance histograms
-    ax3 = fig.add_subplot(gsTop[0])
+    ax1_imbalance = fig.add_subplot(gsTop[0])
     power_imbalance = component_props_filtered.power_imbalance / 1000
     bins = np.linspace(power_imbalance.min(), power_imbalance.max(), 15)
 
     for co2l in selected_co2ls:
-        h = ax3.hist(
+        h = ax1_imbalance.hist(
             power_imbalance[component_props_filtered.co2l == co2l],
             weights=component_props_filtered.snapshot_weighting[
                 component_props_filtered.co2l == co2l
@@ -218,36 +230,35 @@ def create_split_statistics_plot():
             density=False,
         )
 
-    ax3.set_yscale("log")
-    ax3.set_ylabel("Number of split components")
-    ax3.set_xlabel("Power imbalance [GW]")
-    ax3.set_xticks(np.arange(-50, 51, step=25))
+    ax1_imbalance.set_yscale("log")
+    ax1_imbalance.set_ylabel("Number of split components", fontsize=AXIS_LABEL_FONTSIZE)
+    ax1_imbalance.set_xlabel("Power imbalance [GW]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax1_imbalance.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    ax1_imbalance.set_xticks(np.arange(-50, 51, step=25))
 
     # Legend for panels a and b
-    h, l = ax2.get_legend_handles_labels()
-    ax2_legend.legend(
-        h[::-1],
-        l[::-1],
-        title=r"CO$_2$ level [\% of 1990]",
-        loc="center",
-        ncols=3,
-        columnspacing=0.5,
+    h, l = ax2_inertia.get_legend_handles_labels()
+    # Place the legend title to the left of the labels by using a dummy handle and label
+    handles = [mpl.lines.Line2D([], [], color="none")] + h[::-1]
+    labels = [r"CO$_2$ level [\% of 1990]"] + l[::-1]
+    ax2_inertia_legend.legend(
+        handles,
+        labels,
+        loc="center left",
+        ncols=4,
+        columnspacing=1,
+        handletextpad=0.5,
+        # frameon=False,
     )
-    ax2_legend.axis("off")
+    ax2_inertia_legend.axis("off")
 
     # Add subplot labels
-    for ax_loss_lvl, label in zip([ax1, ax2, ax3], ["c", "b", "a"]):
-        ax_loss_lvl.text(
-            0 - 0.25,
-            1 + 0.1,
-            label,
-            fontsize=30,
-            weight="bold",
-            verticalalignment="center",
-            transform=ax_loss_lvl.transAxes,
-        )
+    for idx, ax_loss_lvl in enumerate([ax1_imbalance, ax2_inertia, ax3_num_splits]):
+        add_panel_label(ax_loss_lvl, idx)
 
-    plt.savefig(save_path + "split_statistics.pdf", bbox_inches="tight")
+    plt.tight_layout()
+    # Save figure with consistent style
+    save_figure(fig, save_path, "split_statistics")
     plt.show()
 
 

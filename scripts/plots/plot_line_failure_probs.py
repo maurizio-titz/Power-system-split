@@ -30,6 +30,16 @@ from utils.config import (
     path_to_vis_results_sclopf,
 )
 from utils import data_handling
+from utils.plot_style import (
+    setup_matplotlib_style, 
+    PANEL_LABEL_FONTSIZE, 
+    COLORBAR_LABEL_FONTSIZE,
+    COLORBAR_TICK_FONTSIZE,
+    SUBTITLE_FONTSIZE,
+    add_panel_label,
+    setup_colormap_scientific_notation,
+    save_figure
+)
 
 
 # def create_line_failure_plot():
@@ -290,9 +300,8 @@ def create_line_failure_plot_linear():
         axs_secondary.append(f.add_subplot(gs_sub_secondary[0]))
         axs_colorbars_secondary.append(f.add_subplot(gs_sub_secondary[1]))
 
-    mpl.style.use("default")
-    plt.rc("text", usetex=True)
-    plt.rc("text.latex", preamble=r"\usepackage{amsmath}")
+    # Setup matplotlib styling
+    setup_matplotlib_style()
 
     labels = [r"\textbf{A}", r"\textbf{B}", r"\textbf{C}", r"\textbf{D}"]
 
@@ -343,13 +352,11 @@ def create_line_failure_plot_linear():
             norm=mplcolors.Normalize(vmin=vmin_individual, vmax=vmax_individual),
         )
         cb = f.colorbar(sm, cax=axs_colorbars_primary[count])
-        cb.ax.tick_params(labelsize=16, width=1.0, which="both")
-        # Format ticks in scientific notation
-        cb.ax.ticklabel_format(style="scientific", axis="y", scilimits=(0, 0))
+        setup_colormap_scientific_notation(cb)
         # Add title to all colorbars
         axs_colorbars_primary[count].set_title(
             r"$\langle p_{\ell}^{\text{p}}\rangle$",
-            fontsize=16,
+            fontsize=COLORBAR_LABEL_FONTSIZE,
             weight="bold",
             verticalalignment="center",
             pad=15,
@@ -419,19 +426,11 @@ def create_line_failure_plot_linear():
         # Add subplot titles and labels
         actual_co2_level = get_actual_co2_level(co2l, n_nodes, percent=True)
         axs_primary[count].set_title(
-            r"CO$_2 =$ " + "{}%".format(int(actual_co2_level)), fontsize=28
+            r"CO$_2 =$ " + "{}%".format(int(actual_co2_level)), fontsize=SUBTITLE_FONTSIZE
         )
-        axs_primary[count].text(
-            0 + 0.1,
-            1 + 0.05,
-            labels[count],
-            fontsize=30,
-            weight="bold",
-            verticalalignment="center",
-            transform=axs_primary[count].transAxes,
-        )
+        add_panel_label(axs_primary[count], count)
 
-    plt.savefig(save_path + "line_failure_probs_linear.pdf", bbox_inches="tight")
+    save_figure(f, save_path, "line_failure_probs_linear")
     plt.show()
 
 
@@ -488,9 +487,8 @@ def create_secondary_line_failure_plot():
         axs_secondary.append(f.add_subplot(gs_sub_secondary[0]))
         axs_colorbars_secondary.append(f.add_subplot(gs_sub_secondary[1]))
 
-    mpl.style.use("default")
-    plt.rc("text", usetex=True)
-    plt.rc("text.latex", preamble=r"\usepackage{amsmath}")
+    # Setup matplotlib styling
+    setup_matplotlib_style()
 
     labels = [r"\textbf{A}", r"\textbf{B}", r"\textbf{C}"]
 
@@ -541,13 +539,11 @@ def create_secondary_line_failure_plot():
             norm=mplcolors.Normalize(vmin=vmin_individual, vmax=vmax_individual),
         )
         cb = f.colorbar(sm, cax=axs_colorbars_secondary[count])
-        cb.ax.tick_params(labelsize=16, width=1.0, which="major")
-        # Format ticks in scientific notation
-        cb.ax.ticklabel_format(style="scientific", axis="y", scilimits=(0, 0))
+        setup_colormap_scientific_notation(cb)
         # Add title to all colorbars
         axs_colorbars_secondary[count].set_title(
             r"$\langle p_{\ell}^{\text{s}}\rangle$",
-            fontsize=16,
+            fontsize=COLORBAR_LABEL_FONTSIZE,
             weight="bold",
             verticalalignment="center",
             pad=15,
@@ -556,21 +552,11 @@ def create_secondary_line_failure_plot():
         # Add subplot titles and labels
         actual_co2_level = get_actual_co2_level(co2l, n_nodes, percent=True)
         axs_secondary[count].set_title(
-            r"CO$_2 =$ " + r"{}%".format(int(actual_co2_level)), fontsize=28
+            r"CO$_2 =$ " + r"{}%".format(int(actual_co2_level)), fontsize=SUBTITLE_FONTSIZE
         )
-        axs_secondary[count].text(
-            0 + 0.1,
-            1 + 0.05,
-            labels[count],
-            fontsize=30,
-            weight="bold",
-            verticalalignment="center",
-            transform=axs_secondary[count].transAxes,
-        )
+        add_panel_label(axs_secondary[count], count)
 
-    plt.savefig(
-        save_path + "line_failure_probs_secondary_only.pdf", bbox_inches="tight"
-    )
+    save_figure(f, save_path, "line_failure_probs_secondary_only")
     plt.show()
 
 

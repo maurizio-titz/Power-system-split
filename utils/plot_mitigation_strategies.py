@@ -12,6 +12,8 @@ import networkx
 import numpy as np
 import pandas as pd
 
+from utils.visualization import get_actual_co2_level
+
 matplotlib.rcParams["pgf.texsystem"] = "pdflatex"
 matplotlib.rcParams.update(
     {
@@ -70,6 +72,7 @@ def plot_inertia_loss_mitigation_curve(
     rocof_thres=-1,
     l_share=0.0,
     unit="GWs",
+    color=None,
 ):
     # unit = "MWs"
 
@@ -118,7 +121,7 @@ def plot_inertia_loss_mitigation_curve(
         loss_ref_multiple,
         linestyle="-",
         label=f"{delta_Erot}{unit}",
-        color="black",
+        color=color,
     )
     print("loss_ref_multiple:", loss_ref_multiple.shape)
     # adjust upper xlim
@@ -159,6 +162,8 @@ def plot_map_inertia_placement_final(
     color=color1,
     plot_curve=True,
     use_sclopf=True,
+    split_properties=None,
+    line_color=None,
 ):
     """Plot the results of the inertia placement"""
 
@@ -206,7 +211,11 @@ def plot_map_inertia_placement_final(
     # for each opitimization step holds: [idx_node, delta_rot_energy_factor]
 
     # get split properties
-    split_properties = data_handling.load_split_props(nn, co2_lvl, use_sclopf)
+    if split_properties is None:
+        split_properties = data_handling.load_split_props(nn, co2_lvl, use_sclopf)
+    else:
+        split_properties = split_properties.copy()
+        split_properties = split_properties[split_properties.co2l == co2_lvl]
 
     total_loss_share_rocof_lvl = (
         split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
@@ -243,8 +252,8 @@ def plot_map_inertia_placement_final(
 
     ## Normalize node_size
     max_inertia_placements_in_one_node = max(inertia_placements_by_node)
-    if max_node_size is None:
-        max_node_size = 200 * max_inertia_placements_in_one_node / 10
+    # if max_node_size is None:
+    #     max_node_size = 200 * max_inertia_placements_in_one_node / 10
     node_width_arr = (
         np.array(inertia_placements_by_node) / max_inertia_placements_in_one_node
     ) * max_node_size
@@ -270,6 +279,7 @@ def plot_map_inertia_placement_final(
             modified_comp_idx=modified_comp_idx,
             inertia_placed_ls=inertia_placed_ls,
             unit=unit,
+            color=line_color,
         )
     ax2.grid(True)
     ax2.set_ylim(bottom=0)
@@ -286,6 +296,16 @@ def plot_map_inertia_placement_final(
         linestyle="--",
         c=color,
         lw=2,
+    )
+    right_xlim = ax2.get_xlim()[1]
+    ax2.text(
+        inertia_in_map_plot * unit_factor + right_xlim / 200 * 5,
+        1,
+        f"{int(round(inertia_in_map_plot*unit_factor))}GWs",
+        verticalalignment="bottom",
+        horizontalalignment="left",
+        zorder=np.inf,
+        fontsize=12,
     )
     # ax2.text(
     #     inertia_in_map_plot * unit_factor,
@@ -307,21 +327,22 @@ def plot_map_inertia_placement_final(
     #         label=f"{int(max_inertia_placements_in_one_node*delta_Erot * relative_size_r*unit_factor)} {unit}",
     #         lw=0,
     #     )
-    for n_placements in [1, 3]:
+    for fact in [1, 0.5]:
         ax.plot(
             [],
             [],
             marker="o",
             color=color,
-            markersize=np.sqrt(
-                n_placements / max_inertia_placements_in_one_node * max_node_size
+            markersize=np.sqrt(  # sqrt beause plot and nx.draw scale differently
+                max_node_size * fact
             ),
-            label=f"{int(delta_Erot * n_placements*unit_factor)} {unit}",
+            label=f"{int(delta_Erot * max_inertia_placements_in_one_node*unit_factor*fact)} {unit}",
             lw=0,
         )
     ax.legend(
-        labelspacing=1,
-        loc="upper left",
+        labelspacing=0,
+        handletextpad=0.1,
+        # loc="upper left",
         # bbox_to_anchor=(0.7, 0.975),
         frameon=False,
         fontsize=18,
@@ -379,8 +400,12 @@ def plot_map_inertia_placement_final(
         ax_twin_number.set_ylabel("$N_{\\textrm{splits mit}}/N_{\\textrm{splits}}$")
 
     y_label = "$R_{\\textrm{co2string,mit}}/R_{\\textrm{co2refString}}$"
-    y_label = y_label.replace("co2string", str(int(100 * co2_lvl)) + "\%")
-    y_label = y_label.replace("co2refString", str(int(100 * co2_lvl_ref)) + "\%")
+    y_label = y_label.replace(
+        "co2string", str(int(100 * get_actual_co2_level(co2_lvl))) + "\%"
+    )
+    y_label = y_label.replace(
+        "co2refString", str(int(100 * get_actual_co2_level(co2_lvl_ref))) + "\%"
+    )
 
     if plot_split_number:
         y_label = y_label + " (-)"
@@ -702,6 +727,7 @@ def calc_inertia_placement_ref_loss(
     resolve_strategy="random",
     co2_lvls=(0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0),
     use_sclopf=True,
+    split_properties=None,
 ):
     """calculates the synthetic inertia needed to reach the reference loss level for different CO2 levels.
 
@@ -720,12 +746,14 @@ def calc_inertia_placement_ref_loss(
         _type_: _description_
     """
 
-    split_properties = data_handling.load_split_props(n_nodes, use_sclopf)
-    # split_properties = split_properties[split_properties.co2_level == co2_lvl_ref]
-    # split_properties
+    if split_properties is None:
+        split_properties = data_handling.load_split_props(n_nodes, None, use_sclopf)
+
+    split_properties_ref = split_properties[split_properties.co2l == co2_lvl_ref]
 
     total_loss_share_rocof_ref = (
-        split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
+        split_properties_ref.lost_load_share_blackout
+        * split_properties_ref.snapshot_weighting
     ).sum() * ref_loss_factor
 
     inertia_at_ref_loss_by_lvl = {}
@@ -755,11 +783,10 @@ def calc_inertia_placement_ref_loss(
 
         inertia_placed_res_arr = np.array(inertia_placed_ls)
 
-        split_properties = data_handling.load_split_props(n_nodes, co2_lvl, use_sclopf)
-
+        split_properties_lvl = split_properties[split_properties.co2l == co2_lvl]
         total_loss_share_rocof_lvl = (
-            split_properties.lost_load_share_blackout
-            * split_properties.snapshot_weighting
+            split_properties_lvl.lost_load_share_blackout
+            * split_properties_lvl.snapshot_weighting
         ).sum()
 
         idx_reached_ref_loss = np.where(

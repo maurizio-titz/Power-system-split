@@ -29,6 +29,28 @@ from utils.visualization import get_actual_co2_level, get_co2_levels
 from utils.config import path_to_pypsa_network_sclopf, path_to_figures_sclopf
 from utils import data_handling
 from utils.clustering_visualisation import truncate_colormap
+from utils.plot_style import (
+    setup_matplotlib_style,
+    TITLE_FONTSIZE,
+    SUBTITLE_FONTSIZE,
+    AXIS_LABEL_FONTSIZE,
+    TICK_LABEL_FONTSIZE,
+    LEGEND_FONTSIZE,
+    PANEL_LABEL_FONTSIZE,
+    MAP_XLIM,
+    MAP_YLIM,
+    MAP_LINE_WIDTH,
+    MAP_LINK_WIDTH,
+    add_panel_label,
+    save_figure,
+    setup_map_axes,
+)
+
+# Backwards compatibility constants
+SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
+LABEL_FONTSIZE = AXIS_LABEL_FONTSIZE
+TICK_LABELSIZE = TICK_LABEL_FONTSIZE
+AXIS_LABELSIZE = AXIS_LABEL_FONTSIZE
 
 
 # Helper function for aggregating carriers
@@ -92,24 +114,12 @@ def create_combined_generation_storage_plot():
         for co2l in co2ls
     }
 
-    # Setup matplotlib
-    mpl.style.use("default")
-    plt.rc("text", usetex=True)
-    plt.rc("text.latex", preamble=r"\usepackage{amsmath}\usepackage{bm}")
+    # Setup matplotlib styling
+    setup_matplotlib_style()
 
-    # Define consistent styling constants
-    TITLE_FONTSIZE = 20
-    LABEL_FONTSIZE = 18
-    LEGEND_FONTSIZE = 16
-    SUBLABEL_FONTSIZE = 28
-    AXIS_LABELSIZE = 18
-    TICK_LABELSIZE = 16
-
-    # Map styling constants
-    MAP_XLIM = (-15, 35)  # Longitude range for Europe
-    MAP_YLIM = (35, 70)  # Latitude range for Europe
-    LINE_WIDTH = 0.5
-    LINK_WIDTH = 0.5
+    # Map styling constants (use from plot_style)
+    LINE_WIDTH = MAP_LINE_WIDTH
+    LINK_WIDTH = MAP_LINK_WIDTH
 
     # Create combined figure with generation on top, storage below
     f = plt.figure(
@@ -122,13 +132,13 @@ def create_combined_generation_storage_plot():
 
     # === GENERATION SECTION (TOP) ===
     gs_generation = GridSpecFromSubplotSpec(
-        1, 2, subplot_spec=gs_main[0], width_ratios=[2.2, 1], wspace=0.15
+        1, 2, subplot_spec=gs_main[0], width_ratios=[2.2, 1], wspace=0.1
     )
     gs_gen_left = GridSpecFromSubplotSpec(
-        2, 2, subplot_spec=gs_generation[0], wspace=0.1, hspace=0.1
+        2, 2, subplot_spec=gs_generation[0], wspace=-0.23, hspace=0.1
     )
     gs_gen_right = GridSpecFromSubplotSpec(
-        2, 1, subplot_spec=gs_generation[1], height_ratios=[1, 0.5], hspace=0.2
+        2, 1, subplot_spec=gs_generation[1], height_ratios=[1.2, 0.5], hspace=0.12
     )
 
     # Generation map axes
@@ -146,10 +156,10 @@ def create_combined_generation_storage_plot():
 
     # === STORAGE SECTION (BOTTOM) ===
     gs_storage = GridSpecFromSubplotSpec(
-        1, 2, subplot_spec=gs_main[1], width_ratios=[2.2, 1], wspace=0.15
+        1, 2, subplot_spec=gs_main[1], width_ratios=[2.2, 1], wspace=0.1
     )
     gs_storage_maps = GridSpecFromSubplotSpec(
-        1, 2, subplot_spec=gs_storage[0], wspace=0.1, hspace=0.1
+        1, 2, subplot_spec=gs_storage[0], wspace=-0.23, hspace=0.1
     )
     gs_storage_lines = GridSpecFromSubplotSpec(
         2, 1, subplot_spec=gs_storage[1], height_ratios=[1, 0.5], hspace=0.2
@@ -217,6 +227,7 @@ def create_combined_generation_storage_plot():
     for i, target_level in enumerate(target_levels):
         n = data_handling.load_pypsa_network(target_level, n_nodes, True)
         for ii, month in enumerate(months):
+            axs_primary_gen[i][ii].set_ylim([0, vmax])
             current_snapshots = n.snapshots[n.snapshots.month == month]
             current_gen = (
                 n.generators_t.p.mul(
@@ -350,7 +361,7 @@ def create_combined_generation_storage_plot():
     ax3_gen.grid(True)
     ax3_gen.yaxis.offsetText.set_fontsize(TICK_LABELSIZE)
     ax3_gen.text(
-        0 - 0.15,
+        0 - 0.19,
         1 + 0.05,
         labels_gen[0][2],
         fontsize=SUBLABEL_FONTSIZE,
@@ -469,7 +480,7 @@ def create_combined_generation_storage_plot():
 
     # Panel f: total storage capacity line plot
     ax_line_storage.text(
-        0 - 0.15,
+        0 - 0.19,
         1 + 0.05,
         r"\textbf{E}",
         fontsize=SUBLABEL_FONTSIZE,
@@ -566,8 +577,7 @@ def create_combined_generation_storage_plot():
     )
     ax_line_legend_storage.axis("off")
 
-    plt.tight_layout()
-    plt.savefig(save_path + file_name + ".pdf", bbox_inches="tight")
+    save_figure(f, save_path, file_name)
     plt.show()
 
 

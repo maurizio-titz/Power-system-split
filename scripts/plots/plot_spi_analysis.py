@@ -30,6 +30,15 @@ from utils.config import (
     path_to_pre_outage_sclopf,
 )
 from utils import data_handling, cascade_simulation
+from utils.plot_style import (
+    setup_matplotlib_style,
+    AXIS_LABEL_FONTSIZE,
+    TICK_LABEL_FONTSIZE,
+    LEGEND_FONTSIZE,
+    PANEL_LABEL_FONTSIZE,
+    add_panel_label,
+    save_figure,
+)
 
 
 def create_flow_and_inertia_plot():
@@ -66,10 +75,8 @@ def create_flow_and_inertia_plot():
         / 1000
     )
 
-    # Setup matplotlib
-    plt.style.use("default")
-    plt.rc("text", usetex=True)
-    plt.rc("text.latex", preamble=r"\usepackage{amsmath}")
+    # Setup matplotlib styling
+    setup_matplotlib_style()
 
     # Create figure with two panels
     f = plt.figure(figsize=(16, 6))
@@ -107,11 +114,11 @@ def create_flow_and_inertia_plot():
         )
 
     # Add legend to left panel and styling
-    leg = ax_flow.legend(fontsize=18, title=r"CO$_2$ level [\% of 1990]")
-    plt.setp(leg.get_title(), fontsize=20)
-    ax_flow.tick_params(axis="both", which="both", labelsize=20)
-    ax_flow.set_xlabel(r"Total power flow distance [TW$\cdot$km]", fontsize=22)
-    ax_flow.set_ylabel(r"Hours", fontsize=22)
+    leg = ax_flow.legend(fontsize=LEGEND_FONTSIZE, title=r"CO$_2$ level [\% of 1990]")
+    plt.setp(leg.get_title(), fontsize=LEGEND_FONTSIZE)
+    ax_flow.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    ax_flow.set_xlabel(r"Total power flow distance [TW$\cdot$km]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_flow.set_ylabel(r"Hours", fontsize=AXIS_LABEL_FONTSIZE)
     ax_flow.grid(True)
 
     # Panel b: rotational energy (without legend)
@@ -132,33 +139,17 @@ def create_flow_and_inertia_plot():
             alpha=0.8,
         )
 
-    ax_inertia.tick_params(axis="both", which="both", labelsize=20)
-    ax_inertia.set_xlabel("Rotational energy [GWs]", fontsize=22)
-    ax_inertia.set_ylabel("Hours", fontsize=22)
+    ax_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    ax_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_inertia.set_ylabel("Hours", fontsize=AXIS_LABEL_FONTSIZE)
     ax_inertia.grid(True)
 
     # Add panel labels
-    ax_flow.text(
-        -0.1,
-        1.05,
-        r"\textbf{A}",
-        fontsize=24,
-        weight="bold",
-        verticalalignment="center",
-        transform=ax_flow.transAxes,
-    )
-    ax_inertia.text(
-        -0.1,
-        1.05,
-        r"\textbf{B}",
-        fontsize=24,
-        weight="bold",
-        verticalalignment="center",
-        transform=ax_inertia.transAxes,
-    )
+    add_panel_label(ax_flow, 0)
+    add_panel_label(ax_inertia, 1)
 
     plt.tight_layout()
-    plt.savefig(save_path + "flow_and_inertia.pdf", bbox_inches="tight")
+    save_figure(f, save_path, "flow_and_inertia")
     plt.show()
 
 

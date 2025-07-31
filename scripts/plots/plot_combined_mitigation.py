@@ -38,6 +38,22 @@ from utils.plot_mitigation_strategies import (
     color1,
     color2,
 )
+from utils.plot_style import (
+    setup_matplotlib_style,
+    TITLE_FONTSIZE,
+    SUBTITLE_FONTSIZE, 
+    AXIS_LABEL_FONTSIZE,
+    TICK_LABEL_FONTSIZE,
+    LEGEND_FONTSIZE,
+    PANEL_LABEL_FONTSIZE,
+    add_panel_label,
+    save_figure
+)
+
+# Backwards compatibility
+AXIS_LABELSIZE = AXIS_LABEL_FONTSIZE
+TICK_LABELSIZE = TICK_LABEL_FONTSIZE
+SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 
 
 def create_combined_mitigation_plot(use_annualized_costs=False):
@@ -73,17 +89,7 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
     ref_loss_factors = [1]  # Only use ref_loss_factor=1
 
     # Setup matplotlib with consistent styling
-    plt.style.use("default")
-    plt.rc("text", usetex=True)
-    plt.rc("text.latex", preamble=r"\usepackage{amsmath}\usepackage{bm}")
-
-    # Define consistent styling constants
-    TITLE_FONTSIZE = 16
-    LABEL_FONTSIZE = 14
-    LEGEND_FONTSIZE = 12
-    SUBLABEL_FONTSIZE = 20
-    AXIS_LABELSIZE = 14
-    TICK_LABELSIZE = 12
+    setup_matplotlib_style()
 
     # === INERTIA MITIGATION DATA PREPARATION ===
     inertia_time = (
