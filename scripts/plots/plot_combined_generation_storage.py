@@ -175,6 +175,16 @@ def create_combined_generation_storage_plot():
     ax_line_storage = f.add_subplot(gs_storage_lines[0])
     ax_line_legend_storage = f.add_subplot(gs_storage_lines[1])
 
+    panel_label_axis = [
+        ax1_gen[0],
+        ax2_gen[0],
+        ax3_gen,
+        axs_maps_storage[0],
+        ax_line_storage,
+    ]
+    for idx, ax_loss_lvl in enumerate(panel_label_axis):
+        add_panel_label(ax_loss_lvl, idx, x_offset=-0.15)
+
     # === GENERATION PLOT ===
     # Calculate generation by carrier and CO2 level
     generation_by_carrier_and_co2l = pd.DataFrame(
@@ -210,10 +220,10 @@ def create_combined_generation_storage_plot():
     generation_by_carrier_and_co2l = generation_by_carrier_and_co2l[carrier_mask]
 
     target_levels = [0.6, 0.0]
-    labels_gen = [
-        [r"\textbf{A}", r"", r"\textbf{C}"],
-        [r"\textbf{B}", "", r"\textbf{D}", "", ""],
-    ]
+    # labels_gen = [
+    #     [r"\textbf{A}", r"", r"\textbf{C}"],
+    #     [r"\textbf{B}", "", r"\textbf{D}", "", ""],
+    # ]
 
     # Panel a and b - Generation Maps
     vmax = 3.2e2
@@ -266,15 +276,15 @@ def create_combined_generation_storage_plot():
                     current_snapshots.month_name()[0], fontsize=TITLE_FONTSIZE
                 )
 
-            axs_primary_gen[i][ii].text(
-                0 - 0.1,
-                1 + 0.05,
-                labels_gen[i][ii],
-                fontsize=SUBLABEL_FONTSIZE,
-                weight="bold",
-                verticalalignment="center",
-                transform=axs_primary_gen[i][ii].transAxes,
-            )
+            # axs_primary_gen[i][ii].text(
+            #     0 - 0.1,
+            #     1 + 0.05,
+            #     labels_gen[i][ii],
+            #     fontsize=SUBLABEL_FONTSIZE,
+            #     weight="bold",
+            #     verticalalignment="center",
+            #     transform=axs_primary_gen[i][ii].transAxes,
+            # )
 
         axs_primary_gen[i][0].text(
             0 - 0.15,
@@ -282,6 +292,7 @@ def create_combined_generation_storage_plot():
             rf"CO$_2$={get_actual_co2_level(target_level, percent=True)}\% ",
             fontsize=LABEL_FONTSIZE,
             verticalalignment="center",
+            # rotation=90,
             transform=axs_primary_gen[i][0].transAxes,
         )
 
@@ -360,15 +371,15 @@ def create_combined_generation_storage_plot():
     ax3_gen.set_ylabel(r"Total annual generation [TWh]", fontsize=AXIS_LABELSIZE)
     ax3_gen.grid(True)
     ax3_gen.yaxis.offsetText.set_fontsize(TICK_LABELSIZE)
-    ax3_gen.text(
-        0 - 0.19,
-        1 + 0.05,
-        labels_gen[0][2],
-        fontsize=SUBLABEL_FONTSIZE,
-        weight="bold",
-        verticalalignment="center",
-        transform=ax3_gen.transAxes,
-    )
+    # ax3_gen.text(
+    #     0 - 0.19,
+    #     1 + 0.05,
+    #     labels_gen[0][2],
+    #     fontsize=SUBLABEL_FONTSIZE,
+    #     weight="bold",
+    #     verticalalignment="center",
+    #     transform=ax3_gen.transAxes,
+    # )
     ax3_gen.set_ylim((-2e1, 12.4e2))
 
     # Generation Legend
@@ -457,16 +468,16 @@ def create_combined_generation_storage_plot():
                 current_store_type_string, fontsize=TITLE_FONTSIZE
             )
 
-    # Add storage labels
-    axs_maps_storage[0].text(
-        0 - 0.1,
-        1 + 0.05,
-        r"\textbf{D}",
-        fontsize=SUBLABEL_FONTSIZE,
-        weight="bold",
-        verticalalignment="center",
-        transform=axs_maps_storage[0].transAxes,
-    )
+    # # Add storage labels
+    # axs_maps_storage[0].text(
+    #     0 - 0.1,
+    #     1 + 0.05,
+    #     r"\textbf{D}",
+    #     fontsize=SUBLABEL_FONTSIZE,
+    #     weight="bold",
+    #     verticalalignment="center",
+    #     transform=axs_maps_storage[0].transAxes,
+    # )
 
     axs_maps_storage[0].text(
         0 - 0.15,
@@ -478,16 +489,16 @@ def create_combined_generation_storage_plot():
         transform=axs_maps_storage[0].transAxes,
     )
 
-    # Panel f: total storage capacity line plot
-    ax_line_storage.text(
-        0 - 0.19,
-        1 + 0.05,
-        r"\textbf{E}",
-        fontsize=SUBLABEL_FONTSIZE,
-        weight="bold",
-        verticalalignment="center",
-        transform=ax_line_storage.transAxes,
-    )
+    # # Panel f: total storage capacity line plot
+    # ax_line_storage.text(
+    #     0 - 0.19,
+    #     1 + 0.05,
+    #     r"\textbf{E}",
+    #     fontsize=SUBLABEL_FONTSIZE,
+    #     weight="bold",
+    #     verticalalignment="center",
+    #     transform=ax_line_storage.transAxes,
+    # )
 
     capacity_by_type_by_lvl = pd.DataFrame(index=storage_types, columns=co2ls[::-1])
 

@@ -80,7 +80,7 @@ def create_flow_and_inertia_plot():
 
     # Create figure with two panels
     f = plt.figure(figsize=(16, 6))
-    gs_horizontal = GridSpec(1, 2, figure=f, wspace=0.3)
+    gs_horizontal = GridSpec(1, 2, figure=f, wspace=0.23)
     ax_flow = f.add_subplot(gs_horizontal[0])
     ax_inertia = f.add_subplot(gs_horizontal[1])
 
@@ -94,17 +94,22 @@ def create_flow_and_inertia_plot():
         n = networks[co2l]
         flow_distance = n.lines_t.p0.abs().mul(network.lines.length) / unit_factor
         flows_lvls.append(flow_distance.sum(axis=1))
+    flows_lvls = np.array(flows_lvls)
 
-    bins = np.histogram(np.hstack(flows_lvls), bins=40)[1]
-
+    bins = np.linspace(flows_lvls.min(), flows_lvls.max(), 40)
     for count, co2l in enumerate(selected_co2ls_spi):
-        ind = np.where(np.round(co2ls, 2) == co2l)[0][0]
-        ax_flow.hist(
-            flows_lvls[count],
-            weights=network.snapshot_weightings.generators,
+        density, bins_ = np.histogram(
+            flows_lvls[count, :],
             bins=bins,
-            histtype="step",
-            label=r"{}\%".format(int(round(100 * co2l))),
+            weights=network.snapshot_weightings.generators
+            / network.snapshot_weightings.generators.sum(),
+        )
+        ax_flow.stairs(
+            density,
+            bins,
+            label=r"{}\%".format(
+                get_actual_co2_level(co2l, percent=True),
+            ),
             linewidth=3,
             color=cmap(
                 np.where(selected_co2ls_spi == co2l)[0][0]
@@ -113,35 +118,46 @@ def create_flow_and_inertia_plot():
             alpha=1,
         )
 
+        assert np.isclose(sum(density), 1, atol=1e-3)
+
     # Add legend to left panel and styling
     leg = ax_flow.legend(fontsize=LEGEND_FONTSIZE, title=r"CO$_2$ level [\% of 1990]")
     plt.setp(leg.get_title(), fontsize=LEGEND_FONTSIZE)
     ax_flow.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
-    ax_flow.set_xlabel(r"Total power flow distance [TW$\cdot$km]", fontsize=AXIS_LABEL_FONTSIZE)
-    ax_flow.set_ylabel(r"Hours", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_flow.set_xlabel(
+        r"Total power flow distance [TW$\cdot$km]", fontsize=AXIS_LABEL_FONTSIZE
+    )
+    ax_flow.set_ylabel(r"Frequency", fontsize=AXIS_LABEL_FONTSIZE)
     ax_flow.grid(True)
+    # ax_flow.set_xlim(left=39)
 
     # Panel b: rotational energy (without legend)
     bins = np.linspace(0, inertia_time.max(), 40)
 
     for count, co2l in enumerate(selected_co2ls_spi):
         ind = np.where(np.round(co2ls, 2) == co2l)[0][0]
-        ax_inertia.hist(
-            inertia_time[ind],
-            weights=network.snapshot_weightings.generators,
+        density, bins_ = np.histogram(
+            inertia_time[count, :],
             bins=bins,
-            histtype="step",
+            weights=network.snapshot_weightings.generators
+            / network.snapshot_weightings.generators.sum(),
+        )
+        assert np.all(bins == bins_)
+        ax_inertia.stairs(
+            density,
+            bins,
             linewidth=3,
             color=cmap(
                 np.where(selected_co2ls_spi == co2l)[0][0]
                 / (len(selected_co2ls_spi) - 1)
             ),
-            alpha=0.8,
+            alpha=1,
         )
+        assert np.isclose(sum(density), 1, atol=1e-3)
 
     ax_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
     ax_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
-    ax_inertia.set_ylabel("Hours", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_inertia.set_ylabel("Frequency", fontsize=AXIS_LABEL_FONTSIZE)
     ax_inertia.grid(True)
 
     # Add panel labels

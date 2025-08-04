@@ -31,14 +31,14 @@ from utils.config import (
 )
 from utils import data_handling
 from utils.plot_style import (
-    setup_matplotlib_style, 
-    PANEL_LABEL_FONTSIZE, 
+    setup_matplotlib_style,
+    PANEL_LABEL_FONTSIZE,
     COLORBAR_LABEL_FONTSIZE,
     COLORBAR_TICK_FONTSIZE,
     SUBTITLE_FONTSIZE,
     add_panel_label,
     setup_colormap_scientific_notation,
-    save_figure
+    save_figure,
 )
 
 
@@ -426,7 +426,8 @@ def create_line_failure_plot_linear():
         # Add subplot titles and labels
         actual_co2_level = get_actual_co2_level(co2l, n_nodes, percent=True)
         axs_primary[count].set_title(
-            r"CO$_2 =$ " + "{}%".format(int(actual_co2_level)), fontsize=SUBTITLE_FONTSIZE
+            r"CO$_2 =$ " + "{}%".format(int(actual_co2_level)),
+            fontsize=SUBTITLE_FONTSIZE,
         )
         add_panel_label(axs_primary[count], count)
 
@@ -471,7 +472,7 @@ def create_secondary_line_failure_plot():
         3,
         figure=f,
         width_ratios=[1, 1, 1],
-        wspace=0.15,
+        wspace=0.05,
     )
 
     # Create subplots with space for individual colorbars
@@ -481,7 +482,7 @@ def create_secondary_line_failure_plot():
     for i in range(3):
         # Create subplot with colorbar space
         gs_sub_secondary = GridSpecFromSubplotSpec(
-            1, 2, subplot_spec=gs_main[0, i], width_ratios=[1, 0.05], wspace=0.05
+            1, 2, subplot_spec=gs_main[0, i], width_ratios=[1, 0.05], wspace=-0.05
         )
 
         axs_secondary.append(f.add_subplot(gs_sub_secondary[0]))
@@ -494,6 +495,8 @@ def create_secondary_line_failure_plot():
 
     # Secondary failures
     cmap = copy.copy(mpl.cm.get_cmap("plasma_r"))
+    # cmap = copy.copy(mpl.cm.get_cmap("copper_r"))
+    # cmap = mplcolors.ListedColormap(cmap(np.linspace(0, 0.9, 256)))
     cmap.set_under("gainsboro", 1.0)
 
     for count, co2l in enumerate(selected_co2ls[::-1]):
@@ -552,9 +555,10 @@ def create_secondary_line_failure_plot():
         # Add subplot titles and labels
         actual_co2_level = get_actual_co2_level(co2l, n_nodes, percent=True)
         axs_secondary[count].set_title(
-            r"CO$_2 =$ " + r"{}%".format(int(actual_co2_level)), fontsize=SUBTITLE_FONTSIZE
+            r"CO$_2 =$ " + r"{}\%".format(int(actual_co2_level)),
+            fontsize=SUBTITLE_FONTSIZE,
         )
-        add_panel_label(axs_secondary[count], count)
+        add_panel_label(axs_secondary[count], count, x_offset=0.1)
 
     save_figure(f, save_path, "line_failure_probs_secondary_only")
     plt.show()
