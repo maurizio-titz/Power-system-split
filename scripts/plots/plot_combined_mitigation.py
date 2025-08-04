@@ -41,13 +41,13 @@ from utils.plot_mitigation_strategies import (
 from utils.plot_style import (
     setup_matplotlib_style,
     TITLE_FONTSIZE,
-    SUBTITLE_FONTSIZE, 
+    SUBTITLE_FONTSIZE,
     AXIS_LABEL_FONTSIZE,
     TICK_LABEL_FONTSIZE,
     LEGEND_FONTSIZE,
     PANEL_LABEL_FONTSIZE,
     add_panel_label,
-    save_figure
+    save_figure,
 )
 
 # Backwards compatibility
@@ -195,7 +195,11 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
         label = f"$R_{{\\textrm{{ref}}}}$"  # Simplified label for ref_loss_factor=1
 
         ax_inertia_all.plot(
-            np.array(list(inertia_at_ref_loss_by_lvl.keys())) * 100,
+            np.array(
+                get_actual_co2_level(
+                    list(inertia_at_ref_loss_by_lvl.keys()), percent=True
+                )
+            ),
             np.array(list(inertia_at_ref_loss_by_lvl.values())) * unit_factor,
             label=label,
             color=color_reference_loss,
@@ -236,7 +240,7 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
         )
 
     # Set consistent styling for inertia plots
-    title = f"Synthetic inertia mitigation \n CO$_2$ level={int(get_actual_co2_level(co2_lvl_map)*100)}\\%"
+    title = f"Synthetic inertia mitigation \n CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\\%"
     ax_inertia_loss.set_title(
         title,
         fontsize=TITLE_FONTSIZE,
@@ -254,7 +258,7 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
     ax_inertia_map.set_title(
         rf"Synthetic inertia to reach $\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$"
         + "\n"
-        + rf"CO$_2$ level={int(get_actual_co2_level(co2_lvl_map)*100)}\%",
+        + rf"CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\%",
         fontsize=TITLE_FONTSIZE,
     )
 
@@ -288,23 +292,41 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
             np.array(loss_with_mitigation) / lost_load_reference_lvl < 0.5
         )[0][0]
 
+        # Add secondary y-axis for cost
+        if use_annualized_costs:
+            rescale_factor = 1 / 0.1
+        else:
+            rescale_factor = 1 / 1
+        cost_rescaled = np.cumsum(cost) * rescale_factor / 1e9
         # Add second y axis for costs
         ax2_line_cost = ax_line_loss.twinx()
         ax2_line_cost.plot(
             np.arange(len(cost)),
-            np.cumsum(cost) / 1e9,
+            cost_rescaled,
             color=color_loss_curve,
             linestyle="dotted",
             linewidth=2,
-            label="Cost",
+            label="Annualized cost" if use_annualized_costs else "Cost",
         )
         if use_annualized_costs:
             cost_label = "Annualized cost [billion €]"
         else:
             cost_label = "Cost [billion €]"
         ax2_line_cost.set_ylabel(cost_label, fontsize=AXIS_LABELSIZE)
-        ax2_line_cost.set_ylim((0, 1.1 * sum(cost[:right_xlim]) / 1e9))
+        # ax2_line_cost.set_ylim((0, 1.1 * sum(cost[:right_xlim]) / 1e9))
         ax2_line_cost.tick_params(axis="y", which="major", labelsize=TICK_LABELSIZE)
+
+        ax_line_loss.set_xlim(0, right_xlim)
+        ax_line_loss.set_ylim(bottom=0)
+        ticks_primary = ax_line_loss.get_yticks()
+        ax2_line_cost.set_yticks(ticks_primary)[:-1]
+        ticks_labels_secondary = ticks_primary / rescale_factor
+        if all(ticks_labels_secondary % 1 == 0):
+            ticks_labels_secondary = ticks_labels_secondary.astype(int)
+        ax2_line_cost.set_yticklabels(ticks_labels_secondary)
+
+        primary_lims = ax_line_loss.get_ylim()
+        ax2_line_cost.set_ylim(primary_lims)
 
         # Add reference line for line number
         ax_line_loss.plot(
@@ -332,13 +354,13 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
         # Add reference line for cost
         ax2_line_cost.plot(
             [num_lines_to_reach_ref_loss, num_lines_to_reach_ref_loss],
-            [0, cost_to_reach_ref_loss_lvl / 1e9],
+            [0, cost_to_reach_ref_loss_lvl * rescale_factor / 1e9],
             "--",
             c=color_reference_loss,
         )
         ax2_line_cost.text(
             num_lines_to_reach_ref_loss - right_xlim / 200 * 5,
-            cost_to_reach_ref_loss_lvl / 1e9,
+            cost_to_reach_ref_loss_lvl * rescale_factor / 1e9,
             f"{cost_to_reach_ref_loss_lvl/ 1e9:.1f} billion €",
             verticalalignment="bottom",
             horizontalalignment="right",
@@ -346,12 +368,10 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
             fontsize=TICK_LABELSIZE,
         )
 
-        ax_line_loss.set_xlim(0, right_xlim)
-        ax_line_loss.set_ylim(bottom=0)
         ax_line_loss.tick_params(axis="both", which="major", labelsize=TICK_LABELSIZE)
         ax_line_loss.set_xlabel("Number of reinforced lines", fontsize=AXIS_LABELSIZE)
         ax_line_loss.set_ylabel(loss_axis_label, fontsize=AXIS_LABELSIZE)
-        title = f"Grid extension mitigation \n CO$_2$ level={int(get_actual_co2_level(co2_lvl_map)*100)}\\%"
+        title = f"Grid extension mitigation \n CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\\%"
         ax_line_loss.set_title(
             title,
             fontsize=TITLE_FONTSIZE,
@@ -429,7 +449,7 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
         ax_line_map.set_title(
             rf"Grid extension to reach $\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$"
             + "\n"
-            + rf"CO$_2$ level={int(get_actual_co2_level(co2_lvl_map)*100)}\%",
+            + rf"CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\%",
             fontsize=TITLE_FONTSIZE,
         )
 
@@ -469,20 +489,29 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
             label="Number of reinforced lines",
             color=color_reference_loss,
             linewidth=2,
-            marker="o",
-            markersize=4,
         )
         ax_line_all.invert_xaxis()
+        ax_line_all.set_ylim(bottom=0)
 
         # Add secondary y-axis for cost
+        if use_annualized_costs:
+            rescale_factor = 20 / 0.2
+        else:
+            rescale_factor = 20 / 2
+        cost_rescaled = (
+            cost_df.cost_ref_loss * rescale_factor / 1e9
+        )  # Convert to billion €
+
         ax_line_all_sec = ax_line_all.twinx()
         ax_line_all_sec.plot(
             get_actual_co2_level(cost_df.index, percent=True),
-            cost_df.cost_ref_loss / 1e9,
-            label=f"Cost",
+            cost_rescaled,
+            label="Annualized cost" if use_annualized_costs else "Cost",
             linestyle="dotted",
             color=color_reference_loss,
             linewidth=2,
+            marker="o",
+            markersize=4,
         )
 
         ax_line_all.set_xlabel("CO$_2$ level [\\% of 1990]", fontsize=AXIS_LABELSIZE)
@@ -498,6 +527,20 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
         ax_line_all.tick_params(axis="both", which="major", labelsize=TICK_LABELSIZE)
         ax_line_all_sec.tick_params(axis="y", which="major", labelsize=TICK_LABELSIZE)
         ax_line_all.grid(True, alpha=0.3)
+
+        ticks_primary = ax_line_all.get_yticks()
+        ax_line_all_sec.set_yticks(ticks_primary)[
+            -1
+        ]  # Exclude last tick because it changes ylim
+        ticks_labels_secondary = ticks_primary / rescale_factor
+        if all(ticks_labels_secondary % 1 == 0):
+            ticks_labels_secondary = ticks_labels_secondary.astype(int)
+        ax_line_all_sec.set_yticklabels(ticks_labels_secondary)
+        # ax_line_all_sec.set_yticklabels(
+        #     [f"{tick:.0f}" for tick in ticks_secondary]
+        # )
+        primary_lims = ax_line_all.get_ylim()
+        ax_line_all_sec.set_ylim(primary_lims)
 
         # Add combined legend
         lines1, labels1 = ax_line_all.get_legend_handles_labels()
