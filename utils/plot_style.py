@@ -170,7 +170,12 @@ def add_panel_label(
     }
     default_kwargs.update(kwargs)
 
-    ax.text(x_offset, 1 + y_offset, get_panel_label(label_index, lowercase=lowercase), **default_kwargs)
+    ax.text(
+        x_offset,
+        1 + y_offset,
+        get_panel_label(label_index, lowercase=lowercase),
+        **default_kwargs,
+    )
 
 
 def setup_map_axes(ax, xlim=MAP_XLIM, ylim=MAP_YLIM):
@@ -250,7 +255,7 @@ def save_figure(
 # === UTILITY FUNCTIONS ===
 def format_co2_title(co2_level, n_nodes=600, percent=True):
     """Format CO2 level for plot titles."""
-    from utils.visualization import get_actual_co2_level
+    from utils.data_handling import get_actual_co2_level
 
     actual_level = get_actual_co2_level(co2_level, n_nodes, percent=percent)
     return (
