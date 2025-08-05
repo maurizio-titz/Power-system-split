@@ -25,7 +25,7 @@ import cartopy.crs as ccrs
 sys.path.append("./")
 
 
-from utils.visualization import get_actual_co2_level, get_co2_levels
+from utils.data_handling import get_actual_co2_level, get_co2_levels
 from utils.config import path_to_pypsa_network_sclopf, path_to_figures_sclopf
 from utils import data_handling
 from utils.clustering_visualisation import truncate_colormap

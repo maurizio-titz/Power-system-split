@@ -23,7 +23,7 @@ import cartopy.crs as ccrs
 
 sys.path.append("./")
 
-from utils.visualization import get_actual_co2_level, get_co2_levels
+from utils.data_handling import get_actual_co2_level, get_co2_levels
 from utils.config import (
     path_to_pypsa_network_sclopf,
     path_to_figures_sclopf,
@@ -137,7 +137,7 @@ def create_flow_and_inertia_plot():
     for count, co2l in enumerate(selected_co2ls_spi):
         ind = np.where(np.round(co2ls, 2) == co2l)[0][0]
         density, bins_ = np.histogram(
-            inertia_time[count, :],
+            inertia_time[ind, :],
             bins=bins,
             weights=network.snapshot_weightings.generators
             / network.snapshot_weightings.generators.sum(),
