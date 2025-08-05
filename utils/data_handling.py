@@ -25,7 +25,7 @@ from utils.config import (
 )
 
 
-def build_networkx_graph(pypsa_network, snet_index=None):
+def build_networkx_graph(pypsa_network, snet_index=None, assert_order=True):
     """Build a networkx graph from the pypsa networks"""
     pypsa_network.determine_network_topology()
 
@@ -54,7 +54,8 @@ def build_networkx_graph(pypsa_network, snet_index=None):
                 s_nom=line["s_nom"],
                 num_parallel=line["num_parallel"],
             )
-            assert line["bus0"] < line["bus1"], f"Line {line_index} is not ordered"
+            if assert_order:
+                assert line["bus0"] < line["bus1"], f"Line {line_index} is not ordered"
         else:
             raise (RuntimeError("There duplicated edges in the PyPSA network"))
 
@@ -345,8 +346,62 @@ def load_split_props(n_nodes: int, co2l=None, use_sclopf: bool = True):
     assert isinstance(n_nodes, int), "n_nodes must be an integer"
     # load hdf pandas
     split_properties = pd.read_hdf(load_dir + f"split_properties_all_n{n_nodes}.h5")
+    split_properties["lost_load_share_blackout"] = split_properties[
+        "lost_load_share_blackout"
+    ].astype(float)
 
     if co2l is not None:
         return split_properties[split_properties.index.get_level_values("co2l") == co2l]
 
     return split_properties
+
+
+def get_co2_levels(n_nodes, ignore_lvls=()):
+    """Get available CO2 levels from SCLOPF data files.
+
+    Args:
+        n_nodes (int): Number of nodes in the network
+        ignore_lvls (tuple): CO2 levels to ignore
+
+    Returns:
+        np.array: Sorted array of CO2 levels (descending)
+    """
+    from utils.config import path_to_sclopf_data
+
+    sclopf_files = os.listdir(path_to_sclopf_data)
+    sclopf_files = [file for file in sclopf_files if f"_{n_nodes}_" in file]
+    co2l_list = [float(file.split("Co2L")[-1].split("-")[0]) for file in sclopf_files]
+    co2l_list = sorted(list(set(co2l_list)), reverse=True)
+
+    if isinstance(ignore_lvls, (float, int)):
+        ignore_lvls = [ignore_lvls]
+    for lvl in ignore_lvls:
+        if lvl in co2l_list:
+            co2l_list.remove(lvl)
+
+    return np.array(sorted(co2l_list, reverse=True))
+
+
+def get_actual_co2_level(lvls, n_nodes=600, percent=False):
+    """Get actual CO2 levels from results file.
+
+    Args:
+        lvls: CO2 level(s) to look up
+        n_nodes (int): Number of nodes (not used currently)
+        percent (bool): Return as percentage if True
+
+    Returns:
+        Actual CO2 level(s)
+    """
+    from utils.config import path_to_sclopf_results
+
+    lvls_actual = (
+        pd.read_csv(path_to_sclopf_results + "actual_co2_levels.csv", index_col=0)
+        .loc[lvls]
+        .values.squeeze()
+    )
+
+    if percent:
+        lvls_actual = (lvls_actual * 100).round().astype(int)
+
+    return lvls_actual
