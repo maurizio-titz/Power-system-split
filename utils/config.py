@@ -20,7 +20,7 @@ path_to_inertia_mitigation_results_sclopf = (
     root_path + "/results/sclopf/syn_inertia_mitigation/"
 )
 path_to_line_extension_mitigation_sclopf = (
-    root_path + "results/sclopf/line_extension_mitigation"
+    root_path + "results/sclopf/line_extension_mitigation/"
 )
 path_to_vis_results_sclopf = results_path + "sclopf/split_visualization/"
 path_to_pre_outage_sclopf = results_path + "sclopf/pre_outage_data/"
@@ -36,7 +36,7 @@ path_to_inertia_mitigation_results_lopf = (
     root_path + "/results/lopf/syn_inertia_mitigation/"
 )
 path_to_line_extension_mitigation_lopf = (
-    root_path + "results/lopf/line_extension_mitigation"
+    root_path + "results/lopf/line_extension_mitigation/"
 )
 path_to_vis_results_lopf = results_path + "lopf/split_visualization/"
 path_to_pre_outage_lopf = results_path + "lopf/pre_outage_data/"
