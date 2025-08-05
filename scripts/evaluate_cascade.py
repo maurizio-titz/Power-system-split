@@ -16,10 +16,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from utils.visualization import get_co2_levels
 
 sys.path.append("./")
 # Post messages to mattermost
+from utils.visualization import get_co2_levels
 from utils.cascade_simulation import solve_lpf
 import utils.config as cfg
 from utils import data_handling, send_mattermost_messages, subgraph_evaluation
@@ -58,6 +58,7 @@ def evaluate_cascade(
     verbose: bool = False,
     show_progress: bool = True,
     use_sclopf=True,
+    overrwrite: bool = False,
     # calc_split_indicator_vectors:bool=False
 ):
     """Find the properties of the splits (i.e., RoCoF or lost load) and
@@ -116,6 +117,12 @@ def evaluate_cascade(
         )
         save_path = save_path_lopf
     print(f"saving results to {save_path}")
+
+    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
+    if not overrwrite and os.path.exists(save_df_path + ".h5"):
+        raise FileExistsError(
+            f"Results already exist at {save_df_path}.h5, skipping evaluation."
+        )
 
     os.makedirs(save_path, exist_ok=True)
 
@@ -198,9 +205,9 @@ def evaluate_cascade(
     for timestamp, splits in tqdm(
         splitting_cascades_dtkeys.items(), disable=not show_progress
     ):
-        P_0 = data_handling.get_effective_injections(network, timestamp, nx_graph)
 
         # the following lines are were added when implementing line momentum, which is not used yet
+        # P_0 = data_handling.get_effective_injections(network, timestamp, nx_graph)
         # lines_in_subnet0 = network.lines[(network.buses.sub_network.loc[network.lines.bus0].astype(int)==0).values & (network.buses.sub_network.loc[network.lines.bus1].astype(int)==0).values]
         # list(zip(lines_in_subnet  0.bus0, lines_in_subnet0.bus1)) == networkx.get_edge_attributes(network, "orientation").values()
         # flows = solve_lpf(P_0, B_d, I_m)
@@ -338,27 +345,30 @@ if __name__ == "__main__":
     from utils.config import path_to_sclopf_data
     import os
 
-    # Load arguments
-    # co2l_in = 0.6
-    # co2l_in = float(sys.argv[1])
-
     n_nodes_in = 600
     # co2l_in = get_co2_levels(n_nodes_in)
-    co2l_in = [0.1]
+    co2l_in = [0.05]
 
     if isinstance(co2l_in, float):
         co2l_in = [co2l_in]
     for co2l_in in co2l_in:
-        # print(f"###############################################################")
-        # print(f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}")
-        # print(f"###############################################################")
-        # evaluate_cascade(
-        #     co2l_in,
-        #     n_nodes_in,
-        #     use_sclopf=True,
-        #     eval_indicator_vectors=True,
-        #     # end_time_str="2013-01-02 00:00",
-        # )
+        print(f"###############################################################")
+        print(f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}")
+        print(f"###############################################################")
+        try:
+            evaluate_cascade(
+                co2l_in,
+                n_nodes_in,
+                use_sclopf=True,
+                eval_indicator_vectors=True,
+                overrwrite=False,
+                # end_time_str="2013-01-02 00:00",
+            )
+        except FileExistsError as e:
+            print(
+                f"Skipping evaluation for {co2l_in} and {n_nodes_in} due to existing results."
+            )
+
         print(f"###############################################################")
         print(
             f"Getting edge indicator vecs for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
