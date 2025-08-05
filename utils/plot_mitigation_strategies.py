@@ -12,7 +12,7 @@ import networkx
 import numpy as np
 import pandas as pd
 
-from utils.data_handling import get_actual_co2_level
+from utils.visualization import get_actual_co2_level
 
 matplotlib.rcParams["pgf.texsystem"] = "pdflatex"
 matplotlib.rcParams.update(
