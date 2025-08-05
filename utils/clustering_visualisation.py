@@ -16,6 +16,7 @@ from matplotlib import colors
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
+from utils.data_handling import get_actual_co2_level
 from utils.clustering import get_path_to_clustering_dir, load_clustering
 from utils.config import (
     path_to_clustering_results_sclopf,
@@ -397,9 +398,7 @@ def load_lost_load_share_broken(
 
 
 def get_lost_load_share(
-    masks,
-    n_nodes=600,
-    co2l_list=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6),
+    split_properties,
     lost_load_type="total",
     dir=None,
 ):
@@ -507,74 +506,59 @@ def plot_clusters_lost_load(
     nx_graph,
     pos,
     indicator_name,
-    co2l,
-    samples_per_centroid,
     centroids,
-    labels,
+    centroids_df,
     edge_centroids=None,
     save_dir=None,
     cmap="seismic",
     n_subplots=16,
-    total_lost_load_share=None,
-    centroid_mean_distance=None,
     edge_cmap="inferno",
-    # original_ind_to_components_ind=None,
     cbar_label=None,
-    mask=None,
     custom_order=None,
     ncols=4,
     titles=None,
-    group_affiliation=None,
     show_ind=False,
     show=True,
+    algorithm_name="",
+    ignore_labels=(),
 ):
-    # edge_cmap = mpl.cm.get_cmap(edge_cmap)
-    # if co2l == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
-    #     co2l_string = "all"
-    # else:
-    co2l_string = co2l
+    centroids_df = centroids_df.copy()
 
-    index_by_sample_numbers = np.argsort(samples_per_centroid)[::-1][:n_subplots]
+    if isinstance(ignore_labels, int):
+        ignore_labels = [ignore_labels]
 
-    if total_lost_load_share is None:
-        total_lost_load_share = get_lost_load_share(masks=mask, co2l_list=co2l)
-    # if original_ind_to_components_ind is not None:
-    #     total_lost_load_share = map_components_to_original(
-    #         total_lost_load_share, original_ind_to_components_ind
-    #     )
-    #     if failed_edges is not None:
-    #         failed_edges = map_components_to_original(
-    #             failed_edges, original_ind_to_components_ind
-    #         )
-    # if edge_centroids is None:
-    #     failed_edges = load_masked_indicator_vectors("failed_edges", masks=mask)
+    has_ungrouped = -1 in centroids_df.index
 
-    # if centroid_mean_distance != None:
-    #     normalized_centroid_mean_distance = centroid_mean_distance / max(
-    #         centroid_mean_distance
-    #     )
-
-    sum_lost_load_share_per_centroid = np.array(
-        [np.sum(total_lost_load_share[labels == i]) for i in range(len(centroids))]
-    )
     if custom_order is None:
-        plot_order = np.argsort(sum_lost_load_share_per_centroid)[::-1][:n_subplots]
+        if has_ungrouped:
+            assert list(centroids_df.index) == list(np.arange(-1, len(centroids) - 1))
+        else:
+            assert list(centroids_df.index) == list(np.arange(len(centroids)))
+        centroids_df.reset_index(drop=False, inplace=True)
+        centroids_df.sort_values(by="weighted_lost_load", ascending=False, inplace=True)
+        idx_ungrouped = (
+            centroids_df.index[centroids_df.label == -1][0] if has_ungrouped else None
+        )
         order_string = ""
     else:
-        plot_order = custom_order
+        raise NotImplementedError("custom_order is not implemented yet")
+        centroids_df = centroids_df.loc[custom_order]
         order_string = "_custom_order"
-        # if group_affiliation is not None:
-        #     group_affiliation = group_affiliation[custom_order]
 
-    maxes = [max(centroids[i]) for i in index_by_sample_numbers]
-    mins = [min(centroids[i]) for i in index_by_sample_numbers]
-    vmax = max(maxes)
-    vmin = min(mins)
+    assert np.allclose(
+        centroids_df.weighted_lost_load.values,
+        (centroids_df.mean_load_loss_share * centroids_df.n_samples).values,
+        rtol=1e-8,
+        atol=1e-12,
+    ), "n_samples, mean load loss share and weighted lost load share do not match"
+
+    # maxes = [max(centroids[i]) for i in index_by_sample_numbers]
+    # mins = [min(centroids[i]) for i in index_by_sample_numbers]
+    # vmax = max(maxes)
+    # vmin = min(mins)
 
     vmax = 1.0
     vmin = 10**-3
-    if "main" in indicator_name:
-        centroids = np.abs(centroids - 1)
 
     vmin_edge = 1e-3
     vmax_edge = 1
@@ -588,6 +572,24 @@ def plot_clusters_lost_load(
     gs = GridSpec(
         2, 1, figure=fig, height_ratios=[0.5, n_rows * 3], hspace=0.5 / n_rows
     )
+
+    suptitle = f"num clusters={centroids_df.shape[0]}"
+    if has_ungrouped:
+        share_ungrouped = (
+            centroids_df.loc[idx_ungrouped, "n_samples"] / centroids_df.n_samples.sum()
+        )
+        loss_share_ungrouped = (
+            centroids_df.loc[idx_ungrouped, "weighted_lost_load"]
+            / centroids_df.weighted_lost_load.sum()
+        )
+        suptitle += f", ungrouped={share_ungrouped:.0%}, ungrouped loss share={loss_share_ungrouped:.2%}\n"
+
+    fig.suptitle(
+        suptitle,
+        fontsize=18,
+        y=1 - 0.06 * 4 / n_rows * 3,
+    )
+
     gs_maps = GridSpecFromSubplotSpec(
         n_rows, ncols, subplot_spec=gs[1], hspace=0.04, wspace=0.0
     )
@@ -599,14 +601,29 @@ def plot_clusters_lost_load(
     plt.rc("text.latex", preamble=r"\usepackage{amsmath}")
 
     plot_count = 0
-    for ind, gs_iter in zip(plot_order, gs_maps):
+    for iterrow, gs_iter in zip(centroids_df.iterrows(), gs_maps):
+        ind = iterrow[0]
+        label = iterrow[1]["label"]
+        n_samples = iterrow[1]["n_samples"]
+        total_lost_load_share = iterrow[1]["weighted_lost_load"]
+        mean_lost_load_share_per_centroid = iterrow[1]["mean_load_loss_share"]
+
+        assert np.isclose(
+            total_lost_load_share,
+            mean_lost_load_share_per_centroid * n_samples,
+            rtol=1e-8,
+            atol=1e-12,
+        ), "n_samples, mean load loss share and weighted lost load share do not match"
+
+        if label in ignore_labels:
+            print(f"Skipping label {label} in plot_clusters_lost_load")
+            continue
+
         if plot_count == n_subplots:
             break
         plot_count += 1
 
-        centroid, samples_in_centriod = centroids[ind], samples_per_centroid[ind]
-        if edge_centroids is not None:
-            edge_centroid = edge_centroids[ind]
+        centroid = centroids[label]
 
         ax = fig.add_subplot(gs_iter)
         nodes = nx.draw_networkx_nodes(
@@ -622,7 +639,7 @@ def plot_clusters_lost_load(
         nodes.set_edgecolor("black")
         nodes.set_linewidth(0.2)
 
-        if edge_centroid is None:
+        if edge_centroids is None:
             edges = nx.draw_networkx_edges(
                 nx_graph,
                 pos=pos,
@@ -634,7 +651,7 @@ def plot_clusters_lost_load(
         else:
             failed_edges_prob_log = np.array(
                 # [np.log10(x) if x > 1e-12 else -np.inf for x in edge_centroid]
-                [np.log10(x) for x in edge_centroid]
+                [np.log10(x) for x in edge_centroids[label]]
             )
             edges = nx.draw_networkx_edges(
                 nx_graph,
@@ -653,32 +670,37 @@ def plot_clusters_lost_load(
         ax.axis("off")
 
         if titles is None:
-            number_of_samples_string = sci_notation(samples_in_centriod, sig_fig=1)
-            cum_lost_load_symbol = r"$\bar{r}$"
-            # sci_notation(number, sig_fig=2)
-            if centroid_mean_distance is not None:
-                title = (
-                    f"{group_affiliation[ind]}\n"
-                    + f"{cum_lost_load_symbol}={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\n"
-                    + f"n=${number_of_samples_string}$\n"
-                    # + f"d={round(normalized_centroid_mean_distance[ind],ndigits=1)}\n"
-                )
-            else:
-                title = (
-                    f"{group_affiliation[ind]}\n"
-                    + r"$\bar{R}$"
-                    + f"={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\n"
-                    + f"n=$"
-                    + number_of_samples_string
-                    + "$"
-                )
-            if show_ind:
-                title = f"{ind}: " + title
+            number_of_samples_string = sci_notation(n_samples, sig_fig=1)
+            mean_lost_load_share_string = (
+                ""
+                if mean_lost_load_share_per_centroid is None
+                else (f"mean R$={mean_lost_load_share_per_centroid*100:.0f}\\%$")
+            )
+            total_lost_load_share_string = (
+                ""
+                if total_lost_load_share is None
+                else (f"total R$={sci_notation(total_lost_load_share, sig_fig=1)}\\%$")
+            )
+            # cum_lost_load_symbol = r"$\bar{r}$"
+
+            title = (
+                f"{int(label)} "
+                + r"$\bar{R}$"
+                + f"={round(total_lost_load_share / centroids_df.weighted_lost_load.sum()*100, ndigits=1)}%\n"
+                + f"n=$"
+                + number_of_samples_string
+                + "$\n"
+                + mean_lost_load_share_string
+                + "\n"
+                + total_lost_load_share_string
+            )
+            # if show_ind:
+            #     title = f"{ind}: " + title
         else:
             title = titles[ind]
         ax.set_title(
             title,
-            y=0.73,
+            y=0.76,
             loc="left",
         )
 
@@ -710,12 +732,10 @@ def plot_clusters_lost_load(
 
     if save_dir is not None:
         fname = ""
-        if edge_centroid is not None:
-            fname = (
-                f"clusters_lines_lost_load_k{len(centroids)}_vmin{vmin}{order_string}"
-            )
+        if edge_centroids is not None:
+            fname = f"{algorithm_name}_clustering_all_vmin{vmin}{order_string}"
         else:
-            fname = f"clusters_lost_load_k{len(centroids)}_vmin{vmin}{order_string}"
+            fname = f"{algorithm_name}_clustering_all_vmin{vmin}{order_string}"
         if show_ind:
             fname += "_inds"
         fig.savefig(
@@ -856,13 +876,13 @@ def plot_clusters(
                 title = (
                     ""
                     f"i={ind}\n"
-                    # + f"{cum_lost_load_symbol}={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\n"
+                    # + f"{cum_lost_load_symbol}={round(total_lost_load_share[ind]/ total_lost_load_share.sum()*100, ndigits=1)}%\n"
                     + f"n=${number_of_samples_string}$\n"
                     # + f"d={round(normalized_centroid_mean_distance[ind],ndigits=1)}\n"
                 )
             else:
                 title = (
-                    # f"cum. l.l.={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\n"
+                    # f"cum. l.l.={round(total_lost_load_share[ind]/ total_lost_load_share.sum()*100, ndigits=1)}%\n"
                     # +
                     f"n={number_of_samples_string}"
                 )
@@ -933,9 +953,7 @@ def sci_notation(number, sig_fig=2):
 
 
 def plot_group_lost_load_hist_by_co2_single(
-    group,
-    centroid_inds,
-    labels,
+    group_mask,
     lost_loads,
     masks_sig_to_co2,
     co2l_inds_hist,
@@ -962,9 +980,12 @@ def plot_group_lost_load_hist_by_co2_single(
     # cmap="cvidis"
     cmap = plt.get_cmap("cividis_r")
     co2ls = np.arange(0.0, 0.61, 0.1).round(1)
-    group_mask = np.any([labels == i for i in centroid_inds], axis=0)
+    # group_mask = np.any([labels == i for i in centroid_inds], axis=0)
+    # print(lost_loads.shape)
+    # print(list(group_mask.values())[0].shape)
+    # print(masks_sig_to_co2[co2l_inds_hist[0]].shape)
     lost_loads_lvl = [
-        lost_loads[i][group_mask[masks_sig_to_co2[co2l_inds_hist[i]]]]
+        lost_loads[group_mask & masks_sig_to_co2[co2l_inds_hist[i]]]
         for i in range(len(co2_lvls_hist))
     ]
     if ax is None:
@@ -979,7 +1000,7 @@ def plot_group_lost_load_hist_by_co2_single(
             np.array(lost_loads_lvl[i]) * 100,
             weights=weights[group_mask & masks_sig_to_co2[co2l_ind]]
             / (n_failures_weighted),
-            label=f"CO2={int(co2*100)}%",
+            label=f"CO2={get_actual_co2_level(co2, percent=True)}%",
             bins=np.linspace(0, 100, 21),
             alpha=0.8,
             log=True,
