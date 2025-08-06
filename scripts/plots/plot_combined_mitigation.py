@@ -553,14 +553,6 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
         )
 
     # === ADD SUBPLOT LABELS ===
-    labels = [
-        r"\textbf{A}",
-        r"\textbf{B}",
-        r"\textbf{C}",
-        r"\textbf{D}",
-        r"\textbf{E}",
-        r"\textbf{F}",
-    ]
     axes_all = [
         ax_inertia_loss,
         ax_inertia_map,
@@ -570,16 +562,17 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
         ax_line_all,
     ]
 
-    for ax, label in zip(axes_all, labels):
-        ax.text(
-            -0.15,
-            1.05,
-            label,
-            fontsize=SUBLABEL_FONTSIZE,
-            weight="bold",
-            verticalalignment="center",
-            transform=ax.transAxes,
-        )
+    for i, ax in enumerate(axes_all):
+        # ax.text(
+        #     -0.15,
+        #     0.05,
+        #     label,
+        #     fontsize=SUBLABEL_FONTSIZE,
+        #     weight="bold",
+        #     verticalalignment="center",
+        #     transform=ax.transAxes,
+        # )
+        add_panel_label(ax, i, x_offset=-0.10, y_offset=0.1, lowercase=True)
 
     # === APPLY CONSISTENT STYLING TO ALL AXES ===
     # Apply consistent font styling to all text elements
@@ -614,5 +607,5 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
 
 
 if __name__ == "__main__":
-    create_combined_mitigation_plot(use_annualized_costs=False)
+    # create_combined_mitigation_plot(use_annualized_costs=False)
     create_combined_mitigation_plot(use_annualized_costs=True)
