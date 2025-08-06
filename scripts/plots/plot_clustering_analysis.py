@@ -208,6 +208,7 @@ def create_clustering_analysis_plot(fname=""):
 
     # Prepare data arrays
     weights = np.concatenate([weights_dict[co2l] for co2l in co2l_list])
+    print("total weighted number of events:", weights.sum())
     blackout_vectors_filtered = np.concatenate(
         list(blackout_vectors_filtered_dict.values())
     )
@@ -229,6 +230,8 @@ def create_clustering_analysis_plot(fname=""):
         clustering_res = pickle.load(f)
 
     labels_all = np.load(labels_all_path, allow_pickle=True)
+    print(f"{clustering_res.labels_.shape[0]} unique blackouts.")
+    exit()
 
     with gzip.open(group_masks_path, "rb") as f:
         group_masks = pickle.load(f)

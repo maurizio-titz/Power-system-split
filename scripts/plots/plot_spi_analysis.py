@@ -107,7 +107,7 @@ def create_flow_and_inertia_plot():
         # Set zero values to NaN to avoid plotting lines at zero frequency
         density_masked = density.copy()
         density_masked[density_masked == 0] = np.nan
-        
+
         ax_flow.stairs(
             density_masked,
             bins,
@@ -147,11 +147,11 @@ def create_flow_and_inertia_plot():
             / network.snapshot_weightings.generators.sum(),
         )
         assert np.all(bins == bins_)
-        
+
         # Set zero values to NaN to avoid plotting lines at zero frequency
         density_masked = density.copy()
         density_masked[density_masked == 0] = np.nan
-        
+
         ax_inertia.stairs(
             density_masked,
             bins,

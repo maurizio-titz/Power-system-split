@@ -463,7 +463,7 @@ def create_combined_generation_storage_plot():
 
             current_store_type_string = (
                 current_store_type[0].upper() + current_store_type[1:]
-            )
+            ).replace("H2", "Hydrogen")
             axs_maps_storage[ii].set_title(
                 current_store_type_string, fontsize=TITLE_FONTSIZE
             )
@@ -536,7 +536,7 @@ def create_combined_generation_storage_plot():
             :, ["Hydro", "Pumped hydro", "H2", "Battery"]
         ].values
         * unit_factor,
-        label=["Hydro", "Pumped hydro", "H2", "Battery"],
+        label=["Hydro", "Pumped hydro", "Hydrogen", "Battery"],
     )
 
     for feat_count in range(capacity_by_type_by_lvl_plotting.shape[1]):
