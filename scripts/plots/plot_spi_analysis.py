@@ -104,8 +104,12 @@ def create_flow_and_inertia_plot():
             weights=network.snapshot_weightings.generators
             / network.snapshot_weightings.generators.sum(),
         )
+        # Set zero values to NaN to avoid plotting lines at zero frequency
+        density_masked = density.copy()
+        density_masked[density_masked == 0] = np.nan
+        
         ax_flow.stairs(
-            density,
+            density_masked,
             bins,
             label=r"{}\%".format(
                 get_actual_co2_level(co2l, percent=True),
@@ -143,8 +147,13 @@ def create_flow_and_inertia_plot():
             / network.snapshot_weightings.generators.sum(),
         )
         assert np.all(bins == bins_)
+        
+        # Set zero values to NaN to avoid plotting lines at zero frequency
+        density_masked = density.copy()
+        density_masked[density_masked == 0] = np.nan
+        
         ax_inertia.stairs(
-            density,
+            density_masked,
             bins,
             linewidth=3,
             color=cmap(
