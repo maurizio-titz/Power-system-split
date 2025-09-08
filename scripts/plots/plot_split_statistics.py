@@ -39,7 +39,7 @@ from utils.plot_style import (
 )
 
 
-def create_split_statistics_plot():
+def create_split_statistics_plot(load_normalization=False):
     """Create split statistics plot."""
 
     # Setup
@@ -94,21 +94,6 @@ def create_split_statistics_plot():
         component_props.time_stamp
     ].values
 
-    # # Calculate weighted split properties
-    # weighted_split_props_dict = dict(
-    #     {
-    #         co2l: {
-    #             category: split_props.loc[
-    #                 (split_props.category == category)
-    #                 & (split_props.index.get_level_values(0) == co2l),
-    #                 "snapshot_weighting",
-    #             ].sum()
-    #             for category in split_props.category.unique()
-    #         }
-    #         for co2l in co2ls
-    #     }
-    # )
-
     # Setup matplotlib styling
     setup_matplotlib_style()
 
@@ -127,6 +112,7 @@ def create_split_statistics_plot():
     )
     # gs_bottom = GridSpecFromSubplotSpec(1, 1, subplot_spec=gs_vertical[1, :])
     ax3_num_splits = fig.add_subplot(gsTop[2])
+    # axs_right = GridSpecFromSubplotSpec(2, 1, subplot_spec=gsTop[1, :])
     ax3_num_splits_legend = fig.add_subplot(gsTop[3])
 
     # Panel c: split number and categories (loss of load share distribution)
@@ -146,6 +132,7 @@ def create_split_statistics_plot():
     data = pd.DataFrame(data, index=co2ls[::-1], columns=bin_centers)
 
     plt.sca(ax3_num_splits)
+    markers = ["o", "s", "D", "^", "v", "."]
     for i, bin_center in enumerate(bin_centers):
         color = cmap(i / (len(bin_centers) + 1) + (1 / (len(bin_centers) + 1)))
         counts = data.loc[:, bin_center]
@@ -155,14 +142,19 @@ def create_split_statistics_plot():
             label=rf"{bins[i]}-{bins[i+1]}\%",
             alpha=0.8,
             color=color,
-            marker=".",
-            markersize=10,
+            marker=markers[i % len(markers)],
+            markersize=5,
         )
 
     ax3_num_splits.set_xlabel(
         r"CO$_2$ level [\% of 1990]", fontsize=AXIS_LABEL_FONTSIZE
     )
     ax3_num_splits.set_ylabel("Number of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
+    x_ticks_major = [0, 20, 40, 60]
+    x_ticks_minor = [10, 30, 50]
+    ax3_num_splits.set_xticks(x_ticks_major)
+    ax3_num_splits.set_xticks(x_ticks_minor, minor=True)
+    ax3_num_splits.grid(False)
     ax3_num_splits.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
     ax3_num_splits.set_yscale("log")
     ax3_num_splits.invert_xaxis()
@@ -180,7 +172,11 @@ def create_split_statistics_plot():
     ax3_num_splits_legend.axis("off")
 
     # Filter out very small components
-    component_props_filtered = component_props[component_props.load_share > 0.1]
+    if load_normalization:
+        # component_props_filtered = component_props
+        component_props_filtered = component_props[component_props.load_share > 0.05]
+    else:
+        component_props_filtered = component_props[component_props.load_share > 0.1]
 
     # Panel b: Inertia histograms
     cmap = plt.get_cmap("cividis")
@@ -188,7 +184,17 @@ def create_split_statistics_plot():
     ax2_inertia = fig.add_subplot(gsTop[1])
     ax2_inertia_legend = fig.add_subplot(gs_vertical[1, :])
     rot_energy = component_props_filtered.rot_energy / 1000
-    bins = np.linspace(rot_energy.min(), rot_energy.max(), 15)
+    if load_normalization:
+        rot_energy = component_props_filtered.rot_energy / component_props_filtered.load
+    max_vals = [
+        rot_energy[component_props_filtered.co2l == co2l].max()
+        for co2l in selected_co2ls
+    ]
+    min_vals = [
+        rot_energy[component_props_filtered.co2l == co2l].min()
+        for co2l in selected_co2ls
+    ]
+    bins = np.linspace(min(min_vals), max(max_vals), 15)
 
     for co2l in selected_co2ls:
         vals = ax2_inertia.hist(
@@ -206,13 +212,23 @@ def create_split_statistics_plot():
         )
 
     ax2_inertia.set_yscale("log")
-    ax2_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
+    if load_normalization:
+        ax2_inertia.set_xlabel(
+            "Norm. rotational energy [s]", fontsize=AXIS_LABEL_FONTSIZE
+        )
+    else:
+        ax2_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
     ax2_inertia.set_ylabel("Number of split components", fontsize=AXIS_LABEL_FONTSIZE)
     ax2_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
 
     # Panel a: power imbalance histograms
     ax1_imbalance = fig.add_subplot(gsTop[0])
-    power_imbalance = component_props_filtered.power_imbalance / 1000
+    if load_normalization:
+        power_imbalance = (
+            component_props_filtered.power_imbalance / component_props_filtered.load
+        )
+    else:
+        power_imbalance = component_props_filtered.power_imbalance / 1000
     bins = np.linspace(power_imbalance.min(), power_imbalance.max(), 15)
 
     for co2l in selected_co2ls:
@@ -232,9 +248,22 @@ def create_split_statistics_plot():
 
     ax1_imbalance.set_yscale("log")
     ax1_imbalance.set_ylabel("Number of split components", fontsize=AXIS_LABEL_FONTSIZE)
-    ax1_imbalance.set_xlabel("Power imbalance [GW]", fontsize=AXIS_LABEL_FONTSIZE)
+    if load_normalization:
+        ax1_imbalance.set_xlabel(
+            "Norm. power imbalance [1]", fontsize=AXIS_LABEL_FONTSIZE
+        )
+        ax1_imbalance.set_xticks(
+            np.arange(
+                np.ceil(power_imbalance.min()),
+                np.floor(power_imbalance.max()) + 1,
+                step=1,
+            )
+        )
+    else:
+        ax1_imbalance.set_xlabel("Power imbalance [GW]", fontsize=AXIS_LABEL_FONTSIZE)
+
     ax1_imbalance.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
-    ax1_imbalance.set_xticks(np.arange(-50, 51, step=25))
+    # ax1_imbalance.set_xticks(np.arange(-50, 51, step=25))
 
     # Legend for panels a and b
     h, l = ax2_inertia.get_legend_handles_labels()
@@ -258,9 +287,13 @@ def create_split_statistics_plot():
 
     plt.tight_layout()
     # Save figure with consistent style
-    save_figure(fig, save_path, "split_statistics")
+    save_name = (
+        "split_statistics_normalized" if load_normalization else "split_statistics"
+    )
+    save_figure(fig, save_path, save_name)
     plt.show()
 
 
 if __name__ == "__main__":
-    create_split_statistics_plot()
+    # create_split_statistics_plot()
+    create_split_statistics_plot(load_normalization=True)
