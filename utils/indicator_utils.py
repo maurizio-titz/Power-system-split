@@ -20,34 +20,6 @@ def load_indicator_vectors(
     split_props=None,
     co2_list=(),
 ) -> "tuple[dict, dict, pd.DataFrame]":
-    # if (isinstance(co2l, list) or isinstance(co2l, np.ndarray)) and not isinstance(
-    #     mask, list
-    # ):
-    #     raise TypeError("if co2l is a list mask has to be a list, too")
-
-    # if not (
-    #     (isinstance(co2l, list) or isinstance(co2l, np.ndarray))
-    #     or isinstance(co2l, float)
-    # ):
-    #     Exception("co2l has to be float or list")
-
-    # if weights is None and isinstance(co2l, float):
-    #     all_vectors = load_indicator_vectors_unweighted_single_lvl(
-    #         n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask
-    #     )
-    #     return all_vectors
-
-    # elif weights is None and isinstance(co2l, list):
-    #     all_vectors = load_indicator_vectors_unweighted_multiple_lvl(
-    #         n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask
-    #     )
-    #     return all_vectors
-
-    # elif weights is not None and isinstance(co2l, float):
-    #     all_vectors, all_weights = load_indicator_vectors_weighted_single_lvl(
-    #         n_nodes, co2l, indicator_type, path_to_indicator_vectors, mask, weights
-    #     )
-    #     return all_vectors, all_weights
 
     assert isinstance(
         weights, pd.Series
@@ -80,7 +52,7 @@ def load_indicator_vectors_weighted_multiple_lvl(
     weights,
     split_props: pd.DataFrame,
     co2list=(),
-):
+) -> "tuple[dict, dict, pd.DataFrame]":
     if co2list is None or len(co2list) == 0:
         co2list = split_props.co2l.unique()
 

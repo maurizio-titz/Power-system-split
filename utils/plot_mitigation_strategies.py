@@ -300,12 +300,13 @@ def plot_map_inertia_placement_final(
     right_xlim = ax2.get_xlim()[1]
     ax2.text(
         inertia_in_map_plot * unit_factor + right_xlim / 200 * 5,
-        1,
+        0.2,
         f"{int(round(inertia_in_map_plot*unit_factor))}GWs",
         verticalalignment="bottom",
         horizontalalignment="left",
         zorder=np.inf,
         fontsize=12,
+        c=color,
     )
     # ax2.text(
     #     inertia_in_map_plot * unit_factor,

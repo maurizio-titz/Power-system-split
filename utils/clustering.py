@@ -269,5 +269,11 @@ def get_path_to_clustering_dir(
         n_nodes_split_str = ""
     else:
         n_nodes_split_str = f"_ns{n_nodes_split}"
+    if isinstance(co2l, (np.ndarray)):
+        co2l = co2l.tolist()
+    if isinstance(co2l, (list)):
+        co2_string = str(co2l).replace(", ", "_")[1:-1]
+    else:
+        co2_string = str(co2l)
 
-    return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2{str(co2l).replace(', ', '_')[1:-1]}_n{n_nodes}{n_nodes_split_str}_lls{lost_load_share}/"
+    return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2L{co2_string}_n{n_nodes}{n_nodes_split_str}_lls{lost_load_share}/"
