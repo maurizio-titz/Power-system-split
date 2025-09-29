@@ -41,7 +41,7 @@ from utils.plot_style import (
 )
 
 
-def create_flow_and_inertia_plot():
+def create_flow_and_inertia_plot(mean_distance=False):
     """Create SPI analysis plot with flow, inertia histograms and SPI vectors."""
 
     # Setup
@@ -79,10 +79,13 @@ def create_flow_and_inertia_plot():
     setup_matplotlib_style()
 
     # Create figure with two panels
-    f = plt.figure(figsize=(16, 6))
-    gs_horizontal = GridSpec(1, 2, figure=f, wspace=0.23)
+    f = plt.figure(figsize=(7, 4.5))
+    gs_vertical = GridSpec(2, 1, figure=f, hspace=0.6, height_ratios=[1, 0.1])
+    gs_horizontal = GridSpecFromSubplotSpec(1, 2, gs_vertical[0], wspace=0.23)
+
     ax_flow = f.add_subplot(gs_horizontal[0])
     ax_inertia = f.add_subplot(gs_horizontal[1])
+    ax_legend = f.add_subplot(gs_vertical[1])
 
     # Panel a: total flow histograms
     cmap = plt.get_cmap("cividis_r")
@@ -92,8 +95,15 @@ def create_flow_and_inertia_plot():
     flows_lvls = []
     for count, co2l in enumerate(selected_co2ls_spi):
         n = networks[co2l]
-        flow_distance = n.lines_t.p0.abs().mul(network.lines.length) / unit_factor
-        flows_lvls.append(flow_distance.sum(axis=1))
+        flow_distance = (n.lines_t.p0.abs().mul(network.lines.length)).sum(axis=1)
+        if mean_distance:
+            total_transmissed_power = (
+                n.generators_t.p.mul(network.generators.sign).sum(axis=1)
+            ) + n.storage_units_t.p[n.storage_units_t.p > 0].sum(axis=1)
+            flow_distance = flow_distance / total_transmissed_power
+        else:
+            flow_distance = flow_distance / unit_factor
+        flows_lvls.append(flow_distance)
     flows_lvls = np.array(flows_lvls)
 
     bins = np.linspace(flows_lvls.min(), flows_lvls.max(), 40)
@@ -124,15 +134,42 @@ def create_flow_and_inertia_plot():
 
         assert np.isclose(sum(density), 1, atol=1e-3)
 
-    # Add legend to left panel and styling
-    leg = ax_flow.legend(fontsize=LEGEND_FONTSIZE, title=r"CO$_2$ level [\% of 1990]")
-    plt.setp(leg.get_title(), fontsize=LEGEND_FONTSIZE)
-    ax_flow.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
-    ax_flow.set_xlabel(
-        r"Total power flow distance [TW$\cdot$km]", fontsize=AXIS_LABEL_FONTSIZE
+    # Add legend to separate panel
+    # Legend for panels a and b
+    h, l = ax_flow.get_legend_handles_labels()
+    # Place the legend title to the left of the labels by using a dummy handle and label
+    handles = [mpl.lines.Line2D([], [], color="none")] + h[::-1]
+    labels = [r"CO$_2$ level [\% of 1990]"] + l[::-1]
+    ax_legend.legend(
+        handles,
+        labels,
+        loc="center left",
+        ncols=4,
+        columnspacing=1,
+        handletextpad=0.5,
+        # frameon=False,
     )
+    ax_legend.axis("off")
+    # plt.setp(ax_legend.get_legend().get_title(), fontsize=LEGEND_FONTSIZE)
+    # plt.setp(leg.get_title(), fontsize=LEGEND_FONTSIZE)
+    # ax_flow.set_xlim(bottom=40)
+    ax_flow.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    if mean_distance:
+        ax_flow.set_xlabel(
+            r"Mean transmission distance [km]", fontsize=AXIS_LABEL_FONTSIZE
+        )
+    else:
+        ax_flow.set_xlabel(
+            r"Total power flow distance [TW$\cdot$km]", fontsize=AXIS_LABEL_FONTSIZE
+        )
     ax_flow.set_ylabel(r"Frequency", fontsize=AXIS_LABEL_FONTSIZE)
     ax_flow.grid(True)
+    # ax_flow.legend(
+    #     title=r"CO$_2$ level [\% of 1990]",
+    #     title_fontsize=LEGEND_FONTSIZE,
+    #     frameon=False,
+    #     loc="upper right",
+    # )
     # ax_flow.set_xlim(left=39)
 
     # Panel b: rotational energy (without legend)
@@ -166,17 +203,20 @@ def create_flow_and_inertia_plot():
 
     ax_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
     ax_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
-    ax_inertia.set_ylabel("Frequency", fontsize=AXIS_LABEL_FONTSIZE)
+    # ax_inertia.set_ylabel("Frequency", fontsize=AXIS_LABEL_FONTSIZE)
     ax_inertia.grid(True)
 
     # Add panel labels
-    add_panel_label(ax_flow, 0)
-    add_panel_label(ax_inertia, 1)
+    add_panel_label(ax_flow, 0, y_offset=0.08)
+    add_panel_label(ax_inertia, 1, y_offset=0.08)
 
     plt.tight_layout()
-    save_figure(f, save_path, "flow_and_inertia")
+    f_name = "flow_and_inertia"
+    if mean_distance:
+        f_name += "_mean_distance"
+    save_figure(f, save_path, f_name)
     plt.show()
 
 
 if __name__ == "__main__":
-    create_flow_and_inertia_plot()
+    create_flow_and_inertia_plot(mean_distance=False)

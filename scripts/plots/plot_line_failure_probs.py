@@ -564,6 +564,136 @@ def create_secondary_line_failure_plot():
     plt.show()
 
 
+def create_total_line_failure_plot():
+    """Create line failure probabilities plot showing only secondary failures."""
+
+    # Setup
+    n_nodes = 600
+    save_path = path_to_figures_sclopf
+    os.makedirs(save_path, exist_ok=True)
+
+    # Load network
+    network = data_handling.load_pypsa_network_from_path(
+        path_to_pypsa_network_sclopf
+        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        True,
+    )
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+    pos = nx.get_node_attributes(nx_graph, "pos")
+
+    # Get CO2 levels
+    co2ls = get_co2_levels(n_nodes)
+    selected_co2ls = np.array([0.0, 0.2, 0.6])
+
+    # Load edge likelihoods
+    edge_likelihoods = pickle.load(
+        open(
+            path_to_vis_results_sclopf
+            + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
+            "rb",
+        )
+    )
+
+    # Setup figure with individual colorbars for each subplot (single row)
+    f = plt.figure(figsize=(24, 5))
+    gs_main = GridSpec(
+        1,
+        3,
+        figure=f,
+        width_ratios=[1, 1, 1],
+        wspace=0.05,
+    )
+
+    # Create subplots with space for individual colorbars
+    axs_secondary = []
+    axs_colorbars_secondary = []
+
+    for i in range(3):
+        # Create subplot with colorbar space
+        gs_sub_secondary = GridSpecFromSubplotSpec(
+            1, 2, subplot_spec=gs_main[0, i], width_ratios=[1, 0.05], wspace=-0.05
+        )
+
+        axs_secondary.append(f.add_subplot(gs_sub_secondary[0]))
+        axs_colorbars_secondary.append(f.add_subplot(gs_sub_secondary[1]))
+
+    # Setup matplotlib styling
+    setup_matplotlib_style()
+
+    labels = [r"\textbf{A}", r"\textbf{B}", r"\textbf{C}"]
+
+    # Secondary failures
+    cmap = copy.copy(mpl.cm.get_cmap("plasma_r"))
+    # cmap = copy.copy(mpl.cm.get_cmap("copper_r"))
+    # cmap = mplcolors.ListedColormap(cmap(np.linspace(0, 0.9, 256)))
+    cmap.set_under("gainsboro", 1.0)
+
+    for count, co2l in enumerate(selected_co2ls[::-1]):
+        level = np.round(co2l, 2)
+
+        # Load likelihoods as dictionary and transform into array
+        c_H_s = [edge_likelihoods[level][(u, v)] for u, v in nx_graph.edges()]
+        c_H_s_array = np.array(c_H_s)
+
+        # Calculate individual vmin and vmax for this subplot
+        valid_probs = c_H_s_array[c_H_s_array > 1e-12]
+        if len(valid_probs) > 0:
+            vmin_individual = np.min(valid_probs)
+            vmax_individual = np.max(valid_probs)
+        else:
+            vmin_individual = 1e-6
+            vmax_individual = 1e-3
+
+        print(
+            f"CO2 level {co2l}: Min val sec: {vmin_individual:.2e}, Max val sec: {vmax_individual:.2e}"
+        )
+
+        nodes = nx.draw_networkx_nodes(
+            nx_graph, pos=pos, ax=axs_secondary[count], node_color="black", node_size=0
+        )
+
+        edges = nx.draw_networkx_edges(
+            nx_graph,
+            pos=pos,
+            ax=axs_secondary[count],
+            edge_color=c_H_s,
+            width=3.5,
+            edge_cmap=cmap,
+            edge_vmin=vmin_individual,
+            edge_vmax=vmax_individual,
+        )
+
+        axs_secondary[count].axis("off")
+
+        # Individual colorbar for this secondary subplot
+        sm = plt.cm.ScalarMappable(
+            cmap=cmap,
+            norm=mplcolors.Normalize(vmin=vmin_individual, vmax=vmax_individual),
+        )
+        cb = f.colorbar(sm, cax=axs_colorbars_secondary[count])
+        setup_colormap_scientific_notation(cb)
+        # Add title to all colorbars
+        axs_colorbars_secondary[count].set_title(
+            r"$\langle p_{\ell}\rangle$",
+            fontsize=COLORBAR_LABEL_FONTSIZE,
+            weight="bold",
+            verticalalignment="center",
+            pad=15,
+        )
+
+        # Add subplot titles and labels
+        actual_co2_level = get_actual_co2_level(co2l, n_nodes, percent=True)
+        axs_secondary[count].set_title(
+            r"CO$_2 =$ " + r"{}\%".format(int(actual_co2_level)),
+            fontsize=SUBTITLE_FONTSIZE,
+        )
+        add_panel_label(axs_secondary[count], count, x_offset=0.1)
+
+    save_figure(f, save_path, "line_failure_probs_total")
+    plt.show()
+
+
 if __name__ == "__main__":
-    # create_line_failure_plot_linear()
+    create_line_failure_plot_linear()
     create_secondary_line_failure_plot()
+    create_total_line_failure_plot()

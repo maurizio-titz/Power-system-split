@@ -161,7 +161,7 @@ def find_latest_clustering_file(save_dir):
     return clustering_files[0]
 
 
-def find_best_clustering_file(save_dir):
+def find_best_clustering_file(save_dir, alg_filter=None):
     """Find the best clustering file."""
     # read clustering results df
     clust_res = pd.read_csv(
@@ -169,10 +169,12 @@ def find_best_clustering_file(save_dir):
     )
     clust_res = clust_res.sort_values(by="silhouette_score", ascending=False)
     clustering_files = clust_res.index.tolist()
+    if alg_filter:
+        clustering_files = [f for f in clustering_files if alg_filter in f]
     return clustering_files[0]
 
 
-def create_clustering_analysis_plot(fname=""):
+def create_clustering_analysis_plot(fname="", n_subplots=12, alg_filter=None):
     """Create the main clustering analysis plot."""
 
     # Load data
@@ -188,7 +190,7 @@ def create_clustering_analysis_plot(fname=""):
     # Find and load clustering results
     print("Loading clustering results...")
     if not fname:
-        fname = find_best_clustering_file(save_dir)
+        fname = find_best_clustering_file(save_dir, alg_filter)
     print(f"Using clustering file: {fname}")
     clustering_res_path = os.path.join(save_dir, fname)
 
@@ -225,13 +227,13 @@ def create_clustering_analysis_plot(fname=""):
     if not os.path.exists(group_masks_path):
         raise FileNotFoundError(f"Required file not found: {group_masks_path}")
 
+    print("Processing clustering results...")
     # Load clustering results
     with gzip.open(clustering_res_path, "rb") as f:
         clustering_res = pickle.load(f)
 
     labels_all = np.load(labels_all_path, allow_pickle=True)
     print(f"{clustering_res.labels_.shape[0]} unique blackouts.")
-    exit()
 
     with gzip.open(group_masks_path, "rb") as f:
         group_masks = pickle.load(f)
@@ -256,7 +258,7 @@ def create_clustering_analysis_plot(fname=""):
     centroids = {
         label: blackout_vectors_filtered[group_masks[label]].T
         @ weights[group_masks[label]]
-        / group_masks[label].sum()
+        / weights[group_masks[label]].sum()
         for label in labels
     }
 
@@ -274,8 +276,7 @@ def create_clustering_analysis_plot(fname=""):
     print("Creating visualization...")
 
     # Plot parameters
-    n_subplots = 12  # Show top 12 clusters
-    ncols = 3
+    ncols = 4
     n_rows = int(np.ceil(n_subplots / ncols))
     fig_scaling = 4
 
@@ -299,19 +300,27 @@ def create_clustering_analysis_plot(fname=""):
     fig = plt.figure(figsize=(ncols * fig_scaling, n_rows * fig_scaling * 1.3))
 
     gs = GridSpec(2, 1, figure=fig, hspace=0.15, height_ratios=[0.05, n_rows][::-1])
-    gs_legend_colorax = GridSpecFromSubplotSpec(1, 3, subplot_spec=gs[1, 0])
-    gs_group = GridSpecFromSubplotSpec(n_rows, 1, subplot_spec=gs[0, 0], hspace=0.2)
+    gs_legend_colorax = GridSpecFromSubplotSpec(
+        1, 3, subplot_spec=gs[1, 0], width_ratios=[1, 0.5, 0.5]
+    )
+    gs_clusters = GridSpecFromSubplotSpec(n_rows, 1, subplot_spec=gs[0, 0], hspace=0.2)
 
     plot_count = 0
     df_iter = centroids_df.iterrows()
 
+    print(f"Plotting top {n_subplots} clusters...")
     # Plot clusters
     for row in range(n_rows):
         if plot_count >= n_subplots:
             break
 
         gs_row = GridSpecFromSubplotSpec(
-            2, 1, subplot_spec=gs_group[row, 0], hspace=-0.05, height_ratios=[3, 1]
+            2,
+            1,
+            subplot_spec=gs_clusters[row, 0],
+            hspace=-0.05,
+            height_ratios=[3, 1],
+            wspace=-0.01,
         )
         gs_row_map = GridSpecFromSubplotSpec(
             1, ncols, subplot_spec=gs_row[0, 0], wspace=0.0
@@ -354,21 +363,28 @@ def create_clustering_analysis_plot(fname=""):
             ax.axis("off")
 
             # Add cluster information
-            subtitle = f"={round(centroid_row.lost_load_share*100, ndigits=1)}\%\nn={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100)}\%"
-            subtitle = r"$\bar{R}$" + subtitle
+            cluster_label = (
+                f"{plot_count},"
+                rf"\\"
+                rf"$\bar{{R}}={round(centroid_row.lost_load_share*100, ndigits=1)}\%$"
+                rf"\\"
+                rf"$\beta={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100)}\%$"
+            )
+            # cluster_label = cluster_label
+            # cluster_label = f"" + cluster_label
             ax.set_title(
-                plot_count,
-                y=0.90,
-                x=-0.05,
-                fontsize=TITLE_FONTSIZE,
+                cluster_label,
+                y=0.74,
+                x=-0,
+                fontsize=LABEL_FONTSIZE,
                 loc="left",
             )
-            ax.text(
-                -15,
-                52.5,
-                subtitle,
-                fontsize=LABEL_FONTSIZE,
-            )
+            # ax.text(
+            #     -15,
+            #     52.5,
+            #     subtitle,
+            #     fontsize=LABEL_FONTSIZE,
+            # )
 
             # Create histogram subplot
             ax_hist = fig.add_subplot(gs_row_hist[0, column])
@@ -384,11 +400,13 @@ def create_clustering_analysis_plot(fname=""):
             )
             ax_hist.grid(True)
 
-            if column != 0:
-                ax_hist.set_ylabel("")
             ax_hist.tick_params(axis="y", which="major", pad=0)
             ax_hist.set_xticks(np.arange(0, 101, step=20))
             ax_hist.set_xlabel("Blackout size [\%]", rotation=0, labelpad=0)
+            if column != 0:
+                ax_hist.set_ylabel("")
+                ax_hist.set_yticklabels([])
+
             h, l = ax_hist.get_legend_handles_labels()
             ax_hist.legend().set_visible(False)
 
@@ -396,12 +414,16 @@ def create_clustering_analysis_plot(fname=""):
     ax_hist_legend = fig.add_subplot(gs_legend_colorax[0])
     ax_hist_legend.axis("off")
     if "h" in locals() and "l" in locals():
+        l = [
+            label if label.endswith("\%") else r"{}".format(label.replace("%", "\%"))
+            for label in l
+        ]
         ax_hist_legend.legend(
             h,
             l,
             loc="center",
             fontsize=LEGEND_FONTSIZE,
-            ncols=1,
+            ncols=3,
             title=r"CO$_2$ level [\% of 1990]",
         )
 
@@ -428,18 +450,489 @@ def create_clustering_analysis_plot(fname=""):
     cb_edge.ax.xaxis.set_label_position("top")
 
     # Save the plot
-    save_figure(fig, path_to_figures_sclopf, f"clustering_analysis_{n_subplots}")
+    save_name = f"clustering_analysis_{ncols}cols_{n_subplots}"
+    if alg_filter:
+        save_name += f"_{alg_filter}"
+    if fname:
+        save_name += f"_{fname.replace('.pklz','')}"
+    save_figure(fig, path_to_figures_sclopf, save_name)
+    print(f"Plot saved to: {os.path.join(path_to_figures_sclopf, f'{save_name}.pdf')}")
+
+    return fig
+
+
+def analyse_clusters_temporal_occurence_patterns(
+    fname="", alg_filter=None, n_clusters_to_analyze=12
+):
+    """
+    Create individual histograms for each cluster showing occurrence by hour and month.
+    For each cluster, creates plots for CO2 levels 0%, 20%, and 60%.
+
+    Parameters
+    ----------
+    fname : str
+        Clustering filename to use
+    alg_filter : str, optional
+        Algorithm filter for clustering file selection
+    n_clusters_to_analyze : int, default 4
+        Number of top clusters to analyze
+    """
+
+    # Load data
+    print("Loading clustering data...")
+    data = load_clustering_data()
+    nx_graph = data["nx_graph"]
+    pos = data["pos"]
+    co2l_list = data["co2l_list"]
+    save_dir = data["save_dir"]
+    num_failures_weighted = data["num_failures_weighted"]
+    n_nodes = data["n_nodes"]
+
+    # Find and load clustering results
+    print("Loading clustering results...")
+    if not fname:
+        fname = find_best_clustering_file(save_dir, alg_filter)
+    print(f"Using clustering file: {fname}")
+    clustering_res_path = os.path.join(save_dir, fname)
+
+    print("Loading processed data...")
+    processed_data = load_processed_data(save_dir, n_nodes)
+    split_properties_filtered = processed_data["split_properties_filtered"]
+    masks_dict = processed_data["masks_dict"]
+    weights_dict = processed_data["weights_dict"]
+    blackout_vectors_filtered_dict = processed_data["blackout_vectors_filtered_dict"]
+    failed_edges_indicator_vectors_filtered = processed_data[
+        "failed_edges_indicator_vectors_filtered"
+    ]
+    # distance_matrix = processed_data["distance_matrix"]
+
+    # Setup colormaps
+    node_cmap, edge_cmap = setup_colormaps()
+
+    # Prepare data arrays
+    weights = np.concatenate([weights_dict[co2l] for co2l in co2l_list])
+    print("total weighted number of events:", weights.sum())
+    blackout_vectors_filtered = np.concatenate(
+        list(blackout_vectors_filtered_dict.values())
+    )
+    split_lost_load = split_properties_filtered.lost_load_share_blackout
+    split_weighted_lost_load = split_lost_load * weights
+    co2l_masks = [(split_properties_filtered.co2l == co2l).values for co2l in co2l_list]
+
+    # Check required files exist
+    labels_all_path = clustering_res_path.replace("fitted.pklz", "labels_all.npy")
+    group_masks_path = clustering_res_path.replace("fitted.pklz", "group_masks.pklz")
+
+    if not os.path.exists(labels_all_path):
+        raise FileNotFoundError(f"Required file not found: {labels_all_path}")
+    if not os.path.exists(group_masks_path):
+        raise FileNotFoundError(f"Required file not found: {group_masks_path}")
+
+    print("Processing clustering results...")
+    # Load clustering results
+    with gzip.open(clustering_res_path, "rb") as f:
+        clustering_res = pickle.load(f)
+
+    labels_all = np.load(labels_all_path, allow_pickle=True)
+    print(f"{clustering_res.labels_.shape[0]} unique blackouts.")
+
+    with gzip.open(group_masks_path, "rb") as f:
+        group_masks = pickle.load(f)
+
+    # Process clustering results
+    labels, counts = np.unique(clustering_res.labels_, return_counts=True)
+    n_clusters = len(labels)
+
+    # Create centroids dataframe
+    centroids_df = pd.DataFrame(index=labels)
+    centroids_df["weighted_lost_load"] = np.array(
+        [np.sum(split_weighted_lost_load[labels_all == i]) for i in labels]
+    )
+    centroids_df["lost_load_share"] = (
+        centroids_df["weighted_lost_load"] / centroids_df["weighted_lost_load"].sum()
+    )
+    centroids_df["n_samples"] = np.array(
+        [weights[group_masks[label]].sum() for label in labels]
+    )
+
+    # Calculate centroids
+    centroids = {
+        label: blackout_vectors_filtered[group_masks[label]].T
+        @ weights[group_masks[label]]
+        / weights[group_masks[label]].sum()
+        for label in labels
+    }
+
+    edge_centroids = {
+        label: failed_edges_indicator_vectors_filtered[group_masks[label]].T
+        @ weights[group_masks[label]]
+        / group_masks[label].sum()
+        for label in labels
+    }
+
+    # Sort by weighted lost load
+    centroids_df = centroids_df.sort_values(by="weighted_lost_load", ascending=False)
+
+    # Analyze temporal patterns
+    print("Analyzing temporal occurrence patterns...")
+
+    # Get time information from split properties
+    split_properties_filtered["time_stamp"] = pd.to_datetime(
+        split_properties_filtered.index.get_level_values("time_stamp")
+    )
+    split_properties_filtered["hour"] = split_properties_filtered["time_stamp"].dt.hour
+    split_properties_filtered["month"] = split_properties_filtered[
+        "time_stamp"
+    ].dt.month
+    split_properties_filtered["day_of_year"] = split_properties_filtered[
+        "time_stamp"
+    ].dt.dayofyear
+
+    # Select top clusters to analyze (e.g., top 6)
+    top_clusters = centroids_df.head(n_clusters_to_analyze).index.tolist()
+
+    # CO2 levels to analyze
+    co2_levels_to_plot = [0.0, 0.2, 0.6]  # 0%, 20%, 60%
+    co2_level_names = ["0%", "20%", "60%"]
+
+    # Create individual plots for each cluster
+    for cluster_idx, label in enumerate(top_clusters):
+        print(f"Creating plots for Cluster {cluster_idx + 1}")
+
+        # Create figure with 2 rows (hour, month) and 3 columns (CO2 levels)
+        fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+        fig.suptitle(
+            f"Cluster {cluster_idx + 1} - Temporal Occurrence Patterns", fontsize=16
+        )
+
+        cluster_mask = labels_all == label
+        cluster_data = split_properties_filtered[cluster_mask]
+        cluster_weights = weights[cluster_mask]
+
+        # Create histograms for each CO2 level
+        for co2_idx, co2_level in enumerate(co2_levels_to_plot):
+            # Filter data for this CO2 level
+            co2_mask = cluster_data["co2l"] == co2_level
+            co2_cluster_data = cluster_data[co2_mask]
+            co2_cluster_weights = cluster_weights[co2_mask]
+
+            if len(co2_cluster_data) == 0:
+                # No data for this CO2 level, create empty plots
+                axes[0, co2_idx].text(
+                    0.5,
+                    0.5,
+                    "No data",
+                    ha="center",
+                    va="center",
+                    transform=axes[0, co2_idx].transAxes,
+                )
+                axes[1, co2_idx].text(
+                    0.5,
+                    0.5,
+                    "No data",
+                    ha="center",
+                    va="center",
+                    transform=axes[1, co2_idx].transAxes,
+                )
+                axes[0, co2_idx].set_title(
+                    f"CO$_2$ Level: {co2_level_names[co2_idx]} - Hourly Distribution"
+                )
+                axes[1, co2_idx].set_title(
+                    f"CO$_2$ Level: {co2_level_names[co2_idx]} - Monthly Distribution"
+                )
+                continue
+
+            # Hourly distribution (top row)
+            ax_hour = axes[0, co2_idx]
+            hourly_counts = np.zeros(24)
+            for hour in range(24):
+                hour_mask = co2_cluster_data["hour"] == hour
+                if hour_mask.any():
+                    hourly_counts[hour] = co2_cluster_weights[hour_mask].sum()
+
+            # Normalize to percentage
+            if hourly_counts.sum() > 0:
+                hourly_counts = hourly_counts / hourly_counts.sum() * 100
+
+            ax_hour.bar(range(24), hourly_counts, alpha=0.7, color=f"C{cluster_idx}")
+            ax_hour.set_title(
+                f"CO$_2$ Level: {co2_level_names[co2_idx]} - Hourly Distribution"
+            )
+            ax_hour.set_xlabel("Hour of Day")
+            ax_hour.set_ylabel("Occurrence [%]")
+            ax_hour.set_xticks(range(0, 24, 4))
+            ax_hour.grid(True, alpha=0.3)
+
+            # Monthly distribution (bottom row)
+            ax_month = axes[1, co2_idx]
+            monthly_counts = np.zeros(12)
+            for month in range(1, 13):
+                month_mask = co2_cluster_data["month"] == month
+                if month_mask.any():
+                    monthly_counts[month - 1] = co2_cluster_weights[month_mask].sum()
+
+            # Normalize to percentage
+            if monthly_counts.sum() > 0:
+                monthly_counts = monthly_counts / monthly_counts.sum() * 100
+
+            ax_month.bar(
+                range(1, 13), monthly_counts, alpha=0.7, color=f"C{cluster_idx}"
+            )
+            ax_month.set_title(
+                f"CO$_2$ Level: {co2_level_names[co2_idx]} - Monthly Distribution"
+            )
+            ax_month.set_xlabel("Month")
+            ax_month.set_ylabel("Occurrence [%]")
+            ax_month.set_xticks(range(1, 13))
+            ax_month.set_xticklabels(
+                ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"]
+            )
+            ax_month.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+
+        # Save individual cluster plot
+        save_name = f"temporal_patterns_cluster_{cluster_idx + 1}"
+        if alg_filter:
+            save_name += f"_{alg_filter}"
+        if fname:
+            save_name += f"_{fname.replace('.pklz','')}"
+        save_figure(fig, path_to_figures_sclopf, save_name)
+        print(
+            f"Cluster {cluster_idx + 1} plot saved to: {os.path.join(path_to_figures_sclopf, f'{save_name}.pdf')}"
+        )
+
+        plt.show()
+
+    print(f"Temporal analysis completed for {n_clusters_to_analyze} clusters!")
+    return None
+    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    fig.suptitle("Temporal Occurrence Patterns of Top Clusters", fontsize=16)
+
+    # Color palette for clusters
+    colors = plt.cm.get_cmap("tab10")(np.linspace(0, 1, len(top_clusters)))
+
+    # Plot 1: Hourly distribution
+    ax1 = axes[0, 0]
+    for i, label in enumerate(top_clusters):
+        cluster_mask = labels_all == label
+        cluster_data = split_properties_filtered[cluster_mask]
+        cluster_weights = weights[cluster_mask]
+
+        # Calculate weighted hourly distribution
+        hourly_counts = np.zeros(24)
+        for hour in range(24):
+            hour_mask = cluster_data["hour"] == hour
+            hourly_counts[hour] = cluster_weights[hour_mask].sum()
+
+        # Normalize to percentage
+        hourly_counts = hourly_counts / hourly_counts.sum() * 100
+
+        ax1.plot(
+            range(24),
+            hourly_counts,
+            "o-",
+            color=colors[i],
+            label=f"Cluster {i+1}",
+            alpha=0.7,
+            linewidth=2,
+        )
+
+    ax1.set_xlabel("Hour of Day")
+    ax1.set_ylabel("Occurrence Probability [%]")
+    ax1.set_title("Hourly Distribution")
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax1.set_xticks(range(0, 24, 4))
+
+    # Plot 2: Monthly distribution
+    ax2 = axes[0, 1]
+    for i, label in enumerate(top_clusters):
+        cluster_mask = labels_all == label
+        cluster_data = split_properties_filtered[cluster_mask]
+        cluster_weights = weights[cluster_mask]
+
+        # Calculate weighted monthly distribution
+        monthly_counts = np.zeros(12)
+        for month in range(1, 13):
+            month_mask = cluster_data["month"] == month
+            monthly_counts[month - 1] = cluster_weights[month_mask].sum()
+
+        # Normalize to percentage
+        monthly_counts = monthly_counts / monthly_counts.sum() * 100
+
+        ax2.plot(
+            range(1, 13), monthly_counts, "o-", color=colors[i], alpha=0.7, linewidth=2
+        )
+
+    ax2.set_xlabel("Month")
+    ax2.set_ylabel("Occurrence Probability [%]")
+    ax2.set_title("Monthly Distribution")
+    ax2.grid(True, alpha=0.3)
+    ax2.set_xticks(range(1, 13))
+    ax2.set_xticklabels(["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"])
+
+    # Plot 3: Day of year heatmap
+    ax3 = axes[0, 2]
+    day_cluster_matrix = np.zeros((len(top_clusters), 366))
+
+    for i, label in enumerate(top_clusters):
+        cluster_mask = labels_all == label
+        cluster_data = split_properties_filtered[cluster_mask]
+        cluster_weights = weights[cluster_mask]
+
+        for day in range(1, 367):
+            day_mask = cluster_data["day_of_year"] == day
+            if day_mask.any():
+                day_cluster_matrix[i, day - 1] = cluster_weights[day_mask].sum()
+
+    # Normalize each row
+    for i in range(len(top_clusters)):
+        if day_cluster_matrix[i, :].sum() > 0:
+            day_cluster_matrix[i, :] = (
+                day_cluster_matrix[i, :] / day_cluster_matrix[i, :].sum()
+            )
+
+    im = ax3.imshow(
+        day_cluster_matrix, aspect="auto", cmap="viridis", interpolation="nearest"
+    )
+    ax3.set_xlabel("Day of Year")
+    ax3.set_ylabel("Cluster")
+    ax3.set_title("Daily Occurrence Patterns")
+    ax3.set_yticks(range(len(top_clusters)))
+    ax3.set_yticklabels([f"C{i+1}" for i in range(len(top_clusters))])
+
+    # Add colorbar
+    cbar = plt.colorbar(im, ax=ax3)
+    cbar.set_label("Normalized Occurrence")
+
+    # Plot 4: Hour vs Month heatmap for top cluster
+    ax4 = axes[1, 0]
+    top_label = top_clusters[0]
+    cluster_mask = labels_all == top_label
+    cluster_data = split_properties_filtered[cluster_mask]
+    cluster_weights = weights[cluster_mask]
+
+    hour_month_matrix = np.zeros((24, 12))
+    for hour in range(24):
+        for month in range(1, 13):
+            mask = (cluster_data["hour"] == hour) & (cluster_data["month"] == month)
+            if mask.any():
+                hour_month_matrix[hour, month - 1] = cluster_weights[mask].sum()
+
+    # Normalize
+    if hour_month_matrix.sum() > 0:
+        hour_month_matrix = hour_month_matrix / hour_month_matrix.sum()
+
+    im4 = ax4.imshow(hour_month_matrix, aspect="auto", cmap="plasma", origin="lower")
+    ax4.set_xlabel("Month")
+    ax4.set_ylabel("Hour of Day")
+    ax4.set_title(f"Top Cluster: Hour vs Month")
+    ax4.set_xticks(range(12))
+    ax4.set_xticklabels(["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"])
+    ax4.set_yticks(range(0, 24, 4))
+
+    cbar4 = plt.colorbar(im4, ax=ax4)
+    cbar4.set_label("Normalized Occurrence")
+
+    # Plot 5: CO2 level vs temporal patterns
+    ax5 = axes[1, 1]
+    for co2l in co2l_list[:3]:  # Show top 3 CO2 levels
+        co2_mask = split_properties_filtered["co2l"] == co2l
+        co2_data = split_properties_filtered[co2_mask]
+        co2_weights = weights[co2_mask]
+
+        # Calculate hourly distribution for this CO2 level
+        hourly_counts = np.zeros(24)
+        for hour in range(24):
+            hour_mask = co2_data["hour"] == hour
+            if hour_mask.any():
+                hourly_counts[hour] = co2_weights[hour_mask].sum()
+
+        # Normalize
+        if hourly_counts.sum() > 0:
+            hourly_counts = hourly_counts / hourly_counts.sum() * 100
+
+        ax5.plot(
+            range(24),
+            hourly_counts,
+            "o-",
+            label=f"CO$_2$: {int(co2l*100)}%",
+            alpha=0.7,
+            linewidth=2,
+        )
+
+    ax5.set_xlabel("Hour of Day")
+    ax5.set_ylabel("Occurrence Probability [%]")
+    ax5.set_title("Hourly Distribution by CO$_2$ Level")
+    ax5.grid(True, alpha=0.3)
+    ax5.legend()
+    ax5.set_xticks(range(0, 24, 4))
+
+    # Plot 6: Seasonal patterns
+    ax6 = axes[1, 2]
+    seasons = ["Winter", "Spring", "Summer", "Fall"]
+    season_months = [[12, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]]
+
+    for i, label in enumerate(top_clusters[:3]):  # Show top 3 clusters
+        cluster_mask = labels_all == label
+        cluster_data = split_properties_filtered[cluster_mask]
+        cluster_weights = weights[cluster_mask]
+
+        seasonal_counts = []
+        for season_month_list in season_months:
+            season_mask = cluster_data["month"].isin(season_month_list)
+            seasonal_counts.append(cluster_weights[season_mask].sum())
+
+        # Normalize
+        total = sum(seasonal_counts)
+        if total > 0:
+            seasonal_counts = [count / total * 100 for count in seasonal_counts]
+
+        ax6.bar(
+            np.arange(len(seasons)) + i * 0.25,
+            seasonal_counts,
+            width=0.25,
+            label=f"Cluster {i+1}",
+            color=colors[i],
+            alpha=0.7,
+        )
+
+    ax6.set_xlabel("Season")
+    ax6.set_ylabel("Occurrence Probability [%]")
+    ax6.set_title("Seasonal Distribution")
+    ax6.set_xticks(np.arange(len(seasons)) + 0.25)
+    ax6.set_xticklabels(seasons)
+    ax6.legend()
+    ax6.grid(True, alpha=0.3, axis="y")
+
+    plt.tight_layout()
+
+    # Save the plot
+    save_name = f"temporal_patterns_{len(top_clusters)}clusters"
+    if alg_filter:
+        save_name += f"_{alg_filter}"
+    if fname:
+        save_name += f"_{fname.replace('.pklz','')}"
+    save_figure(fig, path_to_figures_sclopf, save_name)
     print(
-        f"Plot saved to: {os.path.join(path_to_figures_sclopf, f'clustering_analysis_{n_subplots}.pdf')}"
+        f"Temporal analysis plot saved to: {os.path.join(path_to_figures_sclopf, f'{save_name}.pdf')}"
     )
 
     return fig
 
 
 if __name__ == "__main__":
-    try:
-        fig = create_clustering_analysis_plot()
-        print("Clustering analysis plot generated successfully!")
-    except Exception as e:
-        print(f"Error generating clustering analysis plot: {e}")
-        raise
+    # for n_subplots in [9, 12]:
+    #     create_clustering_analysis_plot(
+    #         n_subplots=n_subplots,
+    #         fname="agglomerative_clustering_n600_bACC_katz_maxD4_decay1_linkageAverage_n_clusters1.3e+02_fitted.pklz",
+    #     )
+
+    # Run temporal analysis
+    analyse_clusters_temporal_occurence_patterns(
+        fname="agglomerative_clustering_n600_bACC_katz_maxD4_decay1_linkageAverage_n_clusters1.3e+02_fitted.pklz",
+        n_clusters_to_analyze=6,
+    )
+
+    print("Clustering analysis plot generated successfully!")

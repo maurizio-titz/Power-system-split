@@ -55,8 +55,164 @@ AXIS_LABELSIZE = AXIS_LABEL_FONTSIZE
 TICK_LABELSIZE = TICK_LABEL_FONTSIZE
 SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 
+from utils.config import path_to_line_extension_mitigation_sclopf
 
-def create_combined_mitigation_plot(use_annualized_costs=False):
+
+def calculate_line_extension(split_properties, nx_graph, co2ls, n_nodes=600):
+
+    from utils.cascade_simulation import LOOKUP_TABLE_NP
+
+    table_rounded = np.round(LOOKUP_TABLE_NP, 5)
+    num_par_paths = {}
+    for tup in table_rounded:
+        current_tup = tup
+        num_par_paths[tup[0]] = [current_tup[0] - current_tup[1]]
+        while current_tup[1] != 0:
+            current_tup = table_rounded[
+                np.where((table_rounded[:, 0] == current_tup[1]))[0][0]
+            ]
+            num_par_paths[tup[0]].append(current_tup[0] - current_tup[1])
+    max_num_par = {k: max(v) for k, v in num_par_paths.items()}
+
+    os.makedirs(path_to_line_extension_mitigation_sclopf, exist_ok=True)
+
+    co2l_ref = 0.6
+    split_properties_reference = split_properties[
+        split_properties.co2l == co2l_ref
+    ].copy()
+    lost_load_reference_lvl = split_properties_reference.lost_load_share_blackout.sum()
+    extension_cost_per_MWkm = 445
+
+    networks = {
+        co2l: data_handling.load_pypsa_network(
+            n_nodes=600, co2lvl=co2l, use_sclopf=True
+        )
+        for co2l in co2ls
+    }
+    n_lines = nx_graph.number_of_edges()
+
+    for annualized_costs in [True, False]:
+
+        # cost_to_reach_ref_loss = {}
+        # cost_to_reach_double_ref_loss = {}
+
+        for co2l in co2ls:
+            if co2l == 0.6:
+                continue
+            if annualized_costs:
+                f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2l}_n{n_nodes}.pkl"
+
+            else:
+                f_name = f"heuristic_costMin_loss_mitigation_Co2L{co2l}_n{n_nodes}.pkl"
+            split_props_lvl = split_properties[split_properties.co2l == co2l].copy()
+            split_props_lvl.lost_load_share_blackout = (
+                split_props_lvl.lost_load_share_blackout.astype(float)
+            )
+            remaining_splits = split_props_lvl[
+                split_props_lvl.lost_load_share_blackout > 0
+            ]
+            remaining_splits = remaining_splits.loc[
+                :, ["lost_load_share_blackout", "init_failure_0", "init_failure_1"]
+            ]
+            costs_ = (
+                networks[0.6]
+                .lines.loc[
+                    :,
+                    [
+                        "bus0",
+                        "bus1",
+                        "capital_cost",
+                        "s_nom",
+                        "num_parallel",
+                        "length",
+                    ],
+                ]
+                .copy()
+            )
+            costs_["num_par_ext"] = costs_.num_parallel.apply(
+                lambda x: max_num_par[np.round(x, 5)] if x in max_num_par else 1
+            )
+            if annualized_costs:
+                costs_["extension_cost"] = (
+                    costs_.capital_cost * costs_.s_nom * costs_.num_par_ext
+                )
+            else:
+                costs_["extension_cost"] = (
+                    extension_cost_per_MWkm
+                    * costs_.s_nom
+                    * costs_.num_par_ext
+                    * costs_.length
+                )
+
+            loss_with_mitigation = [split_props_lvl.lost_load_share_blackout.sum()]
+            reinforced_lines = []
+            cost = []
+            num_blackouts = [remaining_splits.shape[0]]
+
+            while remaining_splits.shape[0] > 0:
+                trigger0 = (
+                    remaining_splits.loc[
+                        :,
+                        ["lost_load_share_blackout", "init_failure_0"],
+                    ]
+                    .groupby("init_failure_0")
+                    .sum()
+                )
+                trigger1 = (
+                    remaining_splits.loc[
+                        :,
+                        ["lost_load_share_blackout", "init_failure_1"],
+                    ]
+                    .groupby("init_failure_1")
+                    .sum()
+                )
+                trigger1.rename_axis("trigger", inplace=True)
+                trigger0.rename_axis("trigger", inplace=True)
+                loss_by_trigger = pd.Series(index=list(range(n_lines)), data=0)
+                loss_by_trigger.rename_axis("trigger", inplace=True)
+                loss_by_trigger = loss_by_trigger.add(
+                    trigger0.lost_load_share_blackout, fill_value=0
+                )
+                loss_by_trigger = loss_by_trigger.add(
+                    trigger1.lost_load_share_blackout, fill_value=0
+                )
+                loss_per_dollar = loss_by_trigger / costs_[
+                    "extension_cost"
+                ].reset_index(drop=True)
+
+                trigger = loss_per_dollar.idxmax()
+                cost.append(costs_["extension_cost"][int(trigger)])
+                remaining_splits = remaining_splits[
+                    (remaining_splits.init_failure_1 != trigger)
+                    & (remaining_splits.init_failure_0 != trigger)
+                ]
+                loss_with_mitigation.append(
+                    remaining_splits.lost_load_share_blackout.sum()
+                )
+                reinforced_lines.append(trigger)
+                num_blackouts.append(remaining_splits.shape[0])
+                print()
+
+            with open(path_to_line_extension_mitigation_sclopf + f_name, "wb") as f:
+                pickle.dump(
+                    (reinforced_lines, loss_with_mitigation, num_blackouts, cost), f
+                )
+
+            # num_lines_to_reach_ref_loss = np.where(
+            #     loss_with_mitigation < lost_load_reference_lvl
+            # )[0][0]
+            # num_lines_to_reach_double_ref_loss = np.where(
+            #     loss_with_mitigation < 2 * lost_load_reference_lvl
+            # )[0][0]
+            # cost_to_reach_ref_loss[co2l] = sum(cost[:num_lines_to_reach_ref_loss])
+            # cost_to_reach_double_ref_loss[co2l] = sum(
+            #     cost[:num_lines_to_reach_double_ref_loss]
+            # )
+
+    return reinforced_lines, loss_with_mitigation, num_blackouts, cost
+
+
+def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1):
     """Create combined mitigation plot with inertia on top and line extension below."""
 
     # Setup
@@ -85,7 +241,6 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
 
     # Reference levels and setup
     co2l_ref = 0.6
-    co2_lvl_map = 0.1  # Level for detailed maps
     ref_loss_factors = [1]  # Only use ref_loss_factor=1
 
     # Setup matplotlib with consistent styling
@@ -150,10 +305,9 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
                 open(path_to_line_extension_mitigation_sclopf + f_name, "rb")
             )
         except FileNotFoundError as e:
-            # Calculate mitigation if file doesn't exist (simplified version)
-            cost_to_reach_ref_loss[co2l] = 0
-            lines_to_reach_ref_loss[co2l] = 0
-            raise e
+            reinforced_lines, loss_with_mitigation, num_blackouts, cost = (
+                calculate_line_extension(split_properties, nx_graph, co2ls, n_nodes=600)
+            )
 
         # Find number of lines needed
         num_lines_to_reach_ref_loss = np.where(
@@ -343,12 +497,13 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
         )
         ax_line_loss.text(
             num_lines_to_reach_ref_loss + right_xlim / 200 * 5,
-            1,
+            0.2,
             f"{num_lines_to_reach_ref_loss} lines",
             verticalalignment="bottom",
             horizontalalignment="left",
             zorder=np.inf,
             fontsize=TICK_LABELSIZE,
+            c=color_reference_loss,
         )
 
         # Add reference line for cost
@@ -359,13 +514,14 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
             c=color_reference_loss,
         )
         ax2_line_cost.text(
-            num_lines_to_reach_ref_loss - right_xlim / 200 * 5,
+            num_lines_to_reach_ref_loss + right_xlim / 200 * 6,
             cost_to_reach_ref_loss_lvl * rescale_factor / 1e9,
-            f"{cost_to_reach_ref_loss_lvl/ 1e9:.1f} billion €",
-            verticalalignment="bottom",
-            horizontalalignment="right",
+            f"{cost_to_reach_ref_loss_lvl/ 1e9:.2f} bn. €",
+            verticalalignment="center",
+            horizontalalignment="left",
             zorder=np.inf,
             fontsize=TICK_LABELSIZE,
+            c=color_reference_loss,
         )
 
         ax_line_loss.tick_params(axis="both", which="major", labelsize=TICK_LABELSIZE)
@@ -599,7 +755,7 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
             ax.set_title(ax.get_title(), fontsize=TITLE_FONTSIZE)
 
     plt.tight_layout()
-    f_name = "combined_mitigation_plot.pdf"
+    f_name = f"combined_mitigation_plot_{co2_lvl_map}.pdf"
     if use_annualized_costs:
         f_name = f_name.replace(".pdf", "_annualized.pdf")
     plt.savefig(save_path + f_name, bbox_inches="tight")
@@ -608,4 +764,4 @@ def create_combined_mitigation_plot(use_annualized_costs=False):
 
 if __name__ == "__main__":
     # create_combined_mitigation_plot(use_annualized_costs=False)
-    create_combined_mitigation_plot(use_annualized_costs=True)
+    create_combined_mitigation_plot(use_annualized_costs=True, co2_lvl_map=0.2)
