@@ -56,14 +56,17 @@ PRIMARY_COLORS = {
 }
 
 # CO2 level colors (consistent across plots)
+cmap_lvls = plt.get_cmap("cividis")
+co2ls = np.array([0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.0])
 CO2_COLORS = {
-    0.0: "#d62728",  # Red for 0% CO2
-    0.1: "#ff7f0e",  # Orange
-    0.2: "#2ca02c",  # Green
-    0.3: "#1f77b4",  # Blue
-    0.4: "#9467bd",  # Purple
-    0.5: "#8c564b",  # Brown
-    0.6: "#e377c2",  # Pink
+    0.0: cmap_lvls(np.where(co2ls == 0.0)[0][0] / (len(co2ls) - 1)),
+    0.05: cmap_lvls(np.where(co2ls == 0.05)[0][0] / (len(co2ls) - 1)),
+    0.1: cmap_lvls(np.where(co2ls == 0.1)[0][0] / (len(co2ls) - 1)),
+    0.2: cmap_lvls(np.where(co2ls == 0.2)[0][0] / (len(co2ls) - 1)),
+    0.3: cmap_lvls(np.where(co2ls == 0.3)[0][0] / (len(co2ls) - 1)),
+    0.4: cmap_lvls(np.where(co2ls == 0.4)[0][0] / (len(co2ls) - 1)),
+    0.5: cmap_lvls(np.where(co2ls == 0.5)[0][0] / (len(co2ls) - 1)),
+    0.6: cmap_lvls(np.where(co2ls == 0.6)[0][0] / (len(co2ls) - 1)),
 }
 
 # Technology colors (for generation/storage)
