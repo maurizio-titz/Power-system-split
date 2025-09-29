@@ -51,6 +51,7 @@ def calc_likelihood_failure(
 
     likelihood_primary = {(u, v): 0.0 for u, v in nx_graph.edges()}
     likelihood_secondary = {(u, v): 0.0 for u, v in nx_graph.edges()}
+    likelihood_total = {(u, v): 0.0 for u, v in nx_graph.edges()}
 
     # nr_edges = nx_graph.number_of_edges()
     # total_nr_splits = sum(len(vv) for vv in splitting_cascades.values())
@@ -64,6 +65,7 @@ def calc_likelihood_failure(
 
             for failed_edge in cascade_edges:
                 likelihood_secondary[failed_edge] += weight / number_of_simulations
+                likelihood_total[failed_edge] += weight / number_of_simulations
 
             init_edges = data_handling.matrix_indices_to_nx_edges(
                 init_failure, nx_graph
@@ -72,8 +74,10 @@ def calc_likelihood_failure(
             # for single line failures init_edges is a list of tuples with one element
             for init_edge in init_edges:
                 likelihood_primary[init_edge] += weight / number_of_simulations
+                if not init_edge in cascade_edges:
+                    likelihood_total[init_edge] += weight / number_of_simulations
 
-    return likelihood_primary, likelihood_secondary
+    return likelihood_primary, likelihood_secondary, likelihood_total
 
 
 def cluster_indicator_vectors_agglomerative(
