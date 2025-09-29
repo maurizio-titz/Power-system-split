@@ -9,5 +9,6 @@ results/
 *.pickle
 *.h5
 *.png
+*.tif
 
 utils/config_local.py
