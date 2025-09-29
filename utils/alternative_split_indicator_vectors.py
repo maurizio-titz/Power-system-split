@@ -261,13 +261,13 @@ def find_failed_edge_indicator_vector_for_cascade_results(
         if use_sclopf:
             fpath_out_edge_base = (
                 path_to_evaluation_results_sclopf
-                + "/failed_edges_indicator_vector_Co2l"
+                + "/failed_edges_indicator_vector_Co2L"
                 + f"{co2_lvl}_n{n_nodes}.pklz"
             )
         else:
             fpath_out_edge_base = (
                 path_to_evaluation_results_lopf
-                + "/failed_edges_indicator_vector_Co2l"
+                + "/failed_edges_indicator_vector_Co2L"
                 + f"{co2_lvl}_n{n_nodes}.pklz"
             )
         if os.path.exists(fpath_out_edge_base) and not overwrite:
@@ -505,7 +505,7 @@ def check_component_properties_indicatorvectors_all_co2lvl(
 
     glob_search_str = f"results/sclopf/indicator_vectors_rocof_lshare_edges/indicator_vector_rocof_*n{nn_nodes}.pklz"
     co2_levels = [
-        float(xx.split("_n")[0].split("Co2l")[-1]) for xx in glob(glob_search_str)
+        float(xx.split("_n")[0].split("Co2L")[-1]) for xx in glob(glob_search_str)
     ]
 
     funci = partial(single_call, nn_nodes)
@@ -525,7 +525,7 @@ def check_component_properties_indicatorvectors_all_co2lvl(
     if save_it:
         fpath_out = (
             path_to_indicator_vectors_sclopf
-            + f"/check_rocof_allCo2lvls_nn{nn_nodes}.pklz"
+            + f"/check_rocof_allCo2Lvls_nn{nn_nodes}.pklz"
         )
         with gzip.open(fpath_out, "wb") as fh_out:
             pickle.dump(results, fh_out)
