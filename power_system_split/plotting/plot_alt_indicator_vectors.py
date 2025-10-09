@@ -104,7 +104,7 @@ def calc_likelihood_failure_alt_indicator(
     # Load edge split indicator vector
     fpath_indicator_vector = (
         "results/sclopf/indicator_vectors_rocof_lshare_edges/"
-        + "indicator_vector_failed_edges_Co2l"
+        + "indicator_vector_failed_edges_Co2L"
         + "f{co2_lvl}_n{n_nodes}.pklz"
     )
     with gzip.open(fpath_indicator_vector) as fh_indi_in:
