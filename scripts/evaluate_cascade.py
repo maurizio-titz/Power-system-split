@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 sys.path.append("./")
 # Post messages to mattermost
-from utils.visualization import get_co2_levels
+from utils.data_handling import get_co2_levels
 from utils.cascade_simulation import solve_lpf
 import utils.config as cfg
 from utils import data_handling, send_mattermost_messages, subgraph_evaluation
@@ -231,7 +231,12 @@ def evaluate_cascade(
             # each entry holds: [rot_energy, power_imbalance, load, rocof, load_share]
 
             for observables_single_component in observables_split_components:
-                load_shedded = abs(min(0, observables_single_component[1]))
+                load_shedded = (
+                    abs(min(0, observables_single_component[1]))
+                    / observables_single_component[2]
+                    if observables_single_component[2] != 0
+                    else 0
+                )
                 blackout_load_loss = (
                     int(observables_single_component[3] < -1)
                     * observables_single_component[4]
@@ -361,7 +366,7 @@ if __name__ == "__main__":
                 n_nodes_in,
                 use_sclopf=True,
                 eval_indicator_vectors=True,
-                overrwrite=False,
+                overrwrite=True,
                 # end_time_str="2013-01-02 00:00",
             )
         except FileExistsError as e:
