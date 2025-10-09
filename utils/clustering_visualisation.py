@@ -410,7 +410,7 @@ def get_lost_load_share(
     for co2l, mask in zip(co2l_list, masks):
         split_properties = pd.read_csv(
             path_to_evaluation_results_sclopf
-            + f"split_properties_Co2L{co2l}_n{n_nodes}.csv",
+            + f"split_props_Co2L{co2l}_n{n_nodes}.csv",
             index_col=0,
         )
         lost_load = split_properties[f"lost_load_{lost_load_type}_share"].values
@@ -421,6 +421,30 @@ def get_lost_load_share(
             pickle.dump(np.concatenate(lost_load_all), out)
 
     return np.concatenate(lost_load_all)
+
+
+def load_indicator_vectors_only(
+    indicator_type,
+    n_nodes=600,
+    co2lvls=(),
+    use_sclopf=True,
+):
+    vectors = {}
+    for co2l in co2lvls:
+        if use_sclopf:
+            path = (
+                path_to_evaluation_results_sclopf
+                + f"/{indicator_type}_indicator_vector_Co2L{co2l}_n{n_nodes}.pklz"
+            )
+        else:
+            path = (
+                path_to_evaluation_results_lopf
+                + f"/{indicator_type}_indicator_vector_Co2L{co2l}_n{n_nodes}.pklz"
+            )
+        with gzip.open(path, "rb") as out:
+            vectors[co2l] = pickle.load(out)[-1]
+
+    return vectors
 
 
 def load_masked_indicator_vectors(
