@@ -23,10 +23,10 @@ from utils.clustering_uncertainty import (
     get_unique_vectors_with_weights,
     prepare_clusters_for_analysis,
     typed_katz_centrality_batch,
-    uncertainty_distance_wrapper_concat,
+    weighted_distance_wrapper,
 )
 from utils.indicator_utils import load_indicator_vectors
-from utils.visualization import get_co2_levels
+from utils.data_handling import get_co2_levels
 
 from utils import data_handling
 from utils.clustering import (
@@ -39,6 +39,7 @@ from utils.clustering_visualisation import (
     plot_indicator_vectors,
 )
 from loguru import logger
+from joblib import Parallel, delayed
 from utils.config import (
     path_to_evaluation_results_lopf,
     path_to_evaluation_results_sclopf,
@@ -132,6 +133,40 @@ def rename_old_files(param_dict, directory):
                 logger.info(f"renamed {file} to {new_file}")
 
 
+def run_optics_clustering(
+    params,
+    distance_matrix,
+    save_dir,
+    n_nodes,
+    dist_metric_str,
+    unique_vecs_dict,
+    split_props_filtered_path,
+):
+    params_str = get_str_from_params(params)
+    min_samples = params["min_samples"]
+    save_path = (
+        save_dir
+        + f"/optics_clustering_n{n_nodes}_{dist_metric_str}_{params_str}_fitted.pklz"
+    )
+    if not os.path.exists(save_path):
+        print(f"performing optics clustering with min_samples {min_samples}")
+        opt = OPTICS(**params)
+        opt.fit(distance_matrix)
+        print("opt.labels_shape: " + str(opt.labels_.shape))
+        # save clustering results
+        with gzip.open(
+            save_path,
+            "wb",
+        ) as fh_out:
+            pickle.dump(opt, fh_out)
+    else:
+        print(f"already exists, skipping optics clustering for {save_path}")
+
+    # Load split_props_filtered from disk in the worker process
+    split_props_filtered = pd.read_hdf(split_props_filtered_path, key="split_props")
+    prepare_clusters_for_analysis(save_path, unique_vecs_dict, split_props_filtered)
+
+
 if __name__ == "__main__":
 
     indicator_type_transformation = [
@@ -148,7 +183,7 @@ if __name__ == "__main__":
     co2l_list = get_co2_levels(n_nodes)
     print(f"co2l_list: {co2l_list}")
 
-    indicator_type, transformation = indicator_type_transformation
+    indicator_type, transformation = indicator_type_transformation[0]
 
     if transformation is None:
         transformation_string = "_" + transformation
@@ -351,7 +386,7 @@ if __name__ == "__main__":
                 )
                 distance_matrix = pairwise_distances(
                     blackout_katz_centralities,
-                    metric=uncertainty_distance_wrapper_concat,
+                    metric=weighted_distance_wrapper,
                 )
                 np.save(save_path_distance_matrix, distance_matrix)
 
@@ -362,6 +397,11 @@ if __name__ == "__main__":
                 # set seed for reproducibility
                 n_outages_to_plots = 8
                 for plot_count in tqdm(range(n_outages_to_plots)):
+                    fig_path = save_dir + f"/blackout_vec_{plot_count}.png"
+                    if os.path.exists(fig_path):
+                        logger.info(f"skipping {fig_path}, already exists")
+                        continue
+
                     random_idx = np.random.randint(
                         0, blackout_katz_centralities.shape[0]
                     )
@@ -374,6 +414,7 @@ if __name__ == "__main__":
                     )
 
                     for i_decay_factor in range(n_rows):
+
                         for i_max_distance in range(n_cols):
                             decay_factor = katz_param_grid.param_grid[0][
                                 "decay_factor"
@@ -409,20 +450,20 @@ if __name__ == "__main__":
                             save_dir + f"/katz_centrality_{plot_count}.png",
                         )
 
-                        blackout_vec = unique_vecs[random_idx, :]
-                        f = plot_grid(
-                            nx_graph,
-                            pos,
-                            blackout_vec,
-                            # ax=ax,
-                            save_dir=None,
-                            cmap=matplotlib.colors.ListedColormap(["y", "black"]),
-                            # vmax=vmax,
-                            # vmin=vmin,
-                        )
-                        f.savefig(
-                            save_dir + f"/blackout_vec_{plot_count}.png",
-                        )
+                    blackout_vec = unique_vecs[random_idx, :]
+                    f = plot_grid(
+                        nx_graph,
+                        pos,
+                        blackout_vec,
+                        # ax=ax,
+                        save_dir=None,
+                        cmap=matplotlib.colors.ListedColormap(["y", "black"]),
+                        # vmax=vmax,
+                        # vmin=vmin,
+                    )
+                    f.savefig(
+                        fig_path,
+                    )
         elif distance == "hamming":
             dist_metric_str = "hamming"
             save_path_distance_matrix = (
@@ -453,116 +494,111 @@ if __name__ == "__main__":
 
         logger.info("performing OPTICS clustering")
         OPTICS_param_grid = ParameterGrid(clustering_params["optics"])
-        for params in tqdm(OPTICS_param_grid):
-            params_str = get_str_from_params(params)
-            min_samples = params["min_samples"]
-            save_path = (
-                save_dir
-                + f"/optics_clustering_n{n_nodes}_{dist_metric_str}_{params_str}_fitted.pklz"
-            )
-            if not os.path.exists(save_path):
-                logger.info(
-                    f"performing optics clustering with min_samples {min_samples}"
-                )
-                # distance_matrix_subset = distance_matrix[
-                #     :10000, :10000
-                # ]  # limit to first 10000 vectors for optics clustering
-                opt = OPTICS(**params)
-                opt.fit(distance_matrix)
-                logger.info("opt.labels_shape: " + str(opt.labels_.shape))
-                # save clustering results
-                with gzip.open(
-                    save_path,
-                    "wb",
-                ) as fh_out:
-                    pickle.dump(opt, fh_out)
-            else:
-                logger.info(
-                    f"already exists, skipping optics clustering for {save_path}"
-                )
-            prepare_clusters_for_analysis(
-                save_path, unique_vecs_dict, split_props_filtered
+        logger.info(
+            f"Running {len(OPTICS_param_grid)} OPTICS clustering parameter combinations"
+        )
+
+        # Save split_props_filtered to disk so it can be loaded in worker processes
+        split_props_filtered_path = f"{save_dir}/data_filtered_{n_nodes}.h5"
+        if not "split_props_filtered" in locals():
+            split_props_filtered = pd.read_hdf(
+                split_props_filtered_path, key="split_props"
             )
 
-        logger.info("performing agglomerative clustering")
-        agglomerative_param_grid = ParameterGrid(clustering_params["agglomerative"])
-        for params in tqdm(agglomerative_param_grid):
-            n_clusters = params["n_clusters"]
-            linkage = params["linkage"]
-
-            agglomerative_clustering_save_path = (
-                save_dir
-                + f"/agglo_clustering_n{n_nodes}_{dist_metric_str}_ncl{n_clusters}_{linkage}_fitted.pklz"
-            )
-
-            if not os.path.exists(agglomerative_clustering_save_path):
-                logger.info(
-                    f"performing agglomerative clustering with {n_clusters} clusters and {linkage} linkage"
-                )
-                agg = AgglomerativeClustering(
-                    n_clusters=n_clusters,
-                    metric="precomputed",
-                    linkage=linkage,
-                )
-                agg.fit(distance_matrix)
-                logger.info(
-                    f"agg.labels_shape: {agg.labels_.shape}, "
-                    f"agg.n_connected_components_: {agg.n_connected_components_}"
-                )
-
-                # save clustering results
-                with gzip.open(
-                    agglomerative_clustering_save_path,
-                    "wb",
-                ) as fh_out:
-                    pickle.dump(agg, fh_out)
-            else:
-                logger.info(
-                    f"already exists, skipping optics clustering for {save_path}"
-                )
-            prepare_clusters_for_analysis(
-                agglomerative_clustering_save_path,
+        Parallel(n_jobs=-1)(
+            delayed(run_optics_clustering)(
+                params,
+                distance_matrix,
+                save_dir,
+                n_nodes,
+                dist_metric_str,
                 unique_vecs_dict,
-                split_props_filtered,
+                split_props_filtered_path,
             )
+            for params in tqdm(OPTICS_param_grid)
+        )
 
-        logger.info("performing kmedoids clustering")
-        medoids_param_grid = ParameterGrid(clustering_params["kmedoids"])
-        for params in tqdm(medoids_param_grid):
-            n_clusters = params["n_clusters"]
-            method = params["method"]
-            metric = params["metric"]
+        logger.info("OPTICS clustering completed")
 
-            kmedoids_clustering_save_path = (
-                save_dir
-                + f"/kmedoids_clustering_n{n_nodes}_{dist_metric_str}_ncl{n_clusters}_fitted.pklz"
-            )
+        # logger.info("performing agglomerative clustering")
+        # agglomerative_param_grid = ParameterGrid(clustering_params["agglomerative"])
+        # for params in tqdm(agglomerative_param_grid):
+        #     n_clusters = params["n_clusters"]
+        #     linkage = params["linkage"]
 
-            if not os.path.exists(kmedoids_clustering_save_path):
-                logger.info(f"performing medoids clustering with {n_clusters} clusters")
-                k_med = KMedoids(
-                    n_clusters=n_clusters,
-                    metric=metric,
-                    method=method,
-                )
-                k_med.fit(distance_matrix)
-                logger.info(f"k_med.labels_shape: {k_med.labels_.shape}, ")
+        #     agglomerative_clustering_save_path = (
+        #         save_dir
+        #         + f"/agglo_clustering_n{n_nodes}_{dist_metric_str}_ncl{n_clusters}_{linkage}_fitted.pklz"
+        #     )
 
-                # save clustering results
-                with gzip.open(
-                    kmedoids_clustering_save_path,
-                    "wb",
-                ) as fh_out:
-                    pickle.dump(k_med, fh_out)
-            else:
-                logger.info(
-                    f"already exists, skipping optics clustering for {save_path}"
-                )
-            prepare_clusters_for_analysis(
-                kmedoids_clustering_save_path,
-                unique_vecs_dict,
-                split_props_filtered,
-            )
+        #     if not os.path.exists(agglomerative_clustering_save_path):
+        #         logger.info(
+        #             f"performing agglomerative clustering with {n_clusters} clusters and {linkage} linkage"
+        #         )
+        #         agg = AgglomerativeClustering(
+        #             n_clusters=n_clusters,
+        #             metric="precomputed",
+        #             linkage=linkage,
+        #         )
+        #         agg.fit(distance_matrix)
+        #         logger.info(
+        #             f"agg.labels_shape: {agg.labels_.shape}, "
+        #             f"agg.n_connected_components_: {agg.n_connected_components_}"
+        #         )
+
+        #         # save clustering results
+        #         with gzip.open(
+        #             agglomerative_clustering_save_path,
+        #             "wb",
+        #         ) as fh_out:
+        #             pickle.dump(agg, fh_out)
+        #     else:
+        #         logger.info(
+        #             f"already exists, skipping optics clustering for {save_path}"
+        #         )
+        #     prepare_clusters_for_analysis(
+        #         agglomerative_clustering_save_path,
+        #         unique_vecs_dict,
+        #         split_props_filtered,
+        #     )
+
+        # logger.info("performing kmedoids clustering")
+        # medoids_param_grid = ParameterGrid(clustering_params["kmedoids"])
+        # for params in tqdm(medoids_param_grid):
+        #     n_clusters = params["n_clusters"]
+        #     method = params["method"]
+        #     metric = params["metric"]
+
+        #     kmedoids_clustering_save_path = (
+        #         save_dir
+        #         + f"/kmedoids_clustering_n{n_nodes}_{dist_metric_str}_ncl{n_clusters}_fitted.pklz"
+        #     )
+
+        #     if not os.path.exists(kmedoids_clustering_save_path):
+        #         logger.info(f"performing medoids clustering with {n_clusters} clusters")
+        #         k_med = KMedoids(
+        #             n_clusters=n_clusters,
+        #             metric=metric,
+        #             method=method,
+        #         )
+        #         k_med.fit(distance_matrix)
+        #         logger.info(f"k_med.labels_shape: {k_med.labels_.shape}, ")
+
+        #         # save clustering results
+        #         with gzip.open(
+        #             kmedoids_clustering_save_path,
+        #             "wb",
+        #         ) as fh_out:
+        #             pickle.dump(k_med, fh_out)
+        #     else:
+        #         logger.info(
+        #             f"already exists, skipping optics clustering for {save_path}"
+        #         )
+        #     prepare_clusters_for_analysis(
+        #         kmedoids_clustering_save_path,
+        #         unique_vecs_dict,
+        #         split_props_filtered,
+        #     )
 
         # DBSCAN_param_grid = ParameterGrid(clustering_params["dbscan"])
         # for params in tqdm(DBSCAN_param_grid):

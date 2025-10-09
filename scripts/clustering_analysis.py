@@ -1,16 +1,21 @@
-# %%
 import os
 import sys
+
+import warnings
+
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 import numpy as np
 import pypsa
 import pandas as pd
 import networkx as nx
+from sklearn.metrics import silhouette_score
 
 root_path = "./"
 sys.path.append(root_path)
 
-from utils.visualization import get_co2_levels
+from utils.data_handling import get_co2_levels
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -32,6 +37,7 @@ I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
     nx_graph
 )
 
+
 # Determine number of simulations,
 # i.e., total number of initial failures over the simulated period of one year
 bridge_idxs = data_handling.nx_edges_to_matrix_indices(nx.bridges(nx_graph), nx_graph)
@@ -45,6 +51,7 @@ n_nodes_split, lost_load_share = None, 0.05
 co2l_list = get_co2_levels(
     n_nodes=n_nodes,
 )
+# co2l_list = [0.6]
 indicator_type = "rocof"
 transformation = "blackout"
 # max_dist = 3
@@ -62,19 +69,19 @@ save_dir = get_path_to_clustering_dir(
     lost_load_share=lost_load_share,
 )
 path_to_clustering_results = save_dir
-# %%
+
 split_properties_all = pd.read_hdf(
     path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
 )
 
-# %%
+
 from utils.config import path_to_vis_results_sclopf
 
 split_properties_filtered = pd.read_hdf(
     save_dir + f"data_filtered_{n_nodes}.h5", index_col=0
 )
 
-# %%
+
 masks_fpath = save_dir + f"/masks_dict.pklz"
 with gzip.open(masks_fpath, "rb") as out:
     masks_dict = pickle.load(out)
@@ -88,27 +95,25 @@ else:
     indicator_name = indicator_type + "_" + transformation
 
 
-# %%
 for co2 in co2l_list:
     print(
         f"CO2 Level: {co2}: {masks_dict[co2].sum() == (split_properties_filtered.co2l==co2).sum()}"
     )
 
 
-# %%
 masks_fpath = save_dir + f"/masks_dict.pklz"
 with gzip.open(masks_fpath, "rb") as out:
     masks_dict = pickle.load(out)
 
-# %%
+
 with gzip.open(save_dir + f"unique_blackout_vecs_n{n_nodes}.pklz", "rb") as out:
     unique_blackout_dict = pickle.load(out)
 unique_blackout_vecs = np.array(list(unique_blackout_dict.keys()))
 
-# %%
+
 unique_blackout_vecs.sum(axis=1).min()
 
-# %%
+
 with gzip.open(
     save_dir + f"blackout_vectors_filtered_dict_{n_nodes}.pklz", "rb"
 ) as out:
@@ -118,13 +123,13 @@ failed_edges_indicator_vectors_filtered = load_masked_indicator_vectors(
     "failed_edges", masks_dict=masks_dict
 )
 
-# %%
+
 failed_edges_indicator_vectors_filtered = failed_edges_indicator_vectors_filtered
-# %%
+
 co2l_list = list(masks_dict.keys())
 
-# %%
-from utils.visualization import get_actual_co2_level
+
+from utils.data_handling import get_actual_co2_level
 
 co2l_masks = [(split_properties_filtered.co2l == co2l).values for co2l in co2l_list]
 actual_co2l_list = get_actual_co2_level(lvls=co2l_list, n_nodes=n_nodes)
@@ -139,17 +144,17 @@ node_cmap.set_under("gainsboro", 1.0)
 node_cbar_label = "blackout probability"
 
 edge_cmap = copy.copy(mpl.cm.get_cmap("plasma_r"))
-edge_cmap = copy.copy(mpl.cm.get_cmap("cividis_r"))
+# edge_cmap = copy.copy(mpl.cm.get_cmap("cividis_r"))
 edge_cmap.set_under("gainsboro", 1.0)
 
 plotting_dir = path_to_clustering_results + indicator_name + "/"
 plotting_dir = save_dir
 
-# %%
+
 split_lost_load = split_properties_filtered.lost_load_share_blackout
 weights = np.concatenate([weights_dict[co2l] for co2l in co2l_list])
 split_weighted_lost_load = split_lost_load * weights
-# %%
+
 for vec in unique_blackout_dict.keys():
     unique_blackout_dict[vec]["total_weight"] = unique_blackout_dict[vec][
         "weight"
@@ -160,27 +165,48 @@ blackout_vectors_filtered = np.concatenate(
 )
 blackout_vectors_filtered.shape
 
-# %%
+
 list(masks_dict.values())[0].shape
 
-# %%
+
 mask_all = np.concatenate(
     list(masks_dict.values()),
     axis=0,
 )
 
+decay_factor = 1
+max_distance = 4
+katz_dist_metric_str = "bACC"
+katz_weighting_str = f"_katz_maxD{max_distance}_decay{decay_factor}"
+distance_matrix_path = (
+    save_dir + f"/distance_matrix_n{n_nodes}_{katz_dist_metric_str}{katz_weighting_str}"
+)
+distance_matrix = np.load(distance_matrix_path + ".npy")
+
 
 ########### loading clustering results ###########
 for fname in os.listdir(save_dir)[::-1]:
+    # if (
+    #     not "optics_clustering_n600_bACC_katz_maxD3_decay1_cluster_methodXi_max_eps0.023_min_samples66_xi0.08"
+    #     in fname
+    # ):
+    #     continue
+
     clustering_res_path = os.path.join(save_dir, fname)
     if not "fitted" in fname:
-        # print(f"Skipping {fname}, not a fitted clustering result.")
+        continue
+    elif not os.path.exists(
+        clustering_res_path.replace("fitted.pklz", "labels_all.npy")
+    ):
+        # os.remove(clustering_res_path)
+        print(f"Skipping {fname} as labels_all.npy does not exist.")
         continue
     else:
         print(f"Processing {fname}")
+        # continue
+
     with gzip.open(clustering_res_path, "rb") as out:
         clustering_res = pickle.load(out)
-    print(clustering_res_path, clustering_res.labels_.shape)
 
     labels, counts = np.unique(clustering_res.labels_, return_counts=True)
     plt.hist(counts, bins=100, log=True)
@@ -188,19 +214,18 @@ for fname in os.listdir(save_dir)[::-1]:
     plt.xlabel("Number of nodes in cluster")
     plt.ylabel("Frequency")
     plt.savefig(clustering_res_path.replace("fitted.pklz", "hist.png"))
-    # plt.show()
     plt.close()
 
     with gzip.open(clustering_res_path, "rb") as out:
         clustering_res = pickle.load(out)
 
-    print(clustering_res.labels_.shape)
     labels, counts = np.unique(clustering_res.labels_, return_counts=True)
+    centroids_df = pd.DataFrame(
+        index=labels,
+    )
 
-    # %%
     labels_unique_vecs = clustering_res.labels_
 
-    # with gzip.open(clustering_res_path.replace(".pklz", "_labels_all.npy"), "rb") as out:
     labels_all = np.load(
         clustering_res_path.replace("fitted.pklz", "labels_all.npy"), allow_pickle=True
     )
@@ -210,125 +235,83 @@ for fname in os.listdir(save_dir)[::-1]:
     ) as out:
         group_masks = pickle.load(out)
 
-    # %%
-
-    # %% [markdown]
-    # ### calculate centroid group properties
-
-    # %%
-    # co2l_key = "all"
-    # labels, centroids, samples_per_centroid, centroid_mean_distance, inertia, silhouette_avg = load_clustering(n_nodes, co2l_list, n_clusters, indicator_type, save_dir, transformation=transformation)
-    # %%
     labels_all = np.load(
         clustering_res_path.replace("fitted.pklz", "labels_all.npy"), allow_pickle=True
     )
+    has_ungrouped = np.any(labels_all == -1)
 
-    # %%
     n_clusters = len(np.unique(labels))
-    centroid_weighted_lost_load = np.array(
+    centroids_df["weighted_lost_load"] = np.array(
         [np.sum(split_weighted_lost_load[labels_all == i]) for i in labels]
     )
-    centroid_lost_load_share = (
-        centroid_weighted_lost_load / centroid_weighted_lost_load.sum()
+    centroids_df["lost_load_share"] = (
+        centroids_df["weighted_lost_load"] / centroids_df["weighted_lost_load"].sum()
     )
 
-    centroids = [
-        blackout_vectors_filtered[group_masks[label]].T
+    centroids = {
+        label: blackout_vectors_filtered[group_masks[label]].T
         @ weights[group_masks[label]]
         / group_masks[label].sum()
         for label in labels
-        # if label != -1
-    ]
-
-    # %%
-    edge_centroids = [
-        failed_edges_indicator_vectors_filtered[group_masks[label]].T
-        @ weights[group_masks[label]]
-        / group_masks[label].sum()
-        for label in labels
-        # if label != -1
-    ]
-
-    # %%
-    len(centroid_weighted_lost_load)
-
-    # %%
-    centroid_groups_lost_load_share = {
-        label: centroid_weighted_lost_load[label] for label in labels  # if label != -1
     }
 
-    # %%
-    samples_per_centroid = np.array(
+    edge_centroids = {
+        label: failed_edges_indicator_vectors_filtered[group_masks[label]].T
+        @ weights[group_masks[label]]
+        / group_masks[label].sum()
+        for label in labels
+    }
+
+    centroids_df["n_samples"] = np.array(
         [weights[group_masks[label]].sum() for label in labels]
-        # [group_masks[label].sum() for label in labels if label != -1]
     )
-    assert (
-        sum(samples_per_centroid) == weights.sum()
-    )  # - weights[group_masks[-1]].sum()
+    centroids_df["index_lists"] = np.arange(len(labels))
+    assert sum(centroids_df.n_samples) == weights.sum()
 
-    mean_load_loss_share_per_centroid = (
-        centroid_weighted_lost_load / samples_per_centroid
+    centroids_df["mean_load_loss_share"] = (
+        centroids_df["weighted_lost_load"] / centroids_df["n_samples"]
     )
-    assert all(mean_load_loss_share_per_centroid >= 0) and all(
-        mean_load_loss_share_per_centroid <= 1
+    assert all(centroids_df["mean_load_loss_share"] >= 0) and all(
+        centroids_df["mean_load_loss_share"] <= 1
+    )
+    sil_score = silhouette_score(
+        distance_matrix, labels_unique_vecs, metric="precomputed"
     )
 
-    # %%
     if transformation == None:
         indicator_name = indicator_type
     else:
         indicator_name = indicator_type + "_" + transformation
 
-    # if "main" in transformation:
-    #     node_cbar_label="split off main component prob"
-    # else:
-    #     node_cbar_label=None
     node_cbar_label = "blackout probability"
-    # Add numerical error tolerance for floating point comparison
     assert np.allclose(
-        centroid_weighted_lost_load,
-        mean_load_loss_share_per_centroid * samples_per_centroid,
+        centroids_df["weighted_lost_load"],
+        centroids_df["mean_load_loss_share"] * centroids_df["n_samples"],
         rtol=1e-8,
         atol=1e-12,
     ), "total_lost_load_share must be equal to mean_lost_load_share_per_centroid * samples_per_centroid (within tolerance)"
 
-    labels[
-        centroid_weighted_lost_load
-        != mean_load_loss_share_per_centroid * samples_per_centroid
-    ]
-
-    centroids_df = pd.DataFrame(
-        index=labels,
-        data=np.array(
-            [
-                samples_per_centroid,
-                centroid_weighted_lost_load,
-                mean_load_loss_share_per_centroid,
-            ]
-        ).T,
-        columns=[
-            "n_samples",
-            "weighted_lost_load",
-            "mean_load_loss_share",
-        ],
-    )
     centroids_df.index.name = "label"
     centroids_df.to_csv(clustering_res_path.replace("fitted.pklz", "centroids.csv"))
 
     clustering_res_info[fname] = {
         "n_clusters": centroids_df.shape[0],
-        "share_ungrouped_unique_events": round(
-            centroids_df.n_samples[0] / centroids_df.n_samples.sum(), 2
+        "share_ungrouped_unique_events": (
+            round(centroids_df.n_samples[-1] / centroids_df.n_samples.sum(), 2)
+            if has_ungrouped
+            else None
         ),
-        "share_loss_ungrouped": round(
-            centroids_df.weighted_lost_load[0] / centroids_df.weighted_lost_load.sum(),
-            2,
+        "share_loss_ungrouped": (
+            round(
+                centroids_df.weighted_lost_load[-1]
+                / centroids_df.weighted_lost_load.sum(),
+                2,
+            )
+            if has_ungrouped
+            else None
         ),
+        "silhouette_score": sil_score,
     }
-    # custom_order = np.concatenate(list(centroid_groups_dict.values())).astype(int)
-    # group_affiliation = np.array([None for i in range(n_clusters)])
-    # for group, centroid_indices in centroid_groups_dict.items():
-    #     group_affiliation[centroid_indices] = group
 
     print(indicator_name, n_clusters)
     os.makedirs(plotting_dir, exist_ok=True)
@@ -358,40 +341,24 @@ for fname in os.listdir(save_dir)[::-1]:
     plt.rc("text", usetex=False)
     plt.rc("text.latex", preamble=r"\usepackage{amsmath}")
 
-    group_weighted_samples_list = samples_per_centroid
-    mean_centroids = centroids
     group_failed_edges = edge_centroids
     original_ind_to_components_ind = (None,)
-    for sort_by in ["loss", "number"]:
+    # for sort_by in ["loss", "number"]:
+    for sort_by in ["loss"]:
         if sort_by == "loss":
-            custom_order = np.argsort(list(centroid_groups_lost_load_share.values()))[
-                ::-1
-            ]
+            centroids_df = centroids_df.sort_values(
+                by="weighted_lost_load", ascending=False
+            )
         elif sort_by == "number":
-            custom_order = np.argsort(group_weighted_samples_list)[::-1]
+            centroids_df = centroids_df.sort_values(by="n_samples", ascending=False)
 
         node_cmap = node_cmap
         n_subplots = n_clusters
         edge_cmap = edge_cmap
         # node_cbar_label = "split off main component prob"
-        sum_lost_load_share_per_centroid = np.array(
-            list(centroid_groups_lost_load_share.values())
-        )
-        group_names = np.arange(len(centroids))
-        centroid_inds = group_names
-
-        if sum_lost_load_share_per_centroid is None:
-            sum_lost_load_share_per_centroid = np.array(
-                [
-                    np.sum(split_lost_load[labels == i])
-                    for i in range(len(mean_centroids))
-                ]
-            )
 
         vmax = 1.0
         vmin = 0.001
-        if "main" in transformation:
-            mean_centroids = np.abs(mean_centroids - 1)
         co2l_list = np.array(co2l_list)
 
         vmin_edge = 1e-3
@@ -400,9 +367,9 @@ for fname in os.listdir(save_dir)[::-1]:
         if node_cbar_label is None:
             node_cbar_label = indicator_name.replace("_", " ")
 
-        n_subplots = min(n_subplots, len(mean_centroids))
+        n_subplots = 4  # min(n_subplots, len(centroids))
         ncols = 3
-        n_rows = 4
+        n_rows = int(np.ceil(n_subplots / ncols))
         fig_scaling = 4
         fig = plt.figure(figsize=(ncols * fig_scaling, n_rows * fig_scaling * 1.3))
 
@@ -412,15 +379,21 @@ for fname in os.listdir(save_dir)[::-1]:
         plt.rc("text", usetex=False)
 
         plot_count = 0
-        ind = 0
-        custom_order_iter = iter(custom_order)
 
-        co2_lvls_hist = [0.6, 0.2, 0.0]
+        if len(co2l_list) > 3:
+            co2_lvls_hist = [0.6, 0.2, 0.0]
+        else:
+            co2_lvls_hist = co2l_list
         co2l_inds_hist = [
             np.where(np.array(co2l_list) == co2l)[0][0] for co2l in co2_lvls_hist
         ]
 
+        df_iter = centroids_df.iterrows()
+
+        stop_plotting = False
         for row in range(n_rows):
+            if stop_plotting:
+                break
 
             gs_row = GridSpecFromSubplotSpec(
                 2, 1, subplot_spec=gs_group[row, 0], hspace=-0.05, height_ratios=[3, 1]
@@ -434,22 +407,19 @@ for fname in os.listdir(save_dir)[::-1]:
 
             for column in range(ncols):
 
-                ind = next(custom_order_iter)
-                # print(len(list(custom_order_iter)))
+                label, (centroid_row) = next(df_iter, (None, None))
+                # if centroid_row is None or label is None:
+                #     print("No more centroids to plot.")
+                #     stop_plotting = True
+                #     break
 
                 if plot_count == n_subplots:
+                    stop_plotting = True
                     break
                 plot_count += 1
 
-                # while centroids_df"ungrouped" in group_names[ind]  or group_names[ind] == "none":
-                #     print(f"skipping {group_names[ind]}")
-                #     ind+=1
-
-                centroid, samples_in_centriod = (
-                    mean_centroids[ind],
-                    group_weighted_samples_list[ind],
-                )
-                failed_edges_prob = group_failed_edges[ind]
+                centroid = centroids[label]
+                failed_edges_prob = group_failed_edges[label]
 
                 ax = fig.add_subplot(gs_row_map[0, column])
 
@@ -470,10 +440,10 @@ for fname in os.listdir(save_dir)[::-1]:
 
                 ax.axis("off")
 
-                subtitle = f"={round(sum_lost_load_share_per_centroid[ind]/ sum_lost_load_share_per_centroid.sum()*100, ndigits=1)}%\nn={round(samples_in_centriod/10**6, ndigits=2)}mio"
+                subtitle = f"={round(centroid_row.lost_load_share*100, ndigits=1)}%\nn=${round(centroid_row.n_samples/centroids_df.n_samples.sum()*100)}$%"
                 subtitle = r"$\bar{R}$" + subtitle
                 ax.set_title(
-                    group_names[ind],
+                    plot_count,
                     y=0.90,
                     x=-0.05,
                     fontsize=14,
@@ -491,9 +461,7 @@ for fname in os.listdir(save_dir)[::-1]:
                 # add gridspec for histograms to gs
                 ax_hist = fig.add_subplot(gs_row_hist[0, column])
                 plot_group_lost_load_hist_by_co2_single(
-                    group_names[ind],
-                    group_masks[labels[ind]],
-                    labels,
+                    group_masks[label],
                     split_lost_load,
                     co2l_masks,
                     co2l_inds_hist,
@@ -539,6 +507,9 @@ for fname in os.listdir(save_dir)[::-1]:
             + f"_co2l{co2_lvls_hist}_{ncols}cols_{n_rows}rows_sort{sort_by.capitalize()}.pdf",
             bbox_inches="tight",
         )
+
 clustering_res_info = pd.DataFrame.from_dict(clustering_res_info)
 clustering_res_info = clustering_res_info.T
+print("Clustering results info: ")
+print(clustering_res_info.shape)
 clustering_res_info.to_csv(save_dir + "clustering_res_info.csv")
