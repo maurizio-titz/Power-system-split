@@ -24,12 +24,14 @@ The `scripts` folder contains scripts to reproduce the paper results. The `noteb
 
 The `scripts` contain our workflow with five stages:
 
-- `1_calc_pre_outage_data.py`: Calculate inertia and other properties from the (solved) PyPSA networks.
+- `calc_pre_outage_data.py`: Calculate inertia and other properties from the (solved) PyPSA networks.
 - `run_cascade_code.py` : Run the cascade algorithm on the PyPSA networks.
-- `evaluate_cascade.py`: Evaluating the cascade results, e.g., inertia and load imbalance for each split, indicator vectors.
-- `4_prepare_split_visualization.py`: Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits.
-- `5_calc_inertia_placement.py` : Determine optimal inertia placement to mitigate the impact of system splits. 
-
+- `evaluate_cascade.py`: Evaluating the cascade results, e.g., inertia and load imbalance for each split, indicator vectors. Run only after `run_cascade_code.py` has finished.
+- `prepare_split_visualization.py`: Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits. Run only after `evaluate_cascade.py` has finished.
+- `calc_inertia_placement.py` : Determine optimal inertia placement to mitigate the impact of system splits. Run only after `prepare_split_visualization.py` has finished.
+- `run_clustering_uncertainty_dist.py`: clusters the blackouts of all emission level scenarios. Run only after `prepare_split_visualization.py` has finished.
+- `calculate_distance_matrix.py`: calculates the distance matrix for clustering blackouts
+- `run_clustering_parallel.py`: applies clustering algorithms to the distance matrix
 All code assume that your PYTHONPATH contains the repository directory and the code is executed in there, too. 
 
 ## Input data and results
