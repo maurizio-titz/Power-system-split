@@ -33,7 +33,7 @@ from tqdm.notebook import tqdm
 root_path = '../' # This defaults to './', which should be the repository pathimport os
 os.chdir(root_path)
 sys.path.append(root_path)
-from utils.visualization import get_actual_co2_level
+from utils.data_handling import get_actual_co2_level
 from utils.config import path_to_pypsa_network_sclopf, path_to_cascade_results_sclopf, path_to_vis_results_sclopf, path_to_pre_outage_sclopf, path_to_evaluation_results_sclopf, path_to_figures_sclopf, path_to_sclopf_results
 from utils import data_handling, cascade_simulation
 from utils.config import path_to_indicator_vectors_sclopf
@@ -373,7 +373,7 @@ for i, target_level in enumerate(target_levels):
        # n = data_handling.load_pypsa_network(fpath, False)
        
        # n = data_handling.load_pypsa_network(path_to_pypsa_network_sclopf +
-       #                  f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{target_level}-2920SEG.nc", True)
+       #       # # Figure 2: generation map           f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{target_level}-2920SEG.nc", True)
        n = data_handling.load_pypsa_network(target_level, n_nodes, True)
        for ii, month in enumerate(months):
 
@@ -401,7 +401,7 @@ for i, target_level in enumerate(target_levels):
 
        axs_primary[i][0].text(0 - 0.15, 0.4,
                      rf'CO$_2$={get_actual_co2_level(target_level, percent=True)}\% ',
-                     fontsize=24,
+               # # Figure 2: generation map      fontsize=24,
                      verticalalignment='center',
                      transform=axs_primary[i][0].transAxes)
 
@@ -443,7 +443,7 @@ for ind,data in generation_by_carrier_and_co2l_plot.iterrows():
 
     ax3.plot((get_actual_co2_level(co2s[index])*100 + jit)[plot_inds],
              ((data.values)[index]*1e-6)[plot_inds],
-             color=colors_gens.loc[ind],
+             co# # Figure 2: generation maplor=colors_gens.loc[ind],
              alpha=0.8)
 # plt.gca().set_yscale("log")
 # ax3.scatter([], [], label=r"Oil$\textless 0.6$", marker="")
@@ -540,7 +540,7 @@ f = plt.figure(figsize=(24, 12))
 outer = GridSpec(1, 2, width_ratios = [2, 1]) 
 # gs = GridSpec(2, 3, figure=f)
 gs_left = GridSpecFromSubplotSpec(2, 2, subplot_spec = outer[0], wspace=-0.0, hspace=0.05)
-gs_right = GridSpecFromSubplotSpec(2, 1, subplot_spec = outer[1], height_ratios=[1, 0.6])
+gs_right = Grid# # Figure 2: generation mapSpecFromSubplotSpec(2, 1, subplot_spec = outer[1], height_ratios=[1, 0.6])
 
 ax1 = [f.add_subplot(gs_left[0, i], projection=ccrs.PlateCarree())
        for i in range(2)]
@@ -695,154 +695,154 @@ plt.tight_layout()
 plt.savefig(save_path+'generation_mix_versus_co2level_aggregated.pdf', bbox_inches='tight')
 
 # %% [markdown]
-# # Storage map plots
+# # Storage map plot
 
 # %%
 # select whether to plot the storage OUTPUT capacity (capacity * output efficiency) or the storage capacity
-for plot_output_capacity in [True]:
+plot_output_capacity = True
 
-       mpl.style.use('default')
-       plt.rc('text', usetex=True)
-       plt.rc('text.latex', preamble=r'\usepackage{amsmath}\usepackage{bm}')
+mpl.style.use('default')
+plt.rc('text', usetex=True)
+plt.rc('text.latex', preamble=r'\usepackage{amsmath}\usepackage{bm}')
 
-       target_levels = [0.0]
-       unit = "GWh"
-       unit_factor = 1e-3
+target_levels = [0.0]
+unit = "GWh"
+unit_factor = 1e-3
 
-       f = plt.figure(figsize=(15,10))
+f = plt.figure(figsize=(15,10))
 
-       gs_vertical = GridSpec(2, 2, width_ratios=[2,0.6], wspace=0.13)
-       gs_maps = GridSpecFromSubplotSpec(1, 2, subplot_spec = gs_vertical[0], wspace=-0.0, hspace=-0.2)
-       gs_lines = GridSpecFromSubplotSpec(2, 1, subplot_spec = gs_vertical[1], height_ratios=[0.8,0.2], hspace=0.4)
+gs_vertical = GridSpec(2, 2, width_ratios=[2,0.6], wspace=0.13)
+gs_maps = GridSpecFromSubplotSpec(1, 2, subplot_spec = gs_vertical[0], wspace=-0.0, hspace=-0.2)
+gs_lines = GridSpecFromSubplotSpec(2, 1, subplot_spec = gs_vertical[1], height_ratios=[0.8,0.2], hspace=0.4)
 
-       axs_maps = np.array([f.add_subplot(gs_maps[i], projection=ccrs.PlateCarree())
-              for i in range(2)])
-       ax_line = f.add_subplot(gs_lines[0])
+axs_maps = np.array([f.add_subplot(gs_maps[i], projection=ccrs.PlateCarree())
+        for i in range(2)])
+ax_line = f.add_subplot(gs_lines[0])
 
-       ##### panal a, b: maps #######
+##### panal a, b: maps #######
 
-       buses = list(network.buses.index)
-       storage_types = network.storage_units["carrier"].unique()
-       multi_index = pd.MultiIndex.from_product([buses, storage_types], names=["bus", "carrier"])
+buses = list(network.buses.index)
+storage_types = network.storage_units["carrier"].unique()
+multi_index = pd.MultiIndex.from_product([buses, storage_types], names=["bus", "carrier"])
 
-       battery_color = "red"
-       h2_color = "green"
-       for i, target_level in enumerate(target_levels):
-              for ii, (current_store_type, current_color) in enumerate(zip(["battery", "H2"], [battery_color, h2_color])):
-                     n = networks[target_level]
-                     storage_capacities = n.storage_units.max_hours * n.storage_units.p_nom
-                     if plot_output_capacity:
-                            storage_capacities = n.storage_units.max_hours * n.storage_units.p_nom * n.storage_units.efficiency_dispatch
-                     storage_capacities_grouped = storage_capacities.groupby([n.storage_units["bus"], n.storage_units["carrier"]]).sum()
-                     max_node_size = 0.85
-                     max_capacity = storage_capacities_grouped[:,current_store_type].max()
-                     max_capacity_rounded = round(max_capacity, -int(round(np.log10(max_capacity),0))+1)
-                     n.plot(bus_sizes=storage_capacities_grouped[:,current_store_type]/max_capacity_rounded*max_node_size,
-                            line_colors='black',
-                            bus_colors=current_color,
-                            link_widths=0.5,
-                            line_widths=0.5,
-                            ax=axs_maps[ii])
-                     legend_relative_circle_size = np.array([0.25, 1])
-                     legend_circle_size = [size*max_node_size for size in legend_relative_circle_size]
-                     axs_maps[ii].legend(loc="upper left")
-                     legend_circle_size = [round(size, -int(np.floor(np.log10(size)))) for size in legend_circle_size]
-                     pypsa.plot.add_legend_circles(axs_maps[ii], sizes=legend_circle_size, labels=[f"{size*max_capacity_rounded*unit_factor:2g} {unit}" for size in legend_circle_size], patch_kw={"color":current_color})
-                     
+battery_color = "red"
+h2_color = "green"
+for i, target_level in enumerate(target_levels):
+        for ii, (current_store_type, current_color) in enumerate(zip(["battery", "H2"], [battery_color, h2_color])):
+                n = networks[target_level]
+                storage_capacities = n.storage_units.max_hours * n.storage_units.p_nom
+                if plot_output_capacity:
+                    storage_capacities = n.storage_units.max_hours * n.storage_units.p_nom * n.storage_units.efficiency_dispatch
+                storage_capacities_grouped = storage_capacities.groupby([n.storage_units["bus"], n.storage_units["carrier"]]).sum()
+                max_node_size = 0.85
+                max_capacity = storage_capacities_grouped[:,current_store_type].max()
+                max_capacity_rounded = round(max_capacity, -int(round(np.log10(max_capacity),0))+1)
+                n.plot(bus_sizes=storage_capacities_grouped[:,current_store_type]/max_capacity_rounded*max_node_size,
+                    line_colors='black',
+                    bus_colors=current_color,
+                    link_widths=0.5,
+                    line_widths=0.5,
+                    ax=axs_maps[ii])
+                legend_relative_circle_size = np.array([0.25, 1])
+                legend_circle_size = [size*max_node_size for size in legend_relative_circle_size]
+                axs_maps[ii].legend(loc="upper left")
+                legend_circle_size = [round(size, -int(np.floor(np.log10(size)))) for size in legend_circle_size]
+                pypsa.plot.add_legend_circles(axs_maps[ii], sizes=legend_circle_size, labels=[f"{size*max_capacity_rounded*unit_factor:2g} {unit}" for size in legend_circle_size], patch_kw={"color":current_color})
+                
 
-                     # set current_store_type to upper case
-                     current_store_type_string = current_store_type[0].upper() + current_store_type[1:]
-                     axs_maps[ii].set_title(current_store_type_string, fontsize=16)
-                     
-       axs_maps[0].text(0 - 0.1, 1+0.05,
-                     r'\textbf{a}',
-                     fontsize=24,
-                     weight='bold',
-                     verticalalignment='center',
-                     transform=axs_maps[0].transAxes)
-       # axs_maps[0].text(0 - 0.1, 1,
-       #               r'\textbf{b}',
-       #               fontsize=24,
-       #               weight='bold',
-       #               verticalalignment='center',
-       #               transform=axs_maps[0].transAxes)
-
-
-       axs_maps[0].text(0 - 0.15, 0.8,
-                     fr'CO$_2$={get_actual_co2_level(target_levels[0], percent=True)}\% ',
-                     fontsize=24,
-                     fontweight='bold',
-                     verticalalignment='center',
-                     transform=axs_maps[0].transAxes)
-       # axs_maps[0].text(0 - 0.15, 0.4,
-       #               fr'CO$_2$={get_actual_co2_level(target_levels[1], percent=True)}\%',
-       #               fontsize=16,
-       #               verticalalignment='center',
-       #               transform=axs_maps[0].transAxes)
+                # set current_store_type to upper case
+                current_store_type_string = current_store_type[0].upper() + current_store_type[1:]
+                axs_maps[ii].set_title(current_store_type_string, fontsize=16)
+                
+axs_maps[0].text(0 - 0.1, 1+0.05,
+                r'\textbf{a}',
+                fontsize=24,
+                weight='bold',
+                verticalalignment='center',
+                transform=axs_maps[0].transAxes)
+# axs_maps[0].text(0 - 0.1, 1,
+#               r'\textbf{b}',
+#               fontsize=24,
+#               weight='bold',
+#               verticalalignment='center',
+#               transform=axs_maps[0].transAxes)
 
 
-       ###### panel c: total capacity line plot #####
+axs_maps[0].text(0 - 0.15, 0.8,
+                fr'CO$_2$={get_actual_co2_level(target_levels[0], percent=True)}\% ',
+                fontsize=24,
+                fontweight='bold',
+                verticalalignment='center',
+                transform=axs_maps[0].transAxes)
+# axs_maps[0].text(0 - 0.15, 0.4,
+#               fr'CO$_2$={get_actual_co2_level(target_levels[1], percent=True)}\%',
+#               fontsize=16,
+#               verticalalignment='center',
+#               transform=axs_maps[0].transAxes)
 
-       ax_line.text(0 - 0.1, 1+0.05,
-                     r'\textbf{b}',
-                     fontsize=24,
-                     weight='bold',
-                     verticalalignment='center',
-                     transform=ax_line.transAxes)
 
-       capacity_by_type_by_lvl = pd.DataFrame(index=storage_types, columns=co2ls[::-1])
-       for target_level in co2ls:
-              n = networks[target_level]
-              print(f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{target_level}-2920SEG.nc")
-              storage_capacities_all_lvl = pd.Series(index=multi_index, data=0)
-              storage_capacities_lvl = n.storage_units.max_hours * n.storage_units.p_nom
-              if plot_output_capacity:
-                     storage_capacities_lvl = storage_capacities_lvl * n.storage_units.efficiency_dispatch
-              storage_capacities_grouped_lvl = storage_capacities_lvl.groupby([n.storage_units["carrier"]]).sum()
-              capacity_by_type_by_lvl.loc[storage_capacities_grouped_lvl.index,target_level] = storage_capacities_grouped_lvl
+###### panel c: total capacity line plot #####
 
-              capacity_by_type_by_lvl_plotting = capacity_by_type_by_lvl.T.copy()
-       try:
-              capacity_by_type_by_lvl_plotting.drop(index=[0.7,0.8], inplace=True)
-       except:
-              pass
+ax_line.text(0 - 0.1, 1+0.05,
+                r'\textbf{b}',
+                fontsize=24,
+                weight='bold',
+                verticalalignment='center',
+                transform=ax_line.transAxes)
 
-       capacity_by_type_by_lvl_plotting.rename(columns={"battery": "Battery", "hydro": "Hydro", "PHS": "Pumped hydro"},inplace=True)
-       colors = ["blue", "skyblue", h2_color, battery_color]
-       ax_line.plot(get_actual_co2_level(capacity_by_type_by_lvl.columns,percent=True) ,capacity_by_type_by_lvl_plotting.loc[:,['Hydro', 'Pumped hydro', 'H2','Battery']].values*unit_factor, label=['Hydro', 'Pumped hydro', 'H2','Battery'])
-       for feat_count in range(capacity_by_type_by_lvl_plotting.shape[1]):
-              if "ydro" in capacity_by_type_by_lvl_plotting.columns[feat_count]:
-                     continue
-              plt.scatter(get_actual_co2_level(capacity_by_type_by_lvl.columns,percent=True) ,(capacity_by_type_by_lvl_plotting.loc[:,['Hydro', 'Pumped hydro', 'H2','Battery']].values*unit_factor)[:,feat_count], color=colors[feat_count])
-       secax = ax_line.secondary_yaxis('right', functions=(lambda x: x*(1/6), lambda x: x*6))
-       secax.set_ylabel('Battery power [GW]')#, weight='normal')
-       # secax.tick_params(labelsize=16)
-       # secax.tick_params(axis='y', which='both', labelsize=10, width=1)
+capacity_by_type_by_lvl = pd.DataFrame(index=storage_types, columns=co2ls[::-1])
+for target_level in co2ls:
+        n = networks[target_level]
+        print(f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{target_level}-2920SEG.nc")
+        storage_capacities_all_lvl = pd.Series(index=multi_index, data=0)
+        storage_capacities_lvl = n.storage_units.max_hours * n.storage_units.p_nom
+        if plot_output_capacity:
+                storage_capacities_lvl = storage_capacities_lvl * n.storage_units.efficiency_dispatch
+        storage_capacities_grouped_lvl = storage_capacities_lvl.groupby([n.storage_units["carrier"]]).sum()
+        capacity_by_type_by_lvl.loc[storage_capacities_grouped_lvl.index,target_level] = storage_capacities_grouped_lvl
 
-       for i,ii in enumerate(ax_line.lines):
-              ii.set_color(colors[i])
+        capacity_by_type_by_lvl_plotting = capacity_by_type_by_lvl.T.copy()
+try:
+        capacity_by_type_by_lvl_plotting.drop(index=[0.7,0.8], inplace=True)
+except:
+        pass
 
-       ax_line.invert_xaxis()
-       ax_line.grid(True)
-       plt.yscale('log')
-       if plot_output_capacity:
-              plt.ylabel(f"Storage output capacity [{unit}]")
-       else:
-              plt.ylabel(f"Storage capacity [{unit}]")
-       plt.xlabel(r"CO2 level [\% of 1990]")
-       plt.legend()
-       h, l = ax_line.get_legend_handles_labels()
-       ax_line.get_legend().remove()
-       ax_line_legend = f.add_subplot(gs_lines[1])
-       ax_line_legend.legend(h, l, borderaxespad=0.2, fontsize=15, ncol=2, loc="upper left")
-       ax_line_legend.axis("off")
+capacity_by_type_by_lvl_plotting.rename(columns={"battery": "Battery", "hydro": "Hydro", "PHS": "Pumped hydro"},inplace=True)
+colors = ["blue", "skyblue", h2_color, battery_color]
+ax_line.plot(get_actual_co2_level(capacity_by_type_by_lvl.columns,percent=True) ,capacity_by_type_by_lvl_plotting.loc[:,['Hydro', 'Pumped hydro', 'H2','Battery']].values*unit_factor, label=['Hydro', 'Pumped hydro', 'H2','Battery'])
+for feat_count in range(capacity_by_type_by_lvl_plotting.shape[1]):
+        if "ydro" in capacity_by_type_by_lvl_plotting.columns[feat_count]:
+                continue
+        plt.scatter(get_actual_co2_level(capacity_by_type_by_lvl.columns,percent=True) ,(capacity_by_type_by_lvl_plotting.loc[:,['Hydro', 'Pumped hydro', 'H2','Battery']].values*unit_factor)[:,feat_count], color=colors[feat_count])
+secax = ax_line.secondary_yaxis('right', functions=(lambda x: x*(1/6), lambda x: x*6))
+secax.set_ylabel('Battery power [GW]')#, weight='normal')
+# secax.tick_params(labelsize=16)
+# secax.tick_params(axis='y', which='both', labelsize=10, width=1)
 
-       if plot_output_capacity:
-              file_name = "storage_output_capacity_vs_co2level"
-       else:
-              file_name = "storage_capacity_vs_co2level"
+for i,ii in enumerate(ax_line.lines):
+        ii.set_color(colors[i])
 
-       # plt.savefig(save_path+file_name + 'singleLvl.pdf', bbox_inches='tight')
+ax_line.invert_xaxis()
+ax_line.grid(True)
+plt.yscale('log')
+if plot_output_capacity:
+        plt.ylabel(f"Storage output capacity [{unit}]")
+else:
+        plt.ylabel(f"Storage capacity [{unit}]")
+plt.xlabel(r"CO2 level [\% of 1990]")
+plt.legend()
+h, l = ax_line.get_legend_handles_labels()
+ax_line.get_legend().remove()
+ax_line_legend = f.add_subplot(gs_lines[1])
+ax_line_legend.legend(h, l, borderaxespad=0.2, fontsize=15, ncol=2, loc="upper left")
+ax_line_legend.axis("off")
+
+if plot_output_capacity:
+        file_name = "storage_output_capacity_vs_co2level"
+else:
+        file_name = "storage_capacity_vs_co2level"
+
+# plt.savefig(save_path+file_name + 'singleLvl.pdf', bbox_inches='tight')
 
 # %% [markdown]
 # # Figure 3: SPI
