@@ -5,17 +5,17 @@ import sys
 sys.path.append("./")
 
 
-from utils.visualization import get_co2_levels
+from utils.data_handling import get_co2_levels
 from utils.plot_mitigation_strategies import plot_map_inertia_placement_final
 from utils.synthetic_inertia_placement import (
     run_different_parameters_for_co2lvl,
     run_specific_co2lvl_n_size,
 )
+from utils.config import path_to_sclopf_data
+import datetime
+import os
 
 if __name__ == "__main__":
-    from utils.config import path_to_sclopf_data
-    import datetime
-    import os
 
     n_nodes = 600
     use_sclopf = True
@@ -32,17 +32,30 @@ if __name__ == "__main__":
     )
     resolve_strategies = [resolve_strategy]
     delta_rot_ls = [1000]
+    max_iter = 10000
     for co2_lvl in co2l_list:
         print(f"Running for co2_lvl: {co2_lvl}")
-        run_different_parameters_for_co2lvl(
+        # not used because we decided to only run random placement
+        # run_different_parameters_for_co2lvl(
+        #     co2_lvl,
+        #     n_nodes,
+        #     use_sclopf,
+        #     delta_rot_ls,
+        #     max_iter=10000,
+        #     nr_processes=len(co2l_list),
+        #     revert_chrotE_fac=False,
+        #     resolve_equality_method_ls=resolve_strategies,
+        # )
+        run_specific_co2lvl_n_size(
             co2_lvl,
-            n_nodes,
-            use_sclopf,
-            delta_rot_ls,
-            max_iter=10000,
-            nr_processes=len(co2l_list),
-            revert_chrotE_fac=False,
-            resolve_equality_method_ls=resolve_strategies,
+            nn_nodes=n_nodes,
+            delta_rot_energy=delta_rot_ls[0],
+            show_progress=False,
+            save_it=True,
+            max_iter=max_iter,
+            resolve_equality_method=resolve_strategies[0],
+            revert_ch_rotE_fac=False,
+            use_sclopf=use_sclopf,
         )
     for co2_lvl in co2l_list:
         for delta_rot in delta_rot_ls:
