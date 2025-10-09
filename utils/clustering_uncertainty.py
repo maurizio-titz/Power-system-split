@@ -6,6 +6,7 @@ from typing import Callable
 
 import numpy as np
 import scipy
+from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.preprocessing import normalize
 from tqdm import tqdm
 from collections import OrderedDict
@@ -122,31 +123,30 @@ def typed_katz_centrality_batch(
         [
             node_class_vectors
             @ normalize(np.linalg.matrix_power(adjacency_matrix, d), axis=0, norm="l1")
-            * decay_factor ** (-d)
-            for d in range(
-                max_distance + 1
-            )  # +1 because 0 would be the identity matrix
+            * d ** (-decay_factor)
+            for d in range(1, max_distance)  # +1 because 0 would be the identity matrix
         ],
         axis=0,
     )
-    # assert c.shape == node_class_vectors.shape, "c.shape != node_class_vectors.shape"
+
+    assert c.shape == node_class_vectors.shape, "c.shape != node_class_vectors.shape"
 
     return abs(c)
     # return c
 
 
-def uncertainty_distance(
+def product_weighted_hamming_distance(
     node_classes0,
     node_classes1,
-    node_uncertainties0,
-    node_uncertainties1,
+    node_weight0,
+    node_weight1,
     order: int = 1,
 ) -> float:
-    """calculates the distance between two indicator vectors."""
+    """calculates the distance between two indicator vectors, from the hamming distance between the two indicator vectors weighted by the product of the node weights."""
 
     divs = node_classes0 != node_classes1
     return np.linalg.norm(
-        np.multiply(node_uncertainties0[divs], node_uncertainties1[divs]), ord=order
+        np.multiply(node_weight0[divs], node_weight1[divs]), ord=order
     )
 
 
@@ -185,7 +185,7 @@ def binning_uncertainty_distance(
     ):
         return np.inf
     else:
-        return uncertainty_distance(
+        return product_weighted_hamming_distance(
             node_classes0,
             node_classes1,
             node_uncertainties0,
@@ -234,7 +234,7 @@ def uncertainty_distance_wrapper_tuple(
     node_classes1 = blackout_centrality_tuple_1[0]
     node_uncertainties1 = blackout_centrality_tuple_1[1]
 
-    return uncertainty_distance(
+    return product_weighted_hamming_distance(
         node_classes0,
         node_classes1,
         node_uncertainties0,
@@ -243,13 +243,14 @@ def uncertainty_distance_wrapper_tuple(
     )
 
 
-def uncertainty_distance_wrapper_concat(
-    blackout_centrality_tuple_0,
-    blackout_centrality_tuple_1,
-    order: int = 1,
+def weighted_distance_wrapper(
+    blackout_centrality_tuple_0: np.ndarray,
+    blackout_centrality_tuple_1: np.ndarray,
+    weighted_distance_metric: Callable,
+    kwargs: dict = {},
 ) -> float:
     """
-    calculates the distance between two indicator vectors. takes a tuple of the node classes and uncertainties for each samples, so it can be used as a distance function in the clustering algorithm.
+    wraps product_weighted_hamming_distance so it can be used as a distance metric. takes two tuples of blackout centrality vectors, each containing node classes and node weights concatenated.
     """
     assert (
         blackout_centrality_tuple_0.shape == blackout_centrality_tuple_1.shape
@@ -258,17 +259,186 @@ def uncertainty_distance_wrapper_concat(
     assert n_nodes % 2 == 0
 
     node_classes0 = blackout_centrality_tuple_0[:n_nodes]
-    node_uncertainties0 = blackout_centrality_tuple_0[n_nodes:]
+    node_weights0 = blackout_centrality_tuple_0[n_nodes:]
     node_classes1 = blackout_centrality_tuple_1[:n_nodes]
-    node_uncertainties1 = blackout_centrality_tuple_1[n_nodes:]
+    node_weights1 = blackout_centrality_tuple_1[n_nodes:]
 
-    return uncertainty_distance(
+    return weighted_distance_metric(
         node_classes0,
         node_classes1,
-        node_uncertainties0,
-        node_uncertainties1,
-        order=order,
+        node_weights0,
+        node_weights1,
+        **kwargs,
     )
+
+
+def weighted_bACC_dist(
+    node_classes0,
+    node_classes1,
+    node_weights0=None,
+    node_weights1=None,
+) -> float:
+    """calculates the balanced accuracy between two indicator vectors, weighted by the product of the node uncertainties."""
+
+    if node_weights0 is not None and node_weights1 is not None:
+        node_weights = np.multiply(node_weights0, node_weights1)
+    else:
+        node_weights = None
+
+    # balanced_accuracy_score is not symmetric, so we take the mean of both directions
+    bACC = (
+        balanced_accuracy_score(
+            node_classes0, node_classes1, sample_weight=node_weights
+        )
+        + balanced_accuracy_score(
+            node_classes1, node_classes0, sample_weight=node_weights
+        )
+    ) / 2
+
+    return 1 - bACC
+
+
+def symmetric_weighted_bACC_dist(
+    node_classes0,
+    node_classes1,
+    node_weights0=None,
+    node_weights1=None,
+) -> float:
+    """calculates the symmetric balanced accuracy between two indicator vectors, weighted by the product of the node uncertainties."""
+
+    if node_weights0 is not None and node_weights1 is not None:
+        node_weights = np.multiply(node_weights0, node_weights1)
+    else:
+        node_weights = None
+
+    C = confusion_matrix(node_classes0, node_classes1, sample_weight=node_weights)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        per_class = np.diag(C) / C.sum(axis=1)
+        per_class_T = np.diag(C) / C.sum(axis=0)
+
+    return 1 - (np.mean(per_class) + np.mean(per_class_T)) / 2
+
+
+def balanced_overlap_distance_weighted(
+    node_classes0: np.ndarray,
+    node_classes1: np.ndarray,
+    node_weights0: np.ndarray,
+    node_weights1: np.ndarray,
+) -> float:
+    """calculates the balanced overlap distance between two indicator vectors, weighted by the sum of the node uncertainties."""
+
+    assert (
+        node_classes0.shape == node_classes1.shape
+    ), "node_classes0 and node_classes1 must have the same shape"
+    assert (
+        node_weights0.shape == node_weights1.shape
+    ), "node_weights0 and node_weights1 must have the same shape"
+    assert (
+        node_classes0.shape == node_weights0.shape
+    ), "node_classes0 and node_weights0 must have the same shape"
+
+    assert all(node_weights0 >= 0), "node_weights0 must be non-negative"
+    assert all(node_weights1 >= 0), "node_weights1 must be non-negative"
+
+    node_classes0 = node_classes0.astype(bool)
+    node_classes1 = node_classes1.astype(bool)
+
+    return (
+        1
+        - (
+            (node_classes0 * node_classes1)
+            @ (node_weights0 + node_weights1)
+            / (
+                np.inner(node_classes0, node_weights0)
+                + np.inner(node_classes1, node_weights1)
+            )
+            + (~node_classes0 * ~node_classes1)
+            @ (node_weights0 + node_weights1)
+            / (
+                np.inner(~node_classes0, node_weights0)
+                + np.inner(~node_classes1, node_weights1)
+            )
+        )
+        / 2
+    )
+
+
+def balanced_overlap_distance(
+    node_classes0: np.ndarray,
+    node_classes1: np.ndarray,
+) -> float:
+    """calculates the balanced overlap distance between two indicator vectors, weighted by the product of the node uncertainties."""
+
+    assert (
+        node_classes0.shape == node_classes1.shape
+    ), "node_classes0 and node_classes1 must have the same shape"
+
+    node_classes0 = node_classes0.astype(bool)
+    node_classes1 = node_classes1.astype(bool)
+
+    return (
+        1
+        - (
+            (node_classes0 * node_classes1).sum()
+            / (node_classes0.sum() + node_classes1.sum())
+            + (~node_classes0 * ~node_classes1).sum()
+            / (~node_classes0.sum() + ~node_classes1.sum())
+        )
+        / 2
+    )
+
+
+def calc_distance_matrix(
+    data,
+    metric=weighted_bACC_dist,
+):
+    """
+    Calculate the distance matrix for the given data using the specified metric.
+
+    Parameters:
+        data (np.ndarray): The input data for which to calculate distances.
+        metric (callable): The distance metric to use.
+        n_jobs (int): The number of jobs to run in parallel.
+
+    Returns:
+        np.ndarray: The calculated distance matrix.
+    """
+    d = np.zeros((data.shape[0], data.shape[0]), dtype=np.float64)
+    for i in range(data.shape[0]):
+        for j in range(i + 1, data.shape[0]):
+            d[i, j] = metric(data[i], data[j])
+            # Store the distance in the appropriate place in the matrix
+            d[j, i] = d[i, j]
+
+    np.fill_diagonal(d, 0)  # Set diagonal to zero
+    return d
+
+
+def sparsify_distance_matrix(
+    distance_matrix: np.ndarray,
+    blackout_vectors: np.ndarray,
+) -> np.ndarray:
+    """sparsifies the distance matrix by setting the distance to infinity there is no overlap between blackout or non blackout parts"""
+    assert distance_matrix.shape[0] == blackout_vectors.shape[0]
+
+    blackout_vectors = blackout_vectors.astype(bool)
+    # set distances to infinity where there is no overlap
+    # Vectorized version for speed
+    # For each pair (i, j), set distance to inf if there is no overlap in blackout or non-blackout parts
+    # Overlap: at least one True in both blackout_vectors[i] & blackout_vectors[j], and at least one False in both
+
+    # Compute overlap matrices
+    overlap_blackout = np.dot(blackout_vectors, blackout_vectors.T) > 0
+    overlap_non_blackout = np.dot(~blackout_vectors, ~blackout_vectors.T) > 0
+
+    # If either overlap_blackout or overlap_non_blackout is False, set distance to inf
+    mask = ~(overlap_blackout & overlap_non_blackout)
+    distance_matrix[mask] = 0
+
+    # Convert to sparse matrix format
+    distance_matrix = scipy.sparse.csr_matrix(distance_matrix, dtype=float)
+
+    return distance_matrix
 
 
 def get_order_by_blackout_size(indicator_vectors: np.ndarray):
@@ -401,8 +571,21 @@ def prepare_clusters_for_analysis(
     split_properties_filtered,
     overwrite=False,
 ):
-    path_labels_all = clustering_res_path.replace(".pklz", "_labels_all.npy")
-    path_goup_masks = clustering_res_path.replace(".pklz", "_group_masks.pklz")
+    """Prepares clustering results for analysis by saving labels and group masks.
+    Args:
+        clustering_res_path (str): Path to the clustering results file.
+        unique_blackout_dict (dict): Dictionary of unique blackout vectors.
+        split_properties_filtered (np.ndarray): Filtered properties of the split.
+        overwrite (bool): Whether to overwrite existing files.
+    Returns:
+        None.
+        Saves:
+        labels_all, attributes each outage vector to cluster.
+        group_masks, dictonary which holds a mask for each cluster.
+    """
+
+    path_labels_all = clustering_res_path.replace("fitted.pklz", "labels_all.npy")
+    path_goup_masks = clustering_res_path.replace("fitted.pklz", "group_masks.pklz")
     # path_group_means = clustering_res_path.replace(".pklz", "_group_means.npy")
 
     if (
@@ -412,6 +595,8 @@ def prepare_clusters_for_analysis(
     ):
         print(f"Skipping because labels_all, goup_masks and group_means already exist.")
         return
+
+    print("preparing clusters for analysis...")
 
     with gzip.open(clustering_res_path, "rb") as out:
         clustering_res = pickle.load(out)
@@ -437,7 +622,7 @@ def prepare_clusters_for_analysis(
     #         if k != -1
     #     ]
     # )
-    groups = {
+    label_to_idxs = {
         k: np.concatenate(
             [
                 unique_idx_to_ids[i]
@@ -446,19 +631,21 @@ def prepare_clusters_for_analysis(
             ]
         )
         for k in unique_labels
-        if k != -1
     }
 
-    all_idxs = list(np.concatenate(list(groups.values())))
-    all_idxs.sort()
+    # all_idxs = list(np.concatenate(list(groups.values())))
+    # all_idxs.sort()
     labels_all = np.array([None] * split_properties_filtered.shape[0])
 
-    for group, idxs in groups.items():
-        labels_all[idxs] = group
+    for label, idxs in label_to_idxs.items():
+        assert all(
+            labels_all[idxs] == None
+        ), "labels_all[idxs] must be None before assigning a label. This indicates that the same index is assigned to multiple labels."
+        labels_all[idxs] = label
 
     np.save(path_labels_all, labels_all)
 
-    group_masks = {k: np.array(labels_all == k) for k in unique_labels if k != -1}
+    group_masks = {k: np.array(labels_all == k) for k in unique_labels}
     with gzip.open(path_goup_masks, "wb") as out:
         pickle.dump(group_masks, out)
 
