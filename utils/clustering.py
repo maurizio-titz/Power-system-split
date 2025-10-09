@@ -1,187 +1,446 @@
-"""helper functions for clustering of splits, i.e. the corresponding indicator vectors"""
-
 import gzip
 import os
 import pickle
 import sys
+from typing import Callable
 
 import numpy as np
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
-
-sys.path.append("./")
+import scipy
+from sklearn.metrics import balanced_accuracy_score, confusion_matrix
+from sklearn.preprocessing import normalize
+from tqdm import tqdm
+from collections import OrderedDict
 
 from utils.config import (
     path_to_clustering_results_lopf,
     path_to_clustering_results_sclopf,
 )
-from utils.indicator_utils import (
-    load_indicator_vectors,
-    transform_indicator_vectors,
-)
 
 
-def cluster_kmeans(
+sys.path.append("./")
+
+
+def typed_katz_centrality_single_vector(
+    adjecency_matrix: np.matrix,
+    node_class_vectors: np.ndarray,
+    decay_factor: float = 0.1,
+    max_distance: int = 10,
+) -> np.ndarray:
+    """calculates the nodewise uncertainty, i.e. how close the node is to nodes of the opposite class."""
+    if set(node_class_vectors) == {0, 1}:
+        node_class_vectors = 2 * node_class_vectors - 1
+    elif set(node_class_vectors) == {-1, 1}:
+        pass
+    else:
+        raise ValueError("node_class_vectors must be binary or -1,1")
+
+    c = np.sum(
+        np.array(
+            [
+                np.linalg.matrix_power(adjecency_matrix, d)
+                @ node_class_vectors
+                * decay_factor**d
+                for d in range(1, max_distance + 1)
+            ]
+        ),
+        axis=0,
+    )
+    assert c.shape == node_class_vectors.shape, "c.shape != node_class_vectors.shape"
+
+    return c
+
+
+def typed_katz_centrality_batch(
+    adjacency_matrix: np.matrix,
+    node_class_vectors: np.ndarray,
+    decay_factor: float = 1.5,
+    max_distance: int = 10,
+) -> np.ndarray:
+    """calculates the nodewise uncertainty, i.e. how close the node is to nodes of the opposite class."""
+    if set(np.unique(node_class_vectors)) == {0, 1}:
+        node_class_vectors = 2 * node_class_vectors - 1
+    elif set(node_class_vectors) == {-1, 1}:
+        pass
+    else:
+        raise ValueError("node_class_vectors must be binary, either [0,1] or [-1,1]")
+
+    if scipy.sparse.issparse(adjacency_matrix):
+        adjacency_matrix = adjacency_matrix.toarray()
+
+    c = np.sum(
+        [
+            node_class_vectors
+            @ normalize(np.linalg.matrix_power(adjacency_matrix, d), axis=0, norm="l1")
+            * d ** (-decay_factor)
+            for d in range(
+                1, max_distance + 1
+            )  # +1 because 0 would be the identity matrix
+        ],
+        axis=0,
+    )
+
+    assert c.shape == node_class_vectors.shape, "c.shape != node_class_vectors.shape"
+
+    return abs(c)
+    # return c
+
+
+def product_weighted_hamming_distance(
+    node_classes0,
+    node_classes1,
+    node_weight0,
+    node_weight1,
+    order: int = 1,
+) -> float:
+    """calculates the distance between two indicator vectors, from the hamming distance between the two indicator vectors weighted by the product of the node weights."""
+
+    divs = node_classes0 != node_classes1
+    return np.linalg.norm(
+        np.multiply(node_weight0[divs], node_weight1[divs]), ord=order
+    )
+
+
+def uncertainty_distance_wrapper_tuple(
+    blackout_centrality_tuple_0,
+    blackout_centrality_tuple_1,
+    order: int = 1,
+) -> float:
+    """
+    calculates the distance between two indicator vectors. takes a tuple of the node classes and uncertainties for each samples, so it can be used as a distance function in the clustering algorithm.
+    """
+
+    node_classes0 = blackout_centrality_tuple_0[0]
+    node_uncertainties0 = blackout_centrality_tuple_0[1]
+    node_classes1 = blackout_centrality_tuple_1[0]
+    node_uncertainties1 = blackout_centrality_tuple_1[1]
+
+    return product_weighted_hamming_distance(
+        node_classes0,
+        node_classes1,
+        node_uncertainties0,
+        node_uncertainties1,
+        order=order,
+    )
+
+
+def weighted_distance_wrapper(
+    blackout_centrality_tuple_0: np.ndarray,
+    blackout_centrality_tuple_1: np.ndarray,
+    weighted_distance_metric: Callable,
+    kwargs: dict = {},
+) -> float:
+    """
+    wraps product_weighted_hamming_distance so it can be used as a distance metric. takes two tuples of blackout centrality vectors, each containing node classes and node weights concatenated.
+    """
+    assert (
+        blackout_centrality_tuple_0.shape == blackout_centrality_tuple_1.shape
+    ), "blackout_centrality_tuple_0 and blackout_centrality_tuple_1 must have the same shape"
+    n_nodes = int(blackout_centrality_tuple_0.shape[0] / 2)
+    assert n_nodes % 2 == 0
+
+    node_classes0 = blackout_centrality_tuple_0[:n_nodes]
+    node_weights0 = blackout_centrality_tuple_0[n_nodes:]
+    node_classes1 = blackout_centrality_tuple_1[:n_nodes]
+    node_weights1 = blackout_centrality_tuple_1[n_nodes:]
+
+    return weighted_distance_metric(
+        node_classes0,
+        node_classes1,
+        node_weights0,
+        node_weights1,
+        **kwargs,
+    )
+
+
+def balanced_overlap_distance_weighted(
+    node_classes0: np.ndarray,
+    node_classes1: np.ndarray,
+    node_weights0: np.ndarray,
+    node_weights1: np.ndarray,
+) -> float:
+    """calculates the balanced overlap distance between two indicator vectors, weighted by the sum of the node uncertainties."""
+
+    assert (
+        node_classes0.shape == node_classes1.shape
+    ), "node_classes0 and node_classes1 must have the same shape"
+    assert (
+        node_weights0.shape == node_weights1.shape
+    ), "node_weights0 and node_weights1 must have the same shape"
+    assert (
+        node_classes0.shape == node_weights0.shape
+    ), "node_classes0 and node_weights0 must have the same shape"
+
+    assert all(node_weights0 >= 0), "node_weights0 must be non-negative"
+    assert all(node_weights1 >= 0), "node_weights1 must be non-negative"
+
+    node_classes0 = node_classes0.astype(bool)
+    node_classes1 = node_classes1.astype(bool)
+
+    return (
+        1
+        - (
+            (node_classes0 * node_classes1)
+            @ (node_weights0 + node_weights1)
+            / (
+                np.inner(node_classes0, node_weights0)
+                + np.inner(node_classes1, node_weights1)
+            )
+            + (~node_classes0 * ~node_classes1)
+            @ (node_weights0 + node_weights1)
+            / (
+                np.inner(~node_classes0, node_weights0)
+                + np.inner(~node_classes1, node_weights1)
+            )
+        )
+        / 2
+    )
+
+
+def balanced_overlap_distance(
+    node_classes0: np.ndarray,
+    node_classes1: np.ndarray,
+) -> float:
+    """calculates the balanced overlap distance between two indicator vectors, weighted by the product of the node uncertainties."""
+
+    assert (
+        node_classes0.shape == node_classes1.shape
+    ), "node_classes0 and node_classes1 must have the same shape"
+
+    node_classes0 = node_classes0.astype(bool)
+    node_classes1 = node_classes1.astype(bool)
+
+    return (
+        1
+        - (
+            (node_classes0 * node_classes1).sum()
+            / (node_classes0.sum() + node_classes1.sum())
+            + (~node_classes0 * ~node_classes1).sum()
+            / (~node_classes0.sum() + ~node_classes1.sum())
+        )
+        / 2
+    )
+
+
+def get_order_by_blackout_size(indicator_vectors: np.ndarray):
+    """returns the order of the indicator vectors by blackout size"""
+
+    indicator_vectors = np.atleast_2d(indicator_vectors)
+    blackout_sizes = indicator_vectors.sum(axis=1)
+    # sort the blackout sizes in descending order
+    order = np.argsort(blackout_sizes)[::-1]
+    indicator_vectors_sorted = indicator_vectors[order]
+    blackout_sizes_sorted = blackout_sizes[order]
+
+    return blackout_sizes_sorted, indicator_vectors_sorted, order
+
+
+def calc_distance_matrix(
+    data,
+    metric=balanced_overlap_distance_weighted,
+):
+    """
+    Calculate the distance matrix for the given data using the specified metric.
+
+    Parameters:
+        data (np.ndarray): The input data for which to calculate distances.
+        metric (callable): The distance metric to use.
+        n_jobs (int): The number of jobs to run in parallel.
+
+    Returns:
+        np.ndarray: The calculated distance matrix.
+    """
+    d = np.zeros((data.shape[0], data.shape[0]), dtype=np.float64)
+    for i in range(data.shape[0]):
+        for j in range(i + 1, data.shape[0]):
+            d[i, j] = metric(data[i], data[j])
+            # Store the distance in the appropriate place in the matrix
+            d[j, i] = d[i, j]
+
+    np.fill_diagonal(d, 0)  # Set diagonal to zero
+    return d
+
+
+def get_unique_vectors_with_weights(
+    binary_array: np.ndarray, weights: np.ndarray = np.array([])
+) -> dict:
+    """
+    Finds all duplicate row vectors in a binary array and returns their indices as a list of tuples.
+
+    Args:
+        binary_array (np.ndarray): A binary nxm array.
+
+    Returns:
+        dict: A dictionary where keys are unique row vectors (as tuples) and values are lists of indices where these vectors occur in the binary array.
+    """
+    unique_to_idx = OrderedDict()
+    if weights.size == binary_array.shape[0]:
+        for idx, (row, weight) in tqdm(enumerate(zip(binary_array, weights))):
+            row_tuple = tuple(row)
+            if row_tuple in unique_to_idx:
+                unique_to_idx[row_tuple]["idxs"].append(idx)
+                unique_to_idx[row_tuple]["weight"] += weight
+            else:
+                unique_to_idx[row_tuple] = {"idxs": [idx], "weight": weight}
+    elif weights.size == 0:
+        for idx, row in tqdm(enumerate(binary_array)):
+            row_tuple = tuple(row)
+            if row_tuple in unique_to_idx:
+                unique_to_idx[row_tuple]["idxs"].append(idx)
+            else:
+                unique_to_idx[row_tuple] = {"idxs": [idx]}
+    else:
+        raise ValueError(
+            "weights must be of the same length as the number of rows in the binary array or empty"
+        )
+
+    return unique_to_idx
+
+
+def idx_to_unique_vector_idx(unique_to_idx: dict) -> dict:
+    """
+    Converts a dictionary of unique vectors to a dictionary mapping indices to unique vector indices.
+
+    Args:
+        unique_to_idx (dict): A dictionary where keys are unique row vectors (as tuples) and values are lists of indices where these vectors occur in the binary array.
+
+    Returns:
+        dict: A dictionary mapping each index in the original array to its corresponding unique vector index.
+    """
+    idx_to_unique_vector_idx = {}
+    for unique_vector_idx, (vector, data) in enumerate(unique_to_idx.items()):
+        idxs = np.array(data["idxs"])
+        idx_to_unique_vector_idx.update(
+            dict(zip(idxs, [unique_vector_idx] * len(idxs)))
+        )
+
+    return idx_to_unique_vector_idx
+
+
+# def graph_based_clustering():
+#     https://graph-tool.skewed.de/
+
+
+def prepare_clusters_for_analysis(
+    clustering_res_path,
+    unique_blackout_dict,
+    split_properties_filtered,
+    overwrite=False,
+):
+    """Prepares clustering results for analysis by saving labels and group masks.
+    Args:
+        clustering_res_path (str): Path to the clustering results file.
+        unique_blackout_dict (dict): Dictionary of unique blackout vectors.
+        split_properties_filtered (np.ndarray): Filtered properties of the split.
+        overwrite (bool): Whether to overwrite existing files.
+    Returns:
+        None.
+        Saves:
+        labels_all, attributes each outage vector to cluster.
+        group_masks, dictonary which holds a mask for each cluster.
+    """
+
+    path_labels_all = clustering_res_path.replace("fitted.pklz", "labels_all.npy")
+    path_goup_masks = clustering_res_path.replace("fitted.pklz", "group_masks.pklz")
+    # path_group_means = clustering_res_path.replace(".pklz", "_group_means.npy")
+
+    if (
+        os.path.exists(path_labels_all)
+        and os.path.exists(path_goup_masks)
+        and not overwrite
+    ):
+        print(f"Skipping because labels_all, goup_masks and group_means already exist.")
+        return
+
+    print("preparing clusters for analysis...")
+
+    with gzip.open(clustering_res_path, "rb") as out:
+        clustering_res = pickle.load(out)
+
+    unique_idx_to_ids = [val["idxs"] for val in unique_blackout_dict.values()]
+    unique_blackout_vecs = np.array(list(unique_blackout_dict.keys()))
+
+    labels = clustering_res.labels_
+
+    # Number of clusters in labels, ignoring noise if present.
+    n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+    n_noise_ = list(labels).count(-1)
+
+    unique_labels = set(labels)
+    # core_samples_mask = np.zeros_like(labels, dtype=bool)
+    # core_samples_mask[clustering_res.core_sample_indices_] = True
+
+    class_member_masks = [labels == k for k in unique_labels]
+    # group_means = np.array(
+    #     [
+    #         np.mean(unique_blackout_vecs[labels == k], axis=0)
+    #         for k in unique_labels
+    #         if k != -1
+    #     ]
+    # )
+    label_to_idxs = {
+        k: np.concatenate(
+            [
+                unique_idx_to_ids[i]
+                for i in range(len(unique_idx_to_ids))
+                if labels[i] == k
+            ]
+        )
+        for k in unique_labels
+    }
+
+    # all_idxs = list(np.concatenate(list(groups.values())))
+    # all_idxs.sort()
+    labels_all = np.array([None] * split_properties_filtered.shape[0])
+
+    for label, idxs in label_to_idxs.items():
+        assert all(
+            labels_all[idxs] == None
+        ), "labels_all[idxs] must be None before assigning a label. This indicates that the same index is assigned to multiple labels."
+        labels_all[idxs] = label
+
+    np.save(path_labels_all, labels_all)
+
+    group_masks = {k: np.array(labels_all == k) for k in unique_labels}
+    with gzip.open(path_goup_masks, "wb") as out:
+        pickle.dump(group_masks, out)
+
+
+def get_path_to_clustering_dir(
     n_nodes,
     co2l,
-    n_clusters,
     indicator_type,
-    path_to_indicator_vectors,
-    safe_path,
-    transformation=None,
-    mask=None,
-    weights=None,
+    transformation,
+    n_nodes_split,
+    lost_load_share,
+    use_sclopf=True,
 ):
-    """generates clusters with k-means algorithm and saves the results
+    assert n_nodes is not None, "n_nodes must not be None"
+    assert co2l is not None, "co2l must not be None"
+    assert indicator_type is not None, "indicator_type must not be None"
+    assert transformation is not None, "transformation must not be None"
+    # assert n_nodes_split is not None, "n_nodes_split must not be None"
+    assert lost_load_share is not None, "lost_load_share must not be None"
 
-    Args:
-        n_nodes (int): number of nodes in the network
-        co2l (float): co2 level
-        n_clusters (int): number of clusters
-        indicator_type (string): which type of indicator vector to use
-        path_to_indicator_vectors (string or ): ....
-        path_to_clustering_results (string): ....
-    """
-
-    if weights is None:
-        # indicator_vectors = load_indicator_vectors(
-        #     n_nodes,
-        #     co2l,
-        #     indicator_type,
-        #     path_to_indicator_vectors=path_to_indicator_vectors,
-        #     mask=mask,
-        #     weights=None,
-        # )
-        raise NotImplementedError("weights must not be None for clustering")
+    if transformation is not None:
+        transformation_string = "_" + transformation
     else:
-        indicator_vectors, weights = load_indicator_vectors(
-            n_nodes,
-            co2l,
-            indicator_type,
-            path_to_indicator_vectors=path_to_indicator_vectors,
-            mask=mask,
-            weights=weights,
-        )
-
-    os.makedirs(safe_path, exist_ok=True)
-    with gzip.open(f"{safe_path}/weights.pklz", "wb") as fh_out:
-        pickle.dump(weights, fh_out)
-
-    # transform indicator vector
-    indicator_vectors = transform_indicator_vectors(
-        indicator_vectors, transformation, indicator_type
-    )
-
-    # run KMeans
-    kmeans = KMeans(n_clusters=n_clusters)
-    kmeans.fit(indicator_vectors, sample_weight=weights)
-
-    labels = kmeans.labels_
-    centroids = kmeans.cluster_centers_
-    inertia = kmeans.inertia_
-    silhouette_avg = silhouette_score(indicator_vectors, labels, sample_size=10000)
-    samples_per_cluster = calculate_samples_per_cluster(n_clusters, weights, labels)
-
-    # calculate the mean distance to the centroid for each cluster
-    centroid_mean_distance = calculate_mean_distances_to_centroid(
-        n_clusters, indicator_vectors, labels, centroids
-    )
-
-    with gzip.open(
-        f"{safe_path}/kmeans{n_clusters}.pklz",
-        "wb",
-    ) as fh_out:
-        pickle.dump(
-            [
-                labels,
-                centroids,
-                samples_per_cluster,
-                centroid_mean_distance,
-                inertia,
-                silhouette_avg,
-                #          weights,
-            ],
-            fh_out,
-        )
-
-
-def calculate_samples_per_cluster(
-    n_clusters: int, weights: np.ndarray, labels: np.ndarray
-) -> list:
-    """calculate the weighted number of samples per cluster
-
-    Args:
-        n_clusters (int): number of clusters
-        weights (list): weights given by snapshot lengths
-        labels (list): label of each sample, i.e. which cluster it belongs to
-
-    Returns:
-        _type_: _description_
-    """
-    if weights is None:
-        samples_per_centroid = np.unique(labels, return_counts=True)[1]
+        transformation_string = ""
+    if use_sclopf:
+        path_to_clustering_results = path_to_clustering_results_sclopf
     else:
-        # samples_per_centroid = [
-        #     ((labels == i) * weights).sum() for i in range(n_clusters)
-        # ]
-        samples_per_centroid = np.bincount(
-            labels, weights=weights, minlength=n_clusters
-        ).astype(int)
+        path_to_clustering_results = path_to_clustering_results_lopf
+    if n_nodes_split is None:
+        n_nodes_split_str = ""
+    else:
+        n_nodes_split_str = f"_ns{n_nodes_split}"
+    if isinstance(co2l, (np.ndarray)):
+        co2l = co2l.tolist()
+    if isinstance(co2l, (list)):
+        co2_string = str(co2l).replace(", ", "_")[1:-1]
+    else:
+        co2_string = str(co2l)
 
-    assert (
-        isinstance(samples_per_centroid, np.ndarray)
-        and len(samples_per_centroid.shape) == 1
-    ), "samples_per_centroid is not a 1 dimensional numpy array"
-
-    return samples_per_centroid
-
-
-def calculate_mean_distances_to_centroid(
-    n_clusters: int, indicator_vectors: np.ndarray, labels: list, centroids: list
-):
-    """calculates the mean distance of all samples in a cluster to the centroid
-
-    Args:
-        n_clusters (int): _description_
-        indicator_vectors (np.ndarray): _description_
-        labels (list): _description_
-        centroids (list): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    centroid_mean_distance = []
-    for i_centroid in range(n_clusters):
-        mean_distance = mean_distance_to_centroid(
-            indicator_vectors, centroids, i_centroid, labels
-        )
-        centroid_mean_distance.append(mean_distance)
-    return centroid_mean_distance
-
-
-def mean_distance_to_centroid(indicator_vectors, centroids, i_centroid, cluster_labels):
-    """Calculate Euclidean distance for each data point assigned to centroid
-
-    Args:
-        indicator_vectors (array): indicator
-        i_centroid (_type_): the centroide of interest
-        cluster_labels (array): cluster labels of indicator
-
-    Returns:
-        float: mean distance of all data points assigned to the cluster from the centroid
-    """
-    centroid = centroids[i_centroid]
-    assert (
-        indicator_vectors.shape[1] == centroid.shape[0]
-    ), f"indicator_vectors.shape[1] != centroid.shape[0], {indicator_vectors.shape[1]} != {centroid.shape[0]}"
-
-    distances = [
-        np.linalg.norm(indicator_vector - centroid)
-        for indicator_vector in indicator_vectors[cluster_labels == i_centroid]
-    ]
-    assert bool(np.isnan(distances).any()) is False, "NaN in distances"
-
-    return np.mean(distances)
+    return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2L{co2_string}_n{n_nodes}{n_nodes_split_str}_lls{lost_load_share}/"
 
 
 def load_clustering(
@@ -240,40 +499,5 @@ def load_clustering(
         silhouette_avg,
     )
 
-
-def get_path_to_clustering_dir(
-    n_nodes,
-    co2l,
-    indicator_type,
-    transformation,
-    n_nodes_split,
-    lost_load_share,
-    use_sclopf=True,
-):
-    assert n_nodes is not None, "n_nodes must not be None"
-    assert co2l is not None, "co2l must not be None"
-    assert indicator_type is not None, "indicator_type must not be None"
-    assert transformation is not None, "transformation must not be None"
-    # assert n_nodes_split is not None, "n_nodes_split must not be None"
-    assert lost_load_share is not None, "lost_load_share must not be None"
-
-    if transformation is not None:
-        transformation_string = "_" + transformation
-    else:
-        transformation_string = ""
-    if use_sclopf:
-        path_to_clustering_results = path_to_clustering_results_sclopf
-    else:
-        path_to_clustering_results = path_to_clustering_results_lopf
-    if n_nodes_split is None:
-        n_nodes_split_str = ""
-    else:
-        n_nodes_split_str = f"_ns{n_nodes_split}"
-    if isinstance(co2l, (np.ndarray)):
-        co2l = co2l.tolist()
-    if isinstance(co2l, (list)):
-        co2_string = str(co2l).replace(", ", "_")[1:-1]
-    else:
-        co2_string = str(co2l)
-
-    return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2L{co2_string}_n{n_nodes}{n_nodes_split_str}_lls{lost_load_share}/"
+    # with open(path_group_means, "wb") as out:
+    # np.save(out, group_means)

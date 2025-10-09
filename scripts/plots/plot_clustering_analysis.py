@@ -17,6 +17,8 @@ import gzip
 import pickle
 import copy
 
+from utils.clustering import get_path_to_clustering_dir, load_clustering
+
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -41,7 +43,7 @@ from utils.clustering_visualisation import *
 from utils import data_handling
 from utils.config import path_to_pypsa_network_sclopf, path_to_figures_sclopf
 from utils import cascade_simulation
-from utils.clustering import load_clustering, get_path_to_clustering_dir
+from utils.clustering import get_path_to_clustering_dir
 from scripts.plots.plot_combined_generation_storage import LABEL_FONTSIZE
 from utils.plot_style import *
 

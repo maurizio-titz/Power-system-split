@@ -1,5 +1,7 @@
 import os
 
+from utils.clustering import load_clustering
+
 os.chdir("..")
 import copy
 import gzip
@@ -17,7 +19,7 @@ from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from utils.data_handling import get_actual_co2_level
-from utils.clustering import get_path_to_clustering_dir, load_clustering
+from utils.clustering import get_path_to_clustering_dir
 from utils.config import (
     path_to_clustering_results_sclopf,
     path_to_evaluation_results_lopf,

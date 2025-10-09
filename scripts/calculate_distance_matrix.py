@@ -23,7 +23,7 @@ from sklearn.model_selection import ParameterGrid
 from sklearn_extra.cluster import KMedoids
 from tqdm import tqdm
 from filter_splits import split_mask
-from utils.clustering_uncertainty import (
+from utils.clustering import (
     balanced_overlap_distance,
     balanced_overlap_distance_weighted,
     calc_distance_matrix,
@@ -39,7 +39,6 @@ from utils.data_handling import get_co2_levels
 
 from utils import data_handling
 from utils.clustering import (
-    cluster_kmeans,
     get_path_to_clustering_dir,
 )
 from utils.clustering_visualisation import (
