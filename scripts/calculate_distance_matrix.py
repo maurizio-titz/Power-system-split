@@ -58,7 +58,8 @@ from utils.config import (
     path_to_vis_results_sclopf,
 )
 
-
+decay_factor_clustering = 1
+max_distance_clustering = 1
 use_sclopf = True
 
 if use_sclopf:
@@ -367,8 +368,8 @@ if __name__ == "__main__":
     # ignore splits with less than 5% lost load share
     min_n_nodes_split, min_lost_load_share = None, 0.05
 
-    # co2l_list = get_co2_levels(n_nodes)
-    co2l_list = [0.6]
+    co2l_list = get_co2_levels(n_nodes)
+    # co2l_list = [0.6]
 
     indicator_type, transformation = "rocof", "blackout"
 
@@ -439,8 +440,8 @@ if __name__ == "__main__":
                 )
 
             # # calculate distance matrix
-            decay_factor = 1
-            max_distance = 3
+            decay_factor = decay_factor_clustering
+            max_distance = max_distance_clustering
 
             typed_katz_centralities = typed_katz_centralities_dict[
                 (decay_factor, max_distance)

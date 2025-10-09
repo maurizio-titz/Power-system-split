@@ -31,7 +31,7 @@ from utils.clustering_uncertainty import (
     weighted_distance_wrapper,
 )
 from utils.indicator_utils import load_indicator_vectors
-from utils.visualization import get_co2_levels
+from utils.data_handling import get_co2_levels
 
 from utils import data_handling
 from utils.clustering import (
@@ -55,6 +55,10 @@ from utils.config import (
 )
 from scipy.stats import uniform
 from scipy.stats import loguniform
+from scripts.calculate_distance_matrix import (
+    decay_factor_clustering,
+    max_distance_clustering,
+)
 
 use_sclopf = True
 
@@ -67,7 +71,7 @@ else:
     path_to_pypsa_network = path_to_pypsa_network_lopf
     path_to_vis_results = path_to_vis_results_lopf
 
-n_clusters_list = [32, 64, 128, 256]
+n_clusters_list = [32, 64, 80, 128, 150, 256]
 clustering_params = {
     # "optics": {
     #     "clustering_algorithm": OPTICS,
@@ -81,14 +85,25 @@ clustering_params = {
     "agglomerative": {
         "clustering_algorithm": AgglomerativeClustering,
         "n_clusters": n_clusters_list,
-        "linkage": ["average", "complete", "single"],
+        "linkage": [
+            "average",
+            "complete",
+        ],  # "single" is not used as it leads to bad results
         "metric": ["precomputed"],
     },
+    # "agglomerative": {
+    #     "clustering_algorithm": AgglomerativeClustering,
+    #     "linkage": ["average", "complete"],
+    #     "n_clusters": [None],  # has to be set when using distance threshold
+    #     "compute_full_tree": [True],  # has to be set when using distance threshold
+    #     "distance_threshold": np.logspace(-1, np.log10(0.3), 16),
+    #     "metric": ["precomputed"],
+    # },
     "kmedoids": {
         "clustering_algorithm": KMedoids,
         "n_clusters": n_clusters_list,
         "metric": ["precomputed"],
-        "method": ["alternate"],
+        "method": ["pam"],
     },
 }
 
@@ -101,7 +116,7 @@ def get_str_from_params(params):
     sorted_keys = sorted(params_.keys())
     return "_".join(
         [
-            f"{k}{params_[k].capitalize() if isinstance(params_[k], str) else format(params_[k], '.2g')}"
+            f"{k}{params_[k].capitalize() if isinstance(params_[k], str) else ('None' if params_[k] is None else format(params_[k], '.2g'))}"
             for k in sorted_keys
         ]
     )
@@ -147,7 +162,8 @@ def run_clustering(
     sparsified_distance_matrix: bool = False,
     skip_existing: bool = True,
 ):
-    params["min_samples"] = int(params["min_samples"])
+    if "min_samples" in params:
+        params["min_samples"] = int(params["min_samples"])
     params_str = get_str_from_params(params)
 
     save_path = (
@@ -193,17 +209,11 @@ def run_clustering(
                 f"File {save_path} already exists. Set skip_existing to True to skip this step."
             )
 
-    # Load split_props_filtered from disk in the worker process
-    # split_props_filtered = pd.read_hdf(split_props_filtered_path, key="split_props")
-    # prepare_clusters_for_analysis(save_path, unique_vecs_dict, split_props_filtered)
-
 
 if __name__ == "__main__":
 
     indicator_type_transformation = [
-        # ("blackout"),
         ("rocof", "blackout"),
-        # ("lshare", "main_comp_most_frequent_lshare"),
     ]
 
     n_nodes = 600
@@ -214,6 +224,7 @@ if __name__ == "__main__":
     min_n_nodes_split, min_lost_load_share = None, 0.05
 
     co2l_list = get_co2_levels(n_nodes)
+    # co2l_list = 0.6
     print(f"co2l_list: {co2l_list}")
 
     indicator_type, transformation = indicator_type_transformation[0]
@@ -260,8 +271,8 @@ if __name__ == "__main__":
         logger.info(f"Standard distance matrix path: {standard_save_path}")
 
         # Katz-weighted distance matrix (using the same parameters as in calculate_distance_matrix.py)
-        decay_factor = 1
-        max_distance = 3
+        decay_factor = decay_factor_clustering
+        max_distance = max_distance_clustering
         katz_dist_metric_str = "bACC"
         katz_weighting_str = f"_katz_maxD{max_distance}_decay{decay_factor}"
         katz_save_path = (
@@ -295,10 +306,11 @@ if __name__ == "__main__":
             # Check if distance matrix exists
             matrix_file = save_path_distance_matrix + ".npy"
             if not os.path.exists(matrix_file):
-                logger.warning(
-                    f"Distance matrix not found: {matrix_file}. Skipping {distance_name} clustering."
-                )
-                continue
+                raise FileNotFoundError(f"Distance matrix not found: {matrix_file}")
+                # logger.warning(
+                #     f"Distance matrix not found: {matrix_file}. Skipping {distance_name} clustering."
+                # )
+                # continue
 
             logger.info(f"Processing distance matrix: {distance_name}")
             logger.info(
@@ -339,7 +351,9 @@ if __name__ == "__main__":
                         param_grid, desc=f"{clust_alg_name} {distance_name}"
                     )
                 )
-                logger.info(f"OPTICS clustering completed for {distance_name}")
+                logger.info(
+                    f"{clust_alg_name} clustering completed for {distance_name}"
+                )
 
     logger.info("Preparing clusters for analysis")
     processed_files = 0
