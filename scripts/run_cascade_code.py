@@ -15,8 +15,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+
 sys.path.append("./")
 # Send messages to mattermost
+from utils.data_handling import get_co2_levels
 import utils.config as cfg
 from utils import (
     cascade_simulation,
@@ -167,6 +169,7 @@ def run_cascade_dual_line_failures(
     line_mitigation_dict: dict = None,
     stop_timestamp_str: str = None,
     n_checkpoints: int = 500,
+    overwrite: bool = False,
 ):
     """Run cascade experiments by introducing dual line failures.
 
@@ -207,6 +210,23 @@ def run_cascade_dual_line_failures(
 
     if not use_sclopf:
         fpath_out += "_lopf"
+
+    if save_whole_cascades:
+        fpath_out += "_allcascades"
+
+    if line_mitigation_dict is not None:
+        fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4g}"
+
+    if stop_timestamp_str is not None:
+        fpath_out += f"_stopped_{stop_timestamp_str}"
+
+    if not overwrite and os.path.exists(fpath_out + ".pklz"):
+        print(
+            f"File {fpath_out + '.pklz'} already exists. Please remove it or set 'overwrite' to True."
+        )
+        return
+    else:
+        print(f"Running cascade simulations for {fpath_out}...")
 
     # Load PyPSA network, the graph of the subnetwork and its matrices
     network = data_handling.load_pypsa_network_from_path(full_path_to_file, use_sclopf)
@@ -362,15 +382,6 @@ def run_cascade_dual_line_failures(
             ):
                 break
 
-    if save_whole_cascades:
-        fpath_out += "_allcascades"
-
-    if line_mitigation_dict is not None:
-        fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4g}"
-
-    if stop_timestamp_str is not None:
-        fpath_out += f"_stopped_{stop_timestamp_str}"
-
     ### Simulation of N-2 failures ###
     print("\n#### N-2 failures: Co2 level", co2l, " | #Nodes:", n_nodes, " ####")
     splitting_cascades = dict()
@@ -470,20 +481,19 @@ def run_cascade_dual_line_failures(
 if __name__ == "__main__":
 
     # Load arguments
-    co2l_in = float(sys.argv[1])
-    n_nodes_in = int(sys.argv[2])
-    # stop_timestamp_str = "2013-01-01 04:00:00"
-    if len(sys.argv) > 3:
-        save_whole_cascades_in = bool(sys.argv[3])
-    else:
-        save_whole_cascades_in = False
-    print("Starting single line failures")
-    run_cascade_dual_line_failures(
-        co2l_in,
-        n_nodes_in,
-        save_whole_cascades=save_whole_cascades_in,
-        use_sclopf=True,
-        n_checkpoints=20,
-        check_n1_security=False,
-        # line_mitigation_dict=None,
-    )
+    n_nodes_in = 600
+    co2l_in = get_co2_levels(n_nodes_in)
+    if isinstance(co2l_in, float):
+        co2l_in = [co2l_in]
+    save_whole_cascades_in = False
+
+    for co2l in co2l_in:
+        run_cascade_dual_line_failures(
+            co2l,
+            n_nodes_in,
+            save_whole_cascades=save_whole_cascades_in,
+            use_sclopf=True,
+            n_checkpoints=20,
+            check_n1_security=False,
+            # line_mitigation_dict=None,
+        )
