@@ -14,54 +14,6 @@ from collections import OrderedDict
 sys.path.append("./")
 
 
-def calc_nodewise_uncertainties(
-    laplacian: np.matrix,
-    node_class_vectors: np.ndarray,
-    smothin_order=1,
-    save_dir=None,
-) -> np.ndarray:
-    """calculates the nodewise uncertainty, i.e. how close the node is to nodes of the opposite class.
-
-    Args:
-        laplacian (np.matrix): graph laplacian
-        node_class_vector (np.ndarray): binary vector of length n_nodes holding the class [0,1] of each node.
-        order
-
-    Returns:
-        np.ndarray: uncertainty vector
-    """
-    assert (
-        laplacian.shape[0] == laplacian.shape[1] == node_class_vectors.shape[1]
-    ), "laplacian and node_class_vector must have the same shape"
-
-    # Compute the shortest path distance dictionary from the Laplacian
-    graph = scipy.sparse.csgraph.csgraph_from_dense(laplacian, null_value=0)
-    shortest_path_distances = scipy.sparse.csgraph.dijkstra(
-        graph, directed=False, return_predecessors=False
-    )
-    if smothin_order > 1:
-        # smooth the shortest path distances
-        shortest_path_distances = np.power(
-            shortest_path_distances.to_dense(), smothin_order
-        )
-
-    closeness = 1 / shortest_path_distances
-    np.fill_diagonal(closeness, 0)
-
-    uncertainties = closeness * node_class_vectors
-    uncertainties = np.abs(uncertainties)
-
-    # save uncertainties to file
-    if save_dir is not None:
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        with gzip.open(f"{save_dir}/uncertainties.pklz", "wb") as fh_out:
-            pickle.dump(uncertainties, fh_out)
-
-    return uncertainties
-
-
 def typed_katz_centrality_single_vector(
     adjecency_matrix: np.matrix,
     node_class_vectors: np.ndarray,
@@ -108,23 +60,15 @@ def typed_katz_centrality_batch(
 
     if scipy.sparse.issparse(adjacency_matrix):
         adjacency_matrix = adjacency_matrix.toarray()
-    # decay_factors = np.array([decay_factor**d for d in range(1, max_distance + 1)])
-
-    # adjecency_matrix_powers = np.array([np.linalg.matrix_power(adjacency_matrix, d) for d in range(1, max_distance + 1)])
-
-    # k hop normalization
-    # adjecency_matrix_powers_norm = np.array([normalize(A_k, axis=1, norm='l1') for A_k in adjecency_matrix_powers])
-
-    # full neighborhood normalization
-    # full_neighborhood_weight = [np.sum(A_k, axis=1)*decay_factor_k for decay_factor_k, A_k in zip(decay_factors,adjecency_matrix_powers)]
-    # full_neighborhood_weights = np.sum(adjecency_matrix_powers, axis=1)*decay_factors
 
     c = np.sum(
         [
             node_class_vectors
             @ normalize(np.linalg.matrix_power(adjacency_matrix, d), axis=0, norm="l1")
             * d ** (-decay_factor)
-            for d in range(1, max_distance)  # +1 because 0 would be the identity matrix
+            for d in range(
+                1, max_distance + 1
+            )  # +1 because 0 would be the identity matrix
         ],
         axis=0,
     )
@@ -147,76 +91,6 @@ def product_weighted_hamming_distance(
     divs = node_classes0 != node_classes1
     return np.linalg.norm(
         np.multiply(node_weight0[divs], node_weight1[divs]), ord=order
-    )
-
-
-def uncertainty_distance_from_tuple(
-    node_classes0,
-    node_uncertainties0,
-    node_classes1,
-    node_uncertainties1,
-    order: int = 1,
-) -> float:
-    """calculates the distance between two indicator vectors."""
-
-    divs = node_classes0 != node_classes1
-    return np.linalg.norm(
-        (node_uncertainties0[divs].dot(node_uncertainties1[divs])), ord=order
-    )
-
-
-def binning_uncertainty_distance(
-    node_classes0,
-    node_classes1,
-    node_uncertainties0,
-    node_uncertainties1,
-    order: int = 1,
-    max_relative_blackout_size_difference: float = 0.1,
-) -> float:
-    """calculates the distance between two indicator vectors, if the relative black out size difference is below max_relative_blackout_size_difference, otherwise returns infinity."""
-
-    if node_classes0.sum() > node_classes1.sum():
-        node_classes0, node_classes1 = (
-            node_classes1,
-            node_classes0,
-        )
-    if node_classes0.sum() < node_classes1.sum() * (
-        1 - max_relative_blackout_size_difference
-    ):
-        return np.inf
-    else:
-        return product_weighted_hamming_distance(
-            node_classes0,
-            node_classes1,
-            node_uncertainties0,
-            node_uncertainties1,
-            order,
-        )
-
-
-def binning_uncertainty_distance_wrapper(
-    node_classes_tuple,
-    node_uncertainties_tuple,
-    order: int = 1,
-    max_relative_blackout_size_difference: float = 0.1,
-) -> float:
-    """
-    Not used!
-    calculates the distance between two indicator vectors. takes a tuple of the node classes and uncertainties for each samples, so it can be used as a distance function in the clustering algorithm.
-    """
-
-    node_classes0 = node_classes_tuple[0]
-    node_classes1 = node_classes_tuple[1]
-    node_uncertainties0 = node_uncertainties_tuple[0]
-    node_uncertainties1 = node_uncertainties_tuple[1]
-
-    return binning_uncertainty_distance(
-        node_classes0,
-        node_classes1,
-        node_uncertainties0,
-        node_uncertainties1,
-        order=order,
-        max_relative_blackout_size_difference=max_relative_blackout_size_difference,
     )
 
 
@@ -270,53 +144,6 @@ def weighted_distance_wrapper(
         node_weights1,
         **kwargs,
     )
-
-
-def weighted_bACC_dist(
-    node_classes0,
-    node_classes1,
-    node_weights0=None,
-    node_weights1=None,
-) -> float:
-    """calculates the balanced accuracy between two indicator vectors, weighted by the product of the node uncertainties."""
-
-    if node_weights0 is not None and node_weights1 is not None:
-        node_weights = np.multiply(node_weights0, node_weights1)
-    else:
-        node_weights = None
-
-    # balanced_accuracy_score is not symmetric, so we take the mean of both directions
-    bACC = (
-        balanced_accuracy_score(
-            node_classes0, node_classes1, sample_weight=node_weights
-        )
-        + balanced_accuracy_score(
-            node_classes1, node_classes0, sample_weight=node_weights
-        )
-    ) / 2
-
-    return 1 - bACC
-
-
-def symmetric_weighted_bACC_dist(
-    node_classes0,
-    node_classes1,
-    node_weights0=None,
-    node_weights1=None,
-) -> float:
-    """calculates the symmetric balanced accuracy between two indicator vectors, weighted by the product of the node uncertainties."""
-
-    if node_weights0 is not None and node_weights1 is not None:
-        node_weights = np.multiply(node_weights0, node_weights1)
-    else:
-        node_weights = None
-
-    C = confusion_matrix(node_classes0, node_classes1, sample_weight=node_weights)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        per_class = np.diag(C) / C.sum(axis=1)
-        per_class_T = np.diag(C) / C.sum(axis=0)
-
-    return 1 - (np.mean(per_class) + np.mean(per_class_T)) / 2
 
 
 def balanced_overlap_distance_weighted(
@@ -452,15 +279,6 @@ def get_order_by_blackout_size(indicator_vectors: np.ndarray):
     blackout_sizes_sorted = blackout_sizes[order]
 
     return blackout_sizes_sorted, indicator_vectors_sorted, order
-
-
-def get_neighbour_candidates(
-    indicator_vectors: np.ndarray,
-    max_relative_blackout_size_difference: float,
-):
-    blackout_sizes_sorted, indicator_vectors_sorted, order = get_order_by_blackout_size(
-        indicator_vectors
-    )
 
 
 def calculate_distance_matrix(
