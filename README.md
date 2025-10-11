@@ -18,19 +18,18 @@ To post message to mattermost, please set the incoming 'mattermost_url' in [util
 
 ## Content
 
-The `scripts` folder contains scripts to reproduce the paper results. The `notebook` folder contains a notebook to produce the paper figures from the results. The `utils` folder contains the relevant utilities for cascade simulation and evaluation, as well as functions for visualisation and data handling. 
+The `scripts` folder contains scripts to reproduce the paper results. The `scripts/plots` folder contains a scripts to produce the paper figures from these results. The `utils` folder contains the relevant utilities for cascade simulation and evaluation, as well as functions for visualisation and data handling. 
 
 ## Usage
 
 The `scripts` contain our workflow with five stages:
 
 - `calc_pre_outage_data.py`: Calculate inertia and other properties from the (solved) PyPSA networks.
-- `run_cascade_code.py` : Run the cascade algorithm on the PyPSA networks.
+- `run_cascade_code.py` : Run the cascade algorithm on the PyPSA networks. This can take a few weeks depending on compute power.
 - `evaluate_cascade.py`: Evaluating the cascade results, e.g., inertia and load imbalance for each split, indicator vectors. Run only after `run_cascade_code.py` has finished.
 - `prepare_split_visualization.py`: Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits. Run only after `evaluate_cascade.py` has finished.
 - `calc_inertia_placement.py` : Determine optimal inertia placement to mitigate the impact of system splits. Run only after `prepare_split_visualization.py` has finished.
-- `run_clustering_uncertainty_dist.py`: clusters the blackouts of all emission level scenarios. Run only after `prepare_split_visualization.py` has finished.
-- `calculate_distance_matrix.py`: calculates the distance matrix for clustering blackouts
+- `calculate_distance_matrix.py`: calculates the distance matrix for clustering blackouts. Run only after `prepare_split_visualization.py` has finished.
 - `run_clustering_parallel.py`: applies clustering algorithms to the distance matrix
 All code assume that your PYTHONPATH contains the repository directory and the code is executed in there, too. 
 
