@@ -29,9 +29,7 @@ from utils.clustering import (
     calc_distance_matrix,
     get_unique_vectors_with_weights,
     prepare_clusters_for_analysis,
-    sparsify_distance_matrix,
     typed_katz_centrality_batch,
-    weighted_bACC_dist,
     weighted_distance_wrapper,
 )
 from utils.indicator_utils import load_indicator_vectors

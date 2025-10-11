@@ -17,8 +17,6 @@ import gzip
 import pickle
 import copy
 
-from utils.clustering import get_path_to_clustering_dir, load_clustering
-
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -37,6 +35,7 @@ root_path = "./"
 sys.path.append(root_path)
 
 # Import project utilities
+from utils.clustering import get_path_to_clustering_dir, load_clustering
 from utils.data_handling import get_co2_levels, get_actual_co2_level
 from utils.config import path_to_clustering_results_sclopf, path_to_vis_results_sclopf
 from utils.clustering_visualisation import *

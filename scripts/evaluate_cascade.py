@@ -26,7 +26,6 @@ from utils import data_handling, send_mattermost_messages, subgraph_evaluation
 from utils.alternative_split_indicator_vectors import (  # run_all_co2_lvl_node_based,
     extract_nodal_rocof_and_load_share_in_split_from_old_results,
     find_failed_edge_indicator_vector_for_cascade_results,
-    run_all_co2_lvl_edge_based,
 )
 from utils.config import (
     path_to_cascade_results_lopf,
@@ -351,8 +350,7 @@ if __name__ == "__main__":
     import os
 
     n_nodes_in = 600
-    # co2l_in = get_co2_levels(n_nodes_in)
-    co2l_in = [0.05]
+    co2l_in = get_co2_levels(n_nodes_in)
 
     if isinstance(co2l_in, float):
         co2l_in = [co2l_in]

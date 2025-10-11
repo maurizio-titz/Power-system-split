@@ -51,34 +51,32 @@ snet_index = 0
 # Load arguments
 n_nodes = 600
 
-from utils.config import path_to_sclopf_data
 import datetime
 
 print("Available CO2 Levels:")
 co2l_list = get_co2_levels(n_nodes)
 
 print(sorted(co2l_list))
-# Load PyPSA network and the graph of the subnetwork
-network = data_handling.load_pypsa_network(
-    co2lvl=0.0, n_nodes=n_nodes, use_sclopf=use_sclopf
-)
-nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
-I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
-    nx_graph
-)
 
 #### Cluster split components ####
 print("\nClustering split components...\n")
 
 # Initialize results
 component_props = pd.DataFrame()
-# indicator_vectors = np.empty((0, nx_graph.number_of_nodes()), int)
 
 # Append all indicator vectors and components props
 print("Concatenate components...")
 for co2l in tqdm(co2l_list):
 
-    # indicator_vec_level = np.load(path_to_evaluation_results + f'indicator_vectors_Co2L{co2l}_n{n_nodes}.npy')
+    # Load PyPSA network and the graph of the subnetwork
+    network = data_handling.load_pypsa_network(
+        co2lvl=0.0, n_nodes=n_nodes, use_sclopf=use_sclopf
+    )
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
+        nx_graph
+    )
+
     if use_sclopf:
         component_props_level = pd.read_hdf(
             path_to_evaluation_results_sclopf
@@ -98,6 +96,10 @@ for co2l in tqdm(co2l_list):
 #### Cluster splits ####
 print("\n### Extracting splits ###\n")
 print("Current time:", datetime.datetime.now())
+
+snapshot_weightings = data_handling.load_pypsa_network(
+    co2lvl=0.0, n_nodes=n_nodes, use_sclopf=use_sclopf
+).snapshot_weightings
 
 split_groups = component_props.groupby(["co2l", "time_stamp", "split_number"])
 split_props = pd.DataFrame(
@@ -136,7 +138,7 @@ split_props["largest_component_load_share"] = split_groups.load_share.max().asty
     float
 )
 split_props["load"] = split_groups.load.sum().astype(float)
-split_props["snapshot_weighting"] = network.snapshot_weightings.generators.loc[
+split_props["snapshot_weighting"] = snapshot_weightings.generators.loc[
     split_props.index.get_level_values("time_stamp")
 ].values.astype(int)
 split_props["co2l"] = split_props.index.get_level_values("co2l")
@@ -160,22 +162,31 @@ likelihoods_primary = dict(keys=co2l_list)
 likelihoods_secondary = dict(keys=co2l_list)
 likelihoods_total = dict(keys=co2l_list)
 
-bridge_idxs = data_handling.nx_edges_to_matrix_indices(nx.bridges(nx_graph), nx_graph)
-if use_sclopf:
-    n_2_failures = cascade_simulation.calc_possible_double_line_failures(
-        num_parallels, ignored_idxs=bridge_idxs
-    )
-    # incorporating the weighting of the snapshots
-    number_of_simulations = (
-        len(n_2_failures) * network.snapshot_weightings.generators.sum()
-    )
-else:
-    number_of_simulations = (
-        nx_graph.number_of_edges() - len(bridge_idxs)
-    ) * network.snapshot_weightings.generators.sum()
-print(number_of_simulations)
-
 for co2l in co2l_list[::-1]:
+
+    network = data_handling.load_pypsa_network(
+        co2lvl=co2l, n_nodes=n_nodes, use_sclopf=use_sclopf
+    )
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
+        nx_graph
+    )
+    bridge_idxs = data_handling.nx_edges_to_matrix_indices(
+        nx.bridges(nx_graph), nx_graph
+    )
+    if use_sclopf:
+        n_2_failures = cascade_simulation.calc_possible_double_line_failures(
+            num_parallels, ignored_idxs=bridge_idxs
+        )
+        # incorporating the weighting of the snapshots
+        number_of_simulations = (
+            len(n_2_failures) * network.snapshot_weightings.generators.sum()
+        )
+    else:
+        number_of_simulations = (
+            nx_graph.number_of_edges() - len(bridge_idxs)
+        ) * network.snapshot_weightings.generators.sum()
+    print(number_of_simulations)
 
     print("Co2 level %.2f" % co2l)
 

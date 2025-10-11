@@ -485,13 +485,13 @@ if __name__ == "__main__":
     co2l_in = get_co2_levels(n_nodes_in)
     if isinstance(co2l_in, float):
         co2l_in = [co2l_in]
-    save_whole_cascades_in = False
+    save_whole_cascades = False
 
     for co2l in co2l_in:
         run_cascade_dual_line_failures(
             co2l,
             n_nodes_in,
-            save_whole_cascades=save_whole_cascades_in,
+            save_whole_cascades=save_whole_cascades,
             use_sclopf=True,
             n_checkpoints=20,
             check_n1_security=False,
