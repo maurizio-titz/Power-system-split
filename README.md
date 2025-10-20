@@ -22,7 +22,7 @@ The `scripts` folder contains scripts to reproduce the paper results. The `scrip
 
 ## Usage
 
-The `scripts` contain our workflow with five stages:
+The `scripts` contain our workflow:
 
 - `calc_pre_outage_data.py`: Calculate inertia and other properties from the (solved) PyPSA networks.
 - `run_cascade_code.py` : Run the cascade algorithm on the PyPSA networks. This can take a few weeks depending on compute power.
@@ -30,7 +30,8 @@ The `scripts` contain our workflow with five stages:
 - `prepare_split_visualization.py`: Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits. Run only after `evaluate_cascade.py` has finished.
 - `calc_inertia_placement.py` : Determine optimal inertia placement to mitigate the impact of system splits. Run only after `prepare_split_visualization.py` has finished.
 - `calculate_distance_matrix.py`: calculates the distance matrix for clustering blackouts. Run only after `prepare_split_visualization.py` has finished.
-- `run_clustering_parallel.py`: applies clustering algorithms to the distance matrix
+- `run_clustering_parallel.py`: applies clustering algorithms to the distance matrix. Run only after `calculate_distance_matrix.py` has finished.
+
 All code assume that your PYTHONPATH contains the repository directory and the code is executed in there, too. 
 
 ## Input data and results
