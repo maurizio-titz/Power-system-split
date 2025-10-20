@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """Evaluate the results of the cascade experiments to determine
-the properties of the system splits."""
+the properties of the system splits. Without arguments, all CO2 levels are processed sequentially. This can take several days, so parallel execution is recommended.
+"""
 
 import gzip
 import os
@@ -346,15 +347,27 @@ def evaluate_cascade(
 
 
 if __name__ == "__main__":
+    import argparse
     from utils.config import path_to_sclopf_data
     import os
 
-    n_nodes_in = 600
-    co2l_in = get_co2_levels(n_nodes_in)
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="Evaluate cascade for specific CO2 levels"
+    )
+    parser.add_argument("--co2l", type=float, help="CO2 level to process")
+    parser.add_argument("--n_nodes", type=int, default=600, help="Number of nodes")
+    parser.add_argument(
+        "--all", action="store_true", help="Process all CO2 levels sequentially"
+    )
 
-    if isinstance(co2l_in, float):
-        co2l_in = [co2l_in]
-    for co2l_in in co2l_in:
+    args = parser.parse_args()
+
+    if args.co2l is not None:
+        # Process single CO2 level (for parallel execution via bash)
+        co2l_in = args.co2l
+        n_nodes_in = args.n_nodes
+
         print(f"###############################################################")
         print(f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}")
         print(f"###############################################################")
@@ -411,3 +424,78 @@ if __name__ == "__main__":
             overwrite=False,
             use_sclopf=True,
         )
+
+        print(f"Completed processing CO2 level {co2l_in}")
+
+    elif args.all:
+        # Process all CO2 levels sequentially (original behavior)
+        n_nodes_in = args.n_nodes
+        co2l_list = get_co2_levels(n_nodes_in)
+
+        if isinstance(co2l_list, float):
+            co2l_list = [co2l_list]
+
+        for co2l_in in co2l_list:
+            print(f"###############################################################")
+            print(
+                f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
+            )
+            print(f"###############################################################")
+            try:
+                evaluate_cascade(
+                    co2l_in,
+                    n_nodes_in,
+                    use_sclopf=True,
+                    eval_indicator_vectors=True,
+                    overrwrite=True,
+                    # end_time_str="2013-01-02 00:00",
+                )
+            except FileExistsError as e:
+                print(
+                    f"Skipping evaluation for {co2l_in} and {n_nodes_in} due to existing results."
+                )
+
+            print(f"###############################################################")
+            print(
+                f"Getting edge indicator vecs for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
+            )
+            print(f"###############################################################")
+            find_failed_edge_indicator_vector_for_cascade_results(
+                co2l_in,
+                n_nodes_in,
+                save_res=True,
+                verbose=True,
+                overwrite=False,
+                use_sclopf=True,
+            )
+            print(f"###############################################################")
+            print(
+                f"Extracting nodal RoCoF and load share for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
+            )
+            print(f"###############################################################")
+            extract_nodal_rocof_and_load_share_in_split_from_old_results(
+                co2l_in,
+                n_nodes_in,
+                save_res=True,
+                verbose=True,
+                overwrite=False,
+                use_sclopf=True,
+            )
+            print(f"###############################################################")
+            print(
+                f"Running all CO2 level edge based for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
+            )
+            print(f"###############################################################")
+            find_failed_edge_indicator_vector_for_cascade_results(
+                co2l_in,
+                n_nodes_in,
+                save_res=True,
+                verbose=True,
+                overwrite=False,
+                use_sclopf=True,
+            )
+    else:
+        print(
+            "Please specify either --co2l <value> for single CO2 level or --all for all levels"
+        )
+        parser.print_help()
