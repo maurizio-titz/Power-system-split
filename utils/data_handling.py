@@ -38,7 +38,7 @@ def build_networkx_graph(pypsa_network, snet_index=None, assert_order=True):
     positions = pypsa_network.buses[["x", "y"]]
     pos = dict(zip(positions.index, list(zip(positions.x, positions.y))))
 
-    branches = branches[["bus0", "bus1", "x_pu_eff", "s_nom", "num_parallel"]]
+    branches = branches[["bus0", "bus1", "x_pu_eff", "s_nom_opt", "num_parallel"]]
 
     F = nx.Graph()
 
@@ -159,20 +159,42 @@ def get_effective_injections(network, snapshot, nx_graph):
     return P0
 
 
-def load_pypsa_network(co2lvl, n_nodes, use_sclopf: bool = True):
+def load_pypsa_network(
+    co2lvl, n_nodes, use_sclopf: bool = True, correct_path: bool = True
+):
     if not use_sclopf:
-        return load_pypsa_network_from_path(
-            path_to_pypsa_network_lopf
-            + f"elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-3H.nc",
-            use_sclopf,
-        )
+        try:
+            return load_pypsa_network_from_path(
+                path_to_pypsa_network_lopf
+                + f"elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-3H.nc",
+                use_sclopf,
+            )
+        except AssertionError as e:
+            if correct_path:
+                return load_pypsa_network_from_path(
+                    path_to_pypsa_network_lopf
+                    + f"elec_s_{n_nodes}_ec_lcopt_Co2L{co2lvl}-2920SEG.nc",
+                    use_sclopf,
+                )
+            else:
+                raise e
 
     else:
-        return load_pypsa_network_from_path(
-            path_to_pypsa_network_sclopf
-            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-2920SEG.nc",
-            use_sclopf,
-        )
+        try:
+            return load_pypsa_network_from_path(
+                path_to_pypsa_network_sclopf
+                + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-2920SEG.nc",
+                use_sclopf,
+            )
+        except AssertionError as e:
+            if correct_path:
+                return load_pypsa_network_from_path(
+                    path_to_pypsa_network_sclopf
+                    + f"sclopf-elec_s_{n_nodes}_ec_lcopt_Co2L{co2lvl}-2920SEG.nc",
+                    use_sclopf,
+                )
+            else:
+                raise e
 
 
 def load_pypsa_network_from_path(path_to_pypsa_network: str, use_sclopf: bool):
