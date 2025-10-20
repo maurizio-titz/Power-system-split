@@ -202,7 +202,7 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
     # Filter out very small components
     if load_normalization:
         # component_props_filtered = component_props
-        component_props_filtered = component_props[component_props.load_share > 0.05]
+        component_props_filtered = component_props[component_props.load_share > 0.1]
     else:
         component_props_filtered = component_props[component_props.load_share > 0.1]
 
@@ -424,12 +424,12 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
 
 
 if __name__ == "__main__":
-    # create_split_statistics_plot()
-    # for load_norm in [True, False]:
-    #     for blackout_stat in [True, False]:
-    #         create_split_statistics_plot(
-    #             load_normalization=load_norm, show_blackout_stats=blackout_stat
-    #         )
+    create_split_statistics_plot()
+    for load_norm in [True, False]:
+        for blackout_stat in [True, False]:
+            create_split_statistics_plot(
+                load_normalization=load_norm, show_blackout_stats=blackout_stat
+            )
 
     # Create standalone blackout statistics plot
     create_blackout_statistics_plot()

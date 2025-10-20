@@ -97,10 +97,8 @@ def create_combined_generation_storage_plot():
 
     # Load network graph and node positions
     snet_index = 0
-    network = data_handling.load_pypsa_network_from_path(
-        path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
-        True,
+    network = data_handling.load_pypsa_network(
+        n_nodes=n_nodes, co2lvl=0.0, use_sclopf=True
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
     pos = nx.get_node_attributes(nx_graph, "pos")

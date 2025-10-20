@@ -252,6 +252,7 @@ def save_figure(
     for fmt in formats:
         full_path = os.path.join(save_path, f"{filename}.{fmt}")
         fig.savefig(full_path, format=fmt, dpi=dpi, bbox_inches=bbox_inches)
+        assert os.path.isfile(full_path), f"Failed to save figure: {full_path}"
         print(f"Saved: {full_path}")
 
 

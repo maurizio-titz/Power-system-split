@@ -364,15 +364,14 @@ def create_clustering_analysis_plot(fname="", n_subplots=12, alg_filter=None):
             ax.axis("off")
 
             # Add cluster information
-            cluster_label = (
-                f"{plot_count},"
-                rf"\\"
-                rf"$R={round(centroid_row.lost_load_share*100, ndigits=1)}\%$"
-                rf"\\"
-                rf"$\beta={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100)}\%$"
-            )
-            # cluster_label = cluster_label
-            # cluster_label = f"" + cluster_label
+            # cluster_label = (
+            #     f"{plot_count},"
+            #     rf"\\"
+            #     rf"$R={round(centroid_row.lost_load_share*100, ndigits=1)}\%$"
+            #     rf"\\"
+            #     rf"$\beta={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100)}\%$"
+            # )
+            cluster_label = f"{plot_count}," rf"\\" f"test line2," rf"\\" f"test line3"
             ax.set_title(
                 cluster_label,
                 y=0.74,

@@ -10,5 +10,6 @@ results/
 *.h5
 *.png
 *.tif
+*.log
 
 utils/config_local.py
