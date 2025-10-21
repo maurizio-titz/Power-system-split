@@ -1,12 +1,18 @@
 #!/usr/bin/env python
 
-
-root_path = "/srv/data/jlange/power-system-split/no_extensions/"  # add the root path for your data and results here
+use_extensions = True  # set to False if no line extensions should be considered
+if use_extensions:
+    root_path = "/srv/data/jlange/power-system-split/w_extensions/"  # add the root path for your data and results here
+else:
+    root_path = "/srv/data/jlange/power-system-split/no_extensions/"  # add the root path for your data and results here
 
 data_path = root_path + "/data/"
+path_to_grid_data = root_path + "/grid_params/"
 results_path = root_path + "/results/"
 path_to_sclopf_data = root_path + "/data/European_networks_sclopf/"
-path_to_lopf_data = root_path + "/data/European_networks_lopf/"
+# path_to_lopf_data = root_path + "/data/European_networks_lopf/"
+path_to_lopf_data = "/srv/data/jlange/PYPSA3/sclopf-iter/workflow/submodules/pypsa-eur/s_max_pu_0.7/results/networks/"
+path_to_pypsa_network_lopf = path_to_lopf_data
 
 
 # sclopf paths
@@ -31,7 +37,7 @@ path_to_indicator_vectors_lopf = root_path + "/results/lopf/indicator_vectors/"
 path_to_clustering_results_lopf = root_path + "/results/lopf/clustering/"
 path_to_cascade_results_lopf = root_path + "/results/lopf/cascade_results/"
 path_to_evaluation_results_lopf = root_path + "/results/lopf/evaluation_results/"
-path_to_pypsa_network_lopf = root_path + "/data/European_networks_lopf/"
+# path_to_pypsa_network_lopf = root_path + "/data/European_networks_lopf/"
 path_to_inertia_mitigation_results_lopf = (
     root_path + "/results/lopf/syn_inertia_mitigation/"
 )

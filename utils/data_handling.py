@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import pypsa
 from scipy import sparse
+import re
 
 from utils.config import (
     path_to_pypsa_network_lopf,
@@ -22,36 +23,116 @@ from utils.config import (
     path_to_vis_results_sclopf,
     path_to_cascade_results_sclopf,
     path_to_cascade_results_lopf,
+    path_to_grid_data,
 )
 
 
-def build_networkx_graph(pypsa_network, snet_index=None, assert_order=True):
+def update_line_params(n: pypsa.Network):
+    """Return updated line parameters in pypsa network if lines extension used in optimization.
+    Args:
+        n (pypsa.Network or pypsa.SubNetwork): PyPSA network or subnetwork
+    """
+
+    if isinstance(n, pypsa.SubNetwork):
+        n = n.network
+    # ext_i = n.get_extendable_i("Line")
+    # typed_i = n.lines.query('type != ""').index
+    # ext_untyped_i = ext_i.difference(typed_i)
+    # ext_typed_i = ext_i.intersection(typed_i)
+    base_s_nom = (
+        np.sqrt(3)
+        * n.lines["type"].map(n.line_types.i_nom)
+        * n.lines.bus0.map(n.buses.v_nom)
+    )
+    # s_nom_prev = n.lines.num_parallel * base_s_nom
+    factor = n.lines.s_nom_opt / n.lines.s_nom
+    print("mean extension level= ", factor.mean())
+    # print("mean num_parallel prev= ", n.lines.num_parallel.mean())
+    # print("mean num_parallel post= ", n.lines.num_parallel.mean())
+
+    # for attr, carrier in (("x", "AC"), ("r", "DC")):
+    #     ln_i = n.lines.query("carrier == @carrier").index.intersection(ext_untyped_i)
+    #     n.lines.loc[ln_i, attr] /= factor[ln_i]
+    carrier = "AC"
+    n.lines.loc[:, "x_pu_eff"] /= factor
+
+    # ln_i = ext_i.intersection(typed_i)
+
+    n.lines.loc[:, "num_parallel"] = n.lines.s_nom_opt / base_s_nom
+
+    # return n.lines
+
+
+def get_networkx_graph_path(snet_index=None, co2lvl=None):
+    """Get the path to a networkx graph from the pypsa networks"""
+    graph_path = path_to_grid_data + f"nx_graph"
+    if co2lvl is not None:
+        graph_path = f"{graph_path}_Co2{co2lvl}"
+    if snet_index is not None:
+        graph_path = f"{graph_path}_snet{snet_index}"
+    graph_path = f"{graph_path}.gml"
+
+    return graph_path
+
+
+def load_networkx_graph(snet_index=None, co2lvl=None):
+    """Get a networkx graph from the pypsa networks"""
+    graph_path = get_networkx_graph_path(snet_index, co2lvl)
+    graph = nx.read_gml(graph_path)  # [, stringizer])
+    return graph
+
+
+def save_networkx_graph(graph, snet_index=None, co2lvl=None):
+    """Save a networkx graph from the pypsa networks"""
+    graph_path = get_networkx_graph_path(snet_index, co2lvl)
+    if not os.path.exists(os.path.dirname(graph_path)):
+        os.makedirs(os.path.dirname(graph_path), exist_ok=True)
+    nx.write_gml(graph, graph_path)  # [, stringizer])
+
+
+def build_networkx_graph(
+    pypsa_network, snet_index=None, assert_order=True, save=False, inplace=False
+):
     """Build a networkx graph from the pypsa networks"""
+    if not inplace:
+        pypsa_network = pypsa_network.copy()
     pypsa_network.determine_network_topology()
 
-    try:
+    if snet_index is not None:
         snet = pypsa_network.sub_networks["obj"][snet_index]
-    except KeyError:
+        line_extension_used = any(snet.network.lines.s_nom_extendable)
+    else:
         snet = pypsa_network
+        line_extension_used = any(snet.lines.s_nom_extendable)
 
-    branches = snet.branches()
+    update_line_params(snet)
+    # if line_extension_used:
+    #     print(
+    #         "Lines extension detected. Updating line parameters based on optimized values..."
+    #     )
+    #     update_line_params(snet, s_nom_prev)
+    branches = pypsa_network.lines.loc[snet.branches().index.get_level_values(1)]
+    branches.index = pd.MultiIndex.from_tuples(
+        [("Line", idx) for idx in branches.index]
+    )
+
     positions = pypsa_network.buses[["x", "y"]]
     pos = dict(zip(positions.index, list(zip(positions.x, positions.y))))
 
     branches = branches[["bus0", "bus1", "x_pu_eff", "s_nom_opt", "num_parallel"]]
 
-    F = nx.Graph()
+    G = nx.Graph()
 
     for line_index, line in branches.iterrows():
 
-        if not F.has_edge(line["bus0"], line["bus1"]):
-            F.add_edge(
+        if not G.has_edge(line["bus0"], line["bus1"]):
+            G.add_edge(
                 line["bus0"],
                 line["bus1"],
                 weight=1 / line["x_pu_eff"],
                 orientation=(line["bus0"], line["bus1"]),
                 line_index=[line_index[1]],
-                s_nom=line["s_nom"],
+                s_nom=line["s_nom_opt"],
                 num_parallel=line["num_parallel"],
             )
             if assert_order:
@@ -59,8 +140,13 @@ def build_networkx_graph(pypsa_network, snet_index=None, assert_order=True):
         else:
             raise (RuntimeError("There duplicated edges in the PyPSA network"))
 
-    nx.set_node_attributes(F, pos, "pos")
-    return F
+    nx.set_node_attributes(G, pos, "pos")
+
+    # if save:
+    #     graph_path = path_to_grid_data + f"nx_graph_snet{snet_index}.pklz"
+    #     nx.write_gml(G, graph_path)  # [, stringizer])
+
+    return G
 
 
 def check_order_networkx_line_order_equals_pypsa(
@@ -160,41 +246,45 @@ def get_effective_injections(network, snapshot, nx_graph):
 
 
 def load_pypsa_network(
-    co2lvl, n_nodes, use_sclopf: bool = True, correct_path: bool = True
+    co2lvl,
+    n_nodes,
+    use_sclopf: bool = True,
+    lopt: bool = False,
 ):
-    if not use_sclopf:
-        try:
-            return load_pypsa_network_from_path(
-                path_to_pypsa_network_lopf
-                + f"elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-3H.nc",
-                use_sclopf,
-            )
-        except AssertionError as e:
-            if correct_path:
-                return load_pypsa_network_from_path(
-                    path_to_pypsa_network_lopf
-                    + f"elec_s_{n_nodes}_ec_lcopt_Co2L{co2lvl}-2920SEG.nc",
-                    use_sclopf,
-                )
-            else:
-                raise e
+    """Load PyPSA network with certain Co2 constraint and aggregation level of n_nodes.
+    Args:
+        co2lvl (float): Co2 constraint
+        n_nodes (int): Aggregation level of nodes
+        use_sclopf (bool): If 'True' the network is used was evaluated using security constrained lopf
+        lopt (bool): If 'True' line extensions were used in the optimization
+    Returns:
+        network (PyPSA network)"""
 
+    data_path = (
+        path_to_pypsa_network_sclopf if use_sclopf else path_to_pypsa_network_lopf
+    )
+    files = os.listdir(data_path)
+    # print("Available files:", files)
+
+    files = [
+        f
+        for f in files
+        if re.search(rf"Co2L{re.escape(str(co2lvl))}(?![0-9])", f)
+        and f"_{n_nodes}_" in f
+    ]  # get files for co2lvl and n_nodes
+    # print("Filtered files:", files)
+    files = [f for f in files if ("lcopt" in f) == lopt]  # filter for lopt or not
+    # print("Filtered for lopt files:", files)
+    if len(files) == 0:
+        raise FileNotFoundError(
+            f"No file found for n_nodes={n_nodes} and co2lvl={co2lvl}"
+        )
+    elif len(files) > 1:
+        raise RuntimeError(
+            f"Multiple files found for n_nodes={n_nodes} and co2lvl={co2lvl}: {files}"
+        )
     else:
-        try:
-            return load_pypsa_network_from_path(
-                path_to_pypsa_network_sclopf
-                + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2lvl}-2920SEG.nc",
-                use_sclopf,
-            )
-        except AssertionError as e:
-            if correct_path:
-                return load_pypsa_network_from_path(
-                    path_to_pypsa_network_sclopf
-                    + f"sclopf-elec_s_{n_nodes}_ec_lcopt_Co2L{co2lvl}-2920SEG.nc",
-                    use_sclopf,
-                )
-            else:
-                raise e
+        return load_pypsa_network_from_path(data_path + files[0], use_sclopf)
 
 
 def load_pypsa_network_from_path(path_to_pypsa_network: str, use_sclopf: bool):
@@ -332,6 +422,77 @@ def get_matrices_from_nx_graph(nx_graph):
     )
 
     return I_m, B_d, num_parallels, line_limits
+
+
+def load_grid_matrices(snet_index, co2lvl):
+    """Load grid matrices from file for certain snet and co2lvl.
+
+    Args:
+        snet_index (int): Subnetwork index
+        co2lvl (float): CO2 constraint
+    Returns:
+        I_m (scipy.sparse matrix): Incidence matrix
+        B_d (scipy.sparse matrix): Susceptance matrix
+        num_parallels (numpy array): Effective number of parallel lines per edge
+        line_limits (numpy array): Line limits per edge
+    """
+    with gzip.open(
+        path_to_grid_data + f"grid_matrices_snet{snet_index}_co2lvl{co2lvl}.pklz", "rb"
+    ) as f:
+        grid_matrices = pickle.load(f)
+
+    I_m = grid_matrices["I_m"]
+    B_d = grid_matrices["B_d"]
+    num_parallels = grid_matrices["num_parallels"]
+    line_limits = grid_matrices["line_limits"]
+
+    return I_m, B_d, num_parallels, line_limits
+
+
+def save_grid_matrices(
+    snet_index,
+    co2lvl,
+    I_m=None,
+    B_d=None,
+    num_parallels=None,
+    line_limits=None,
+    nx_graph=None,
+):
+    """Save grid matrices to disk. Provide either nx_graph or all matrix arguments.
+
+    Args:
+        snet_index (int): Subnetwork index used in filename.
+        co2lvl (float): CO2 level used in filename.
+        I_m (scipy.sparse matrix or numpy array): Incidence matrix.
+        B_d (scipy.sparse matrix): Susceptance diagonal matrix.
+        num_parallels (np.ndarray): Effective parallel line counts.
+        line_limits (np.ndarray): Line limits per edge.
+        nx_graph (networkx.Graph, optional): If provided, matrices are extracted from this graph.
+    Returns:
+        str: Path to the written file.
+    """
+    if nx_graph is not None:
+        I_m, B_d, num_parallels, line_limits = get_matrices_from_nx_graph(nx_graph)
+
+    if any(x is None for x in (I_m, B_d, num_parallels, line_limits)):
+        raise ValueError(
+            "Either provide nx_graph or all of I_m, B_d, num_parallels and line_limits."
+        )
+
+    out = {
+        "I_m": I_m,
+        "B_d": B_d,
+        "num_parallels": num_parallels,
+        "line_limits": line_limits,
+    }
+
+    file_path = (
+        path_to_grid_data + f"grid_matrices_snet{snet_index}_co2lvl{co2lvl}.pklz"
+    )
+    with gzip.open(file_path, "wb") as fh:
+        pickle.dump(out, fh, protocol=pickle.HIGHEST_PROTOCOL)
+
+    return file_path
 
 
 def get_adjacency_matrix_from_nx_graph(nx_graph):
