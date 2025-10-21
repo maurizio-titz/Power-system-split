@@ -23,7 +23,7 @@ The `scripts` folder contains scripts to reproduce the paper results. The `scrip
 ## Usage
 
 The `scripts` contain our workflow:
-
+- `extract_grid_data.py`: Saves grid props to disk. Run before running `run_cascade_code.py`.
 - `calc_pre_outage_data.py`: Calculate inertia and other properties from the (solved) PyPSA networks.
 - `run_cascade_code.py` : Run the cascade algorithm on the PyPSA networks. This can take a few weeks depending on compute power.
 - `evaluate_cascade.py`: Evaluating the cascade results, e.g., inertia and load imbalance for each split, indicator vectors. Run only after `run_cascade_code.py` has finished.
