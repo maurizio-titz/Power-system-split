@@ -34,3 +34,13 @@ for co2l in co2ls:
         num_parallels=num_parallels,
         line_limits=line_limits,
     )
+
+    effective_injections = {
+        snapshot: data_handling.get_effective_injections(network, snapshot, nx_graph)
+        for snapshot in network.snapshots
+    }
+    data_handling.save_effective_injections(
+        co2lvl=co2l, effective_injections=effective_injections
+    )
+    snapshots = list(network.snapshots)
+    data_handling.save_snapshot_list(snapshots, co2lvl=co2l)

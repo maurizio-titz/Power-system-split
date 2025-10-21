@@ -229,14 +229,15 @@ def run_cascade_dual_line_failures(
         print(f"Running cascade simulations for {fpath_out}...")
 
     # Load PyPSA network, the graph of the subnetwork and its matrices
-    network = data_handling.load_pypsa_network_from_path(full_path_to_file, use_sclopf)
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    nx_graph = data_handling.load_networkx_graph(snet_index=snet_index, co2lvl=co2l)
+    snapshots = data_handling.load_snapshot_list(co2lvl=co2l)
+    injections_all_snapshots = data_handling.load_effective_injections(co2lvl=co2l)
 
     # Check if line extension mitigation is supposed to be run.
     # Networkx Graph is being modified, if line extension needs to be considered.
     if line_mitigation_dict is None:
-        I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
-            nx_graph
+        I_m, B_d, num_parallels, line_limits = data_handling.load_grid_matrices(
+            snet_index=snet_index, co2lvl=co2l
         )
 
         # Calculate possible N-1 and N-2 failures (using non-bridges)
@@ -251,6 +252,10 @@ def run_cascade_dual_line_failures(
         )
 
     else:
+        raise NotImplementedError(
+            "Line extension mitigation not implemented yet."
+        )  # this never really worked!
+
         # Cascade simulation with extended lines
         nn_links_extended = line_mitigation_dict["nn_links"]
         delta_num_parallel = line_mitigation_dict["delta_num_parallel"]
@@ -356,11 +361,11 @@ def run_cascade_dual_line_failures(
     if check_n1_security:
         ### Check N-1 stability ###
         print("\n#### N-1 failures: Co2 level", co2l, " | #Nodes:", n_nodes, " ####")
-        for snapshot in tqdm(network.snapshots):
+        for snapshot in tqdm(snapshots):
 
             key_now = snapshot.strftime("%Y-%m-%d %H:00")
 
-            P_0 = data_handling.get_effective_injections(network, snapshot, nx_graph)
+            P_0 = injections_all_snapshots[snapshot]
 
             for initial_failure in n_1_failures:
 
@@ -381,28 +386,28 @@ def run_cascade_dual_line_failures(
                 and dt.strptime(stop_timestamp_str, "%Y-%m-%d %H:00") <= snapshot
             ):
                 break
+    else:
+        print("Warning: Not checking N-1 stability.")
 
     ### Simulation of N-2 failures ###
     print("\n#### N-2 failures: Co2 level", co2l, " | #Nodes:", n_nodes, " ####")
     splitting_cascades = dict()
 
     if n_checkpoints < 0:
-        n_checkpoints = len(network.snapshots)
-    checkpoint_idxs = np.arange(
-        0, len(network.snapshots), len(network.snapshots) // n_checkpoints
-    )
+        n_checkpoints = len(snapshots)
+    checkpoint_idxs = np.arange(0, len(snapshots), len(snapshots) // n_checkpoints)
     print(checkpoint_idxs)
-    checkpoint_snaphots = network.snapshots[checkpoint_idxs]
+    checkpoint_snaphots = snapshots[checkpoint_idxs]
     last_checkpoint_snapshot = None
 
-    for i, snapshot in tqdm(enumerate(network.snapshots)):
+    for i, snapshot in tqdm(enumerate(snapshots)):
         key_now = snapshot.strftime("%Y-%m-%d %H:00")
 
         if stop_timestamp_str is not None:
             print(f"running {key_now}, stop at {stop_timestamp_str}")
         # splitting_cascades[snapshot.strftime('%Y-%m-%d %H:00')] = {}
 
-        P_0 = data_handling.get_effective_injections(network, snapshot, nx_graph)
+        P_0 = injections_all_snapshots[snapshot]
 
         res_dict = dict()
         for initial_failure in tqdm(n_2_failures, leave=False):

@@ -245,6 +245,75 @@ def get_effective_injections(network, snapshot, nx_graph):
     return P0
 
 
+def save_effective_injections(co2lvl, effective_injections):
+    """Save effective injections to disk.
+
+    Args:
+        co2lvl (float): CO2 level used in filename.
+        effective_injections (dict): Dictionary of effective injections per snapshot.
+    Returns:
+        str: Path to the written file.
+    """
+
+    file_path = path_to_grid_data + f"effective_injections_co2lvl{co2lvl}.pklz"
+    with gzip.open(file_path, "wb") as fh:
+        pickle.dump(effective_injections, fh, protocol=pickle.HIGHEST_PROTOCOL)
+
+    return file_path
+
+
+def load_effective_injections(co2lvl):
+    """Load effective injections from disk for certain snet and co2lvl.
+
+    Args:
+        co2lvl (float): CO2 constraint
+    Returns:
+        effective_injections (dict): Dictionary of effective injections per snapshot.
+    """
+    with gzip.open(
+        path_to_grid_data + f"effective_injections_co2lvl{co2lvl}.pklz",
+        "rb",
+    ) as f:
+        effective_injections = pickle.load(f)
+
+    return effective_injections
+
+
+def load_snapshot_list(co2lvl):
+    """Load snapshot list from disk for certain co2lvl.
+
+    Args:
+        co2lvl (float): CO2 constraint
+
+    Returns:
+        snapshot_list (list): List of snapshots.
+    """
+    with gzip.open(
+        path_to_grid_data + f"snapshot_list_co2lvl{co2lvl}.pklz",
+        "rb",
+    ) as f:
+        snapshot_list = pickle.load(f)
+
+    return snapshot_list
+
+
+def save_snapshot_list(snapshots, co2lvl):
+    """Save snapshot list to disk.
+
+    Args:
+        snapshots (list): List of snapshots.
+        co2lvl (float): CO2 level used in filename.
+    Returns:
+        str: Path to the written file.
+    """
+
+    file_path = path_to_grid_data + f"snapshot_list_co2lvl{co2lvl}.pklz"
+    with gzip.open(file_path, "wb") as fh:
+        pickle.dump(snapshots, fh, protocol=pickle.HIGHEST_PROTOCOL)
+
+    return file_path
+
+
 def load_pypsa_network(
     co2lvl,
     n_nodes,
