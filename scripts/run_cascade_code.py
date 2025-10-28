@@ -168,6 +168,7 @@ def run_cascade_dual_line_failures(
     use_sclopf: bool = True,
     line_mitigation_dict: dict = None,
     stop_timestamp_str: str = None,
+    start_timestamp_str: str = None,
     n_checkpoints: int = 500,
     overwrite: bool = False,
 ):
@@ -217,8 +218,11 @@ def run_cascade_dual_line_failures(
     if line_mitigation_dict is not None:
         fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4g}"
 
+    if start_timestamp_str is not None:
+        fpath_out += f"_from{start_timestamp_str.replace(' ', '_')}"
+
     if stop_timestamp_str is not None:
-        fpath_out += f"_stopped_{stop_timestamp_str}"
+        fpath_out += f"_to{stop_timestamp_str.replace(' ', '_')}"
 
     if not overwrite and os.path.exists(fpath_out + ".pklz"):
         print(
@@ -362,13 +366,16 @@ def run_cascade_dual_line_failures(
         ### Check N-1 stability ###
         print("\n#### N-1 failures: Co2 level", co2l, " | #Nodes:", n_nodes, " ####")
         for snapshot in tqdm(snapshots):
+            if start_timestamp_str is not None:
+                if dt.strptime(start_timestamp_str, "%Y-%m-%d %H:00") > snapshot:
+                    continue
 
             key_now = snapshot.strftime("%Y-%m-%d %H:00")
 
             P_0 = injections_all_snapshots[snapshot]
 
             for initial_failure in n_1_failures:
-
+                initial_failure.pop("weight")
                 failing_links, system_split = cascade_simulation.simulate_cascade(
                     I_m,
                     B_d,
@@ -393,15 +400,23 @@ def run_cascade_dual_line_failures(
     print("\n#### N-2 failures: Co2 level", co2l, " | #Nodes:", n_nodes, " ####")
     splitting_cascades = dict()
 
-    if n_checkpoints < 0:
-        n_checkpoints = len(snapshots)
-    checkpoint_idxs = np.arange(0, len(snapshots), len(snapshots) // n_checkpoints)
-    print(checkpoint_idxs)
-    checkpoint_snaphots = snapshots[checkpoint_idxs]
+    if n_checkpoints == 0:
+        checkpoint_snaphots = []
+    else:
+        if n_checkpoints < 0:
+            n_checkpoints = len(snapshots)
+
+        checkpoint_idxs = np.arange(0, len(snapshots), len(snapshots) // n_checkpoints)
+        print(checkpoint_idxs)
+        checkpoint_snaphots = snapshots[checkpoint_idxs]
     last_checkpoint_snapshot = None
 
     for i, snapshot in tqdm(enumerate(snapshots)):
         key_now = snapshot.strftime("%Y-%m-%d %H:00")
+
+        if start_timestamp_str is not None:
+            if dt.strptime(start_timestamp_str, "%Y-%m-%d %H:00") > snapshot:
+                continue
 
         if stop_timestamp_str is not None:
             print(f"running {key_now}, stop at {stop_timestamp_str}")
@@ -411,7 +426,7 @@ def run_cascade_dual_line_failures(
 
         res_dict = dict()
         for initial_failure in tqdm(n_2_failures, leave=False):
-
+            initial_failure_weight = initial_failure.pop("weight")
             failing_links, system_split = cascade_simulation.simulate_cascade(
                 I_m,
                 B_d,
@@ -421,14 +436,21 @@ def run_cascade_dual_line_failures(
                 initial_failure,
                 use_sclopf=use_sclopf,
             )
+            initial_failure = list(initial_failure.values()) + list(
+                initial_failure.keys()
+            )
 
             if save_whole_cascades:
-                # splitting_cascades[snapshot.strftime('%Y-%m-%d %H:00')][tuple(initial_failure)] = failing_links
-                res_dict[tuple(initial_failure)] = failing_links, system_split
-
+                res_dict[tuple(initial_failure)] = (
+                    failing_links,
+                    system_split,
+                    initial_failure_weight,
+                )
             elif system_split:
-                # splitting_cascades[snapshot.strftime('%Y-%m-%d %H:00')][tuple(initial_failure)] = failing_links
-                res_dict[tuple(initial_failure)] = failing_links
+                res_dict[tuple(initial_failure)] = (
+                    failing_links,
+                    initial_failure_weight,
+                )
 
         splitting_cascades[key_now] = res_dict
 
@@ -483,22 +505,93 @@ def run_cascade_dual_line_failures(
     return
 
 
+def run_cascade_dual_line_failures_batch(
+    batch_id: int,
+    total_batches: int,
+    co2l: float,
+    n_nodes: int,
+    start_date: str = "2013-01-01 00:00",
+    end_date: str = "2013-12-31 23:00",
+    **kwargs,
+):
+    """Run cascade dual line failures for a specific batch.
+
+    Args:
+        batch_id (int): Batch number (0-indexed)
+        total_batches (int): Total number of batches
+        co2l (float): CO2 level
+        n_nodes (int): Number of nodes
+        start_date (str): Overall start date for the simulation
+        end_date (str): Overall end date for the simulation
+        **kwargs: Additional arguments passed to run_cascade_dual_line_failures
+    """
+    from datetime import datetime, timedelta
+
+    # Parse start and end dates
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d %H:%M")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d %H:%M")
+
+    # Calculate total duration and batch duration
+    total_duration = end_dt - start_dt
+    batch_duration = total_duration / total_batches
+
+    # Calculate this batch's start and end times
+    batch_start = start_dt + batch_id * batch_duration
+    batch_end = start_dt + (batch_id + 1) * batch_duration
+
+    # Format as strings (matching the expected format)
+    start_timestamp_str = batch_start.strftime("%Y-%m-%d %H:%M")
+    end_timestamp_str = batch_end.strftime("%Y-%m-%d %H:%M")
+
+    print(
+        f"Batch {batch_id}: Running from {start_timestamp_str} to {end_timestamp_str}"
+    )
+
+    # Call the main function with calculated timestamps
+    return run_cascade_dual_line_failures(
+        co2l=co2l,
+        n_nodes=n_nodes,
+        start_timestamp_str=start_timestamp_str,
+        stop_timestamp_str=end_timestamp_str,
+        **kwargs,
+    )
+
+
 if __name__ == "__main__":
 
     # Load arguments
     n_nodes_in = 600
     co2l_in = get_co2_levels(n_nodes_in)
+    co2l_in = [0.6]
     if isinstance(co2l_in, float):
         co2l_in = [co2l_in]
     save_whole_cascades = False
 
-    for co2l in co2l_in:
-        run_cascade_dual_line_failures(
-            co2l,
-            n_nodes_in,
-            save_whole_cascades=save_whole_cascades,
-            use_sclopf=True,
-            n_checkpoints=20,
-            check_n1_security=False,
-            # line_mitigation_dict=None,
-        )
+    # for co2l in co2l_in:
+    #     run_cascade_dual_line_failures(
+    #         co2l,
+    #         n_nodes_in,
+    #         save_whole_cascades=save_whole_cascades,
+    #         use_sclopf=True,
+    #         n_checkpoints=20,
+    #         check_n1_security=True,
+    #         # line_mitigation_dict=None,
+    #         start_timestamp_str="2013-01-01 03:00:00",
+    #         stop_timestamp_str="2013-01-01 06:00:00",
+    #         overwrite=True,
+    #     )
+
+    total_batches = 1000
+    batch_id = 0
+
+    run_cascade_dual_line_failures_batch(
+        batch_id=batch_id,
+        total_batches=total_batches,
+        co2l=0.6,
+        n_nodes=600,
+        save_whole_cascades=False,
+        use_sclopf=True,
+        check_n1_security=True,
+        overwrite=True,
+        n_checkpoints=0,
+    )

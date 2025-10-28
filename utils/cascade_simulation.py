@@ -6,8 +6,10 @@ Purely matrix-based simulation of cascading failures in power grids
 """
 
 import itertools
+from typing import Union
 
 import numpy as np
+import pandas as pd
 from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 
@@ -53,10 +55,8 @@ LOOKUP_TABLE_NP = np.array(
         [2.86842105, 1.86842105],
     ]
 )
-
-# ! Remove after testing
-# for line extension extend lookup table:
-LOOKUP_TABLE_NP = np.concatenate((LOOKUP_TABLE_NP, LOOKUP_TABLE_NP + 1), axis=0)
+num_parallels_diffs_ = LOOKUP_TABLE_NP[:, 0] - LOOKUP_TABLE_NP[:, 1]
+line_type_num_parallels = np.sort(np.unique(np.round(num_parallels_diffs_, 7)))
 
 # The smallest cable seems to be 0.3351.. here instead of 0.2894.. as for sclopf
 ## Decision to reduce 2.34 by 1 and not be 0.3351...
@@ -93,7 +93,55 @@ LOOKUP_TABLE_NP_non_sclopf = np.array(
 # not appearing in PyPSA network
 
 
-def calc_num_parallel_after_failure(num_parallel: float, use_sclopf: bool = True):
+def get_circuit_counts_in_all_lines(num_parallels, use_sclopf: bool = True):
+    """Get the counts of different line types in all lines of the network.
+    Args:
+        num_parallels (list-like): Effective number of parallel lines per edge.
+    Returns:
+        pd.DataFrame: DataFrame where each row corresponds to a line and each column to a
+            line type (defined by num_parallel reduction when one circuit is removed).
+    """
+    if use_sclopf:
+        look_up_table = LOOKUP_TABLE_NP
+    else:
+        look_up_table = LOOKUP_TABLE_NP_non_sclopf
+
+    num_p_paths_all = []
+    for num_p in num_parallels:
+        num_p_path = []
+        while num_p > 0:
+            num_p_path.append(num_p)
+            if 0 < num_p < 3:
+                num_parallel_case = np.argwhere(np.isclose(look_up_table[:, 0], num_p))[
+                    0, 0
+                ]
+                num_p = look_up_table[num_parallel_case, 1]
+            elif num_p >= 3:
+                num_p -= 1
+        num_p_paths_all.append(num_p_path + [0])
+
+    # get the reduction of num_parallels at each step for each line
+    line_type_counts = []
+    for path in num_p_paths_all:
+        path_diffs = [np.round(path[i] - path[i + 1], 7) for i in range(len(path) - 1)]
+        # print(path_diffs)
+        line_type_count = [
+            sum(path_diffs == line_typ_num_par)
+            for line_typ_num_par in line_type_num_parallels
+        ]
+        line_type_counts.append(line_type_count)
+    line_type_counts = pd.DataFrame(
+        line_type_counts,
+        columns=[f"num_par_{num_par}" for num_par in line_type_num_parallels],
+    )
+
+    return line_type_counts
+
+
+def remove_highest_volt_lvl_circuit(
+    num_parallel: float,
+    use_sclopf: bool = True,
+):
     """Calculate the new effective number of circuits on a line
     after removing one circuit. The new value depends on the line type
     and is indicated in a lookup table.
@@ -106,7 +154,6 @@ def calc_num_parallel_after_failure(num_parallel: float, use_sclopf: bool = True
     Returns:
         float: new value
     """
-
     if use_sclopf:
         look_up_table = LOOKUP_TABLE_NP
     else:
@@ -148,27 +195,48 @@ def calc_possible_double_line_failures(
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network.
 
     Returns:
-        list: List of lists, where each list contains two matrix indices of lines
+        list: List of dicts, where each dict contains two matrix indices of lines
     """
+    circuit_counts_per_line = get_circuit_counts_in_all_lines(
+        num_parallels, use_sclopf=use_sclopf
+    )
 
     if not ignored_idxs:
         edge_indices = range(len(num_parallels))
     else:
         edge_indices = list(set(range(len(num_parallels))) - set(ignored_idxs))
 
+    possible_failures = []
     # Add failures on two different lines
-    possible_failures = list(map(list, itertools.combinations(edge_indices, 2)))
+    for idx_1 in edge_indices:
+        for idx_2 in edge_indices:
+            if idx_2 < idx_1:
+                continue
+            for line_type_1 in line_type_num_parallels:
+                count_1 = circuit_counts_per_line.iloc[idx_1][f"num_par_{line_type_1}"]
+                if count_1 > 0:
+                    for line_type_2 in line_type_num_parallels:
+                        count_2 = circuit_counts_per_line.iloc[idx_2][
+                            f"num_par_{line_type_2}"
+                        ]
+                        is_double_counting_case = (
+                            idx_1 == idx_2 and line_type_1 == line_type_2
+                        )
+                        if is_double_counting_case:
+                            count_2 -= 1  # avoid double counting same circuit
 
-    # Add common mode failures (two circuits failing in one line)
-    for i in edge_indices:
-        num_parallel_one_fail = calc_num_parallel_after_failure(
-            num_parallels[i], use_sclopf=use_sclopf
-        )
-
-        # Only add common mode failure if more than one circuit is present
-        # (i.e., first failure did not remove all circuits)
-        if not np.isclose(num_parallel_one_fail, 0):
-            possible_failures += [[i, i]]
+                        if count_2 > 0:
+                            possible_failures.append(
+                                {
+                                    idx_1: line_type_1,
+                                    idx_2: line_type_2,
+                                    "weight": (
+                                        count_1 * count_2 / 2
+                                        if is_double_counting_case
+                                        else count_1 * count_2
+                                    ),
+                                }
+                            )
 
     return possible_failures
 
@@ -183,13 +251,29 @@ def calc_possible_single_line_failures(num_parallels, ignored_idxs=None):
     Returns:
         list: List of lists, where each list contains one matrix index of a line
     """
+    circuit_counts_per_line = get_circuit_counts_in_all_lines(
+        num_parallels, use_sclopf=True
+    )
 
     if not ignored_idxs:
-        possible_failures = list(range(len(num_parallels)))
+        edge_indices = range(len(num_parallels))
     else:
-        possible_failures = list(set(range(len(num_parallels))) - set(ignored_idxs))
+        edge_indices = list(set(range(len(num_parallels))) - set(ignored_idxs))
 
-    return [[failure] for failure in possible_failures]
+    possible_failures = []
+    # Add failures on two different lines
+    for idx_1 in edge_indices:
+        for line_type_1 in line_type_num_parallels:
+            count_1 = circuit_counts_per_line.iloc[idx_1][f"num_par_{line_type_1}"]
+            if count_1 > 0:
+                possible_failures.append(
+                    {
+                        idx_1: line_type_1,
+                        "weight": count_1,
+                    }
+                )
+
+    return possible_failures
 
 
 def remove_line_from_Bd(
@@ -199,6 +283,7 @@ def remove_line_from_Bd(
     del_idx,
     remove_all_circuits=False,
     use_sclopf: bool = True,
+    num_parallel_reduction: Union[float, None] = None,
 ):
     """Remove a line by changing the susceptances, the number of parallel lines and
     the line limits.
@@ -217,16 +302,23 @@ def remove_line_from_Bd(
     num_parallel = num_parallel_ls[del_idx]
     assert num_parallel >= 1e-8, (
         "Line removal for num_parallel=0 not correct."
-        + " Line was either already removed a wrong num_parallel was assigned. "
+        + " Line was either already removed, a wrong num_parallel was assigned. "
     )
+    assert (
+        not remove_all_circuits or num_parallel_reduction is None
+    ), "If remove_all_circuits is True, num_parallel_reduction has to be None."
 
     # Calculate new num_parallel after removal
     if remove_all_circuits:
         num_parallel_new = 0
-    else:
-        num_parallel_new = calc_num_parallel_after_failure(
+    elif num_parallel_reduction is not None:  # if a specific value is given, use it
+        num_parallel_new = num_parallel - num_parallel_reduction
+    else:  # highest voltage level circuit is removed first by protective relays
+        num_parallel_new = remove_highest_volt_lvl_circuit(
             num_parallel, use_sclopf=use_sclopf
         )
+    if num_parallel_new < 1e-6:
+        num_parallel_new = 0
 
     # Adapt network parameters accordingly
     num_par_factor = num_parallel_new / num_parallel
@@ -267,7 +359,7 @@ def simulate_cascade(
     P0,
     line_limits_in,
     num_parallel_in,
-    failure_lines,
+    failure_lines: dict,
     epsilon=1e-4,
     max_cascade_length=np.inf,
     use_sclopf: bool = True,
@@ -283,7 +375,7 @@ def simulate_cascade(
         line_limits_in (1d numpy array): Limits of of power lines. 's_nom' in PyPSA
         num_parallel_in (1d numpy array): List with 'num_parallel' that gives a effective number
             for each edge the line quantifying different and also multiple lines between two nodes.
-        failure_lines (list): Collects the initial failure lines
+        failure_lines (dict): Holds the initial failure lines and their respective reductions in num_parallel.
         epsilon (float): Margin above capacity that has to be exceeded for a link to fail.
             he margin should be given as a share of the capacity (between 0 and 1).
         max_cascade_length (int): Maximum number of secondary failures to investigate.
@@ -298,13 +390,25 @@ def simulate_cascade(
     num_parallel_ls = num_parallel_in.copy()
     line_limits = line_limits_in.copy()
 
+    if any(
+        [
+            not any(line_type_num_parallels - num_par_red < 1e-6)
+            for num_par_red in failure_lines.values()
+        ]
+    ):
+        raise ValueError(
+            "A num_parallel reduction value in failure_lines is not valid."
+            + f" Valid reductions are: {line_type_num_parallels}"
+        )
+
     # Remove initial failures
-    for del_idx in failure_lines:
+    for del_idx in failure_lines.keys():
         remove_line_from_Bd(
             B_d,
             num_parallel_ls,
             line_limits,
             del_idx,
+            num_parallel_reduction=failure_lines[del_idx],
             use_sclopf=use_sclopf,
             remove_all_circuits=initial_remove_all,
         )
@@ -337,7 +441,6 @@ def simulate_cascade(
         if len(idxs_overloaded) == 0:
             # Cascade stopped
             still_going = False
-
         else:
             failure_cascade += list(idxs_overloaded)
             # Delete all circuits in a line if line is overloaded

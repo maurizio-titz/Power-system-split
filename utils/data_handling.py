@@ -16,6 +16,10 @@ import pypsa
 from scipy import sparse
 import re
 
+from utils.cascade_simulation import (
+    remove_highest_volt_lvl_circuit,
+    line_type_num_parallels,
+)
 from utils.config import (
     path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
@@ -91,7 +95,11 @@ def save_networkx_graph(graph, snet_index=None, co2lvl=None):
 
 
 def build_networkx_graph(
-    pypsa_network, snet_index=None, assert_order=True, save=False, inplace=False
+    pypsa_network,
+    snet_index=None,
+    assert_order=True,
+    inplace=False,
+    update_lines=False,
 ):
     """Build a networkx graph from the pypsa networks"""
     if not inplace:
@@ -100,17 +108,13 @@ def build_networkx_graph(
 
     if snet_index is not None:
         snet = pypsa_network.sub_networks["obj"][snet_index]
-        line_extension_used = any(snet.network.lines.s_nom_extendable)
     else:
         snet = pypsa_network
-        line_extension_used = any(snet.lines.s_nom_extendable)
 
-    update_line_params(snet)
-    # if line_extension_used:
-    #     print(
-    #         "Lines extension detected. Updating line parameters based on optimized values..."
-    #     )
-    #     update_line_params(snet, s_nom_prev)
+    if update_lines:
+        update_line_params(snet)
+        print("Updating line parameters based on optimized values.")
+
     branches = pypsa_network.lines.loc[snet.branches().index.get_level_values(1)]
     branches.index = pd.MultiIndex.from_tuples(
         [("Line", idx) for idx in branches.index]
@@ -124,6 +128,7 @@ def build_networkx_graph(
     G = nx.Graph()
 
     for line_index, line in branches.iterrows():
+        # circuit_counts = get_circuit_counts(line["num_parallel"], use_sclopf=True)
 
         if not G.has_edge(line["bus0"], line["bus1"]):
             G.add_edge(
@@ -134,6 +139,7 @@ def build_networkx_graph(
                 line_index=[line_index[1]],
                 s_nom=line["s_nom_opt"],
                 num_parallel=line["num_parallel"],
+                # circuit_counts=circuit_counts,
             )
             if assert_order:
                 assert line["bus0"] < line["bus1"], f"Line {line_index} is not ordered"
@@ -189,6 +195,29 @@ def check_if_edges_sorted(nx_graph: nx.Graph):
         if u > v:
             raise (RuntimeError(f"Edge {i} ({u}, {v}) is not sorted"))
     return True
+
+
+def get_circuit_counts(num_parallel, use_sclopf: bool = True):
+    """Get the number of each sub line type in a given line based on num_parallel values in PyPSA network.
+
+    Args:
+        num_parallel (int): Effective number of parallel lines for a given line.
+        use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network.
+    Returns:
+        dict: Dictionary of number of each sub line type in a given line.
+    """
+    line_types = np.zeros_like(line_type_num_parallels)
+    while num_parallel > 1e-6:
+        num_parallel_new = remove_highest_volt_lvl_circuit(
+            num_parallel, use_sclopf=use_sclopf
+        )
+        num_par_removed = num_parallel - num_parallel_new
+        line_type_idx = np.argwhere(
+            np.isclose(line_type_num_parallels, num_par_removed)
+        )[0, 0]
+        line_types[line_type_idx] += 1
+        num_parallel = num_parallel_new
+    return dict(zip(line_type_num_parallels, line_types))
 
 
 def construct_incidencematrix_from_orientation(Graph, return_np_array=True):
@@ -333,7 +362,7 @@ def load_pypsa_network(
         path_to_pypsa_network_sclopf if use_sclopf else path_to_pypsa_network_lopf
     )
     files = os.listdir(data_path)
-    # print("Available files:", files)
+    print("Available files:", files)
 
     files = [
         f
