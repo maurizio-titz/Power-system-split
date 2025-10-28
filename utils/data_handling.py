@@ -86,9 +86,12 @@ def load_networkx_graph(snet_index=None, co2lvl=None):
     return graph
 
 
-def save_networkx_graph(graph, snet_index=None, co2lvl=None):
+def save_networkx_graph(graph, snet_index=None, co2lvl=None, overwrite=False):
     """Save a networkx graph from the pypsa networks"""
     graph_path = get_networkx_graph_path(snet_index, co2lvl)
+    if not overwrite and os.path.exists(graph_path):
+        raise FileExistsError(f"File {graph_path} already exists. Set overwrite=True.")
+
     if not os.path.exists(os.path.dirname(graph_path)):
         os.makedirs(os.path.dirname(graph_path), exist_ok=True)
     nx.write_gml(graph, graph_path)  # [, stringizer])
@@ -274,7 +277,7 @@ def get_effective_injections(network, snapshot, nx_graph):
     return P0
 
 
-def save_effective_injections(co2lvl, effective_injections):
+def save_effective_injections(co2lvl, effective_injections, overwrite=False):
     """Save effective injections to disk.
 
     Args:
@@ -285,6 +288,10 @@ def save_effective_injections(co2lvl, effective_injections):
     """
 
     file_path = path_to_grid_data + f"effective_injections_co2lvl{co2lvl}.pklz"
+
+    if not overwrite and os.path.exists(file_path):
+        raise FileExistsError(f"File {file_path} already exists. Set overwrite=True.")
+
     with gzip.open(file_path, "wb") as fh:
         pickle.dump(effective_injections, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -326,7 +333,7 @@ def load_snapshot_list(co2lvl):
     return snapshot_list
 
 
-def save_snapshot_list(snapshots, co2lvl):
+def save_snapshot_list(snapshots, co2lvl, overwrite=False):
     """Save snapshot list to disk.
 
     Args:
@@ -337,6 +344,10 @@ def save_snapshot_list(snapshots, co2lvl):
     """
 
     file_path = path_to_grid_data + f"snapshot_list_co2lvl{co2lvl}.pklz"
+
+    if not overwrite and os.path.exists(file_path):
+        raise FileExistsError(f"File {file_path} already exists. Set overwrite=True.")
+
     with gzip.open(file_path, "wb") as fh:
         pickle.dump(snapshots, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -555,6 +566,7 @@ def save_grid_matrices(
     num_parallels=None,
     line_limits=None,
     nx_graph=None,
+    overwrite=False,
 ):
     """Save grid matrices to disk. Provide either nx_graph or all matrix arguments.
 
@@ -569,6 +581,14 @@ def save_grid_matrices(
     Returns:
         str: Path to the written file.
     """
+
+    file_path = (
+        path_to_grid_data + f"grid_matrices_snet{snet_index}_co2lvl{co2lvl}.pklz"
+    )
+
+    if not overwrite and os.path.exists(file_path):
+        raise FileExistsError(f"File {file_path} already exists. Set overwrite=True.")
+
     if nx_graph is not None:
         I_m, B_d, num_parallels, line_limits = get_matrices_from_nx_graph(nx_graph)
 
@@ -584,9 +604,6 @@ def save_grid_matrices(
         "line_limits": line_limits,
     }
 
-    file_path = (
-        path_to_grid_data + f"grid_matrices_snet{snet_index}_co2lvl{co2lvl}.pklz"
-    )
     with gzip.open(file_path, "wb") as fh:
         pickle.dump(out, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
