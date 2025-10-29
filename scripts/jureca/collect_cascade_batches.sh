@@ -31,7 +31,8 @@ source activate system_split
 # Collect results
 python -c "
 import sys
-sys.path.append('./')
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 from scripts.run_cascade_code import collect_batch_results
 
 co2l = float('${CO2L}')

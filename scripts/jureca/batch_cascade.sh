@@ -1,13 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=cascade_batch_co2_%A_%a
-#SBATCH --array=0-999
-#SBATCH --time=04:00:00
+#SBATCH --array=0-999  # 1000 batches per CO2 level (adjusted by submission script if TEST_MODE=1)
+#SBATCH --time=01:00:00
 #SBATCH --mem=8G
 #SBATCH --cpus-per-task=1
 #SBATCH --output=logs/cascade_batch_co2_${CO2L}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.out
 #SBATCH --error=logs/cascade_batch_co2_${CO2L}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.err
-#SBATCH --account=YOUR_PROJECT_ACCOUNT  # Replace with your project account
-#SBATCH --partition=dc-cpu  # or dc-gpu if you need GPU
 
 # CO2L should be passed as environment variable
 if [ -z "$CO2L" ]; then
@@ -20,14 +18,9 @@ TOTAL_BATCHES=${TOTAL_BATCHES:-1000}
 START_DATE=${START_DATE:-"2013-01-01 00:00"}
 END_DATE=${END_DATE:-"2013-12-31 23:00"}
 
-# Load modules for JURECA DC
-module purge
-module load Stages/2024
-module load GCCcore/.12.3.0
-module load Miniconda3
-
-# Activate the conda environment
-source activate system_split
+# Load environment
+module load python/3.8
+source /path/to/your/venv/bin/activate
 
 # Create logs directory
 mkdir -p logs
@@ -35,7 +28,8 @@ mkdir -p logs
 # Run the batch
 python -c "
 import sys
-sys.path.append('./')
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 from scripts.run_cascade_code import run_cascade_dual_line_failures_batch
 
 batch_id = int('${SLURM_ARRAY_TASK_ID}')

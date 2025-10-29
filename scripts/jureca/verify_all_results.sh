@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=cascade_verify_all
-#SBATCH --time=00:30:00
+#SBATCH --time=01:00:00
 #SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
 #SBATCH --output=logs/cascade_verify_all_%j.out
@@ -18,7 +18,8 @@ source /path/to/your/venv/bin/activate
 # Verify all results
 python -c "
 import sys
-sys.path.append('./')
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 from scripts.run_cascade_code import verify_collected_results
 from utils.config import path_to_cascade_results_sclopf
 

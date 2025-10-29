@@ -9,7 +9,7 @@ fi
 
 # Define CO2 levels (matching your plot script)
 if [ "$TEST_MODE" = true ]; then
-    CO2_LEVELS=(0.6 0.4)  # Only test with 2 CO2 levels
+    CO2_LEVELS=(0.6 0.0)  # Only test with 2 CO2 levels
     TOTAL_BATCHES=2
     START_DATE="2013-01-01 00:00"
     END_DATE="2013-01-01 04:00"
@@ -45,7 +45,7 @@ for co2l in "${CO2_LEVELS[@]}"; do
     # Submit batch job array with all environment variables
     BATCH_JOB_ID=$(sbatch --parsable $sbatch_array \
         --export=CO2L=$co2l,TOTAL_BATCHES=$TOTAL_BATCHES,START_DATE="$START_DATE",END_DATE="$END_DATE" \
-        batch_cascade.sh)
+        $(dirname "$0")/batch_cascade.sh)
     BATCH_JOB_IDS+=($BATCH_JOB_ID)
     
     echo "  Batch job ID: $BATCH_JOB_ID"
@@ -64,7 +64,7 @@ for i in "${!CO2_LEVELS[@]}"; do
     # Submit collection job with dependency and all environment variables
     COLLECT_JOB_ID=$(sbatch --parsable --dependency=afterok:$batch_job_id \
         --export=CO2L=$co2l,TOTAL_BATCHES=$TOTAL_BATCHES,START_DATE="$START_DATE",END_DATE="$END_DATE" \
-        collect_cascade_batches.sh)
+        $(dirname "$0")/collect_cascade_batches.sh)
     COLLECT_JOB_IDS+=($COLLECT_JOB_ID)
     
     echo "  Collection job ID: $COLLECT_JOB_ID"
@@ -82,6 +82,6 @@ if [ ${#COLLECT_JOB_IDS[@]} -gt 0 ]; then
     FINAL_JOB_DEPS=$(IFS=:; echo "${COLLECT_JOB_IDS[*]}")
     VERIFY_JOB_ID=$(sbatch --parsable --dependency=afterok:$FINAL_JOB_DEPS \
         --export=TOTAL_BATCHES=$TOTAL_BATCHES,START_DATE="$START_DATE",END_DATE="$END_DATE" \
-        verify_all_results.sh)
+        $(dirname "$0")/verify_all_results.sh)
     echo "Verification job ID: $VERIFY_JOB_ID"
 fi
