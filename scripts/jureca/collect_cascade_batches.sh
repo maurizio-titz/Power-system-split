@@ -27,14 +27,9 @@ TOTAL_BATCHES=${TOTAL_BATCHES:-1000}
 START_DATE=${START_DATE:-"2013-01-01 00:00"}
 END_DATE=${END_DATE:-"2013-12-31 23:00"}
 
-# Load modules for JURECA DC
-module purge
-module load Stages/2024
-module load GCCcore/.12.3.0
-module load Miniconda3
-
-# Activate the conda environment
-source activate system_split
+# Load environment
+module load python/3.11
+source conda/envs/myenv/bin/activate
 
 # Collect results
 python -c "

@@ -32,8 +32,8 @@ START_DATE=${START_DATE:-"2013-01-01 00:00"}
 END_DATE=${END_DATE:-"2013-12-31 23:00"}
 
 # Load environment
-module load python/3.8
-source /path/to/your/venv/bin/activate
+module load python/3.11
+source conda/envs/myenv/bin/activate
 
 # Create logs directory
 mkdir -p logs
