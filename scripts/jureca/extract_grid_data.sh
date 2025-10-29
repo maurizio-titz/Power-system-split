@@ -22,9 +22,6 @@ source /p/project1/iek-10/power-system-split/conda/bin/activate /p/project1/iek-
 # Create logs directory
 mkdir -p logs
 
-# Change to project root directory
-cd $(dirname "$0")/../..
-
 echo "Running extract_grid_data.py..."
 echo "Working directory: $(pwd)"
 
