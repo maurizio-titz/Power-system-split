@@ -16,7 +16,7 @@ END_DATE=${END_DATE:-"2013-12-31 23:00"}
 
 # Load environment
 module load python/3.11
-source conda/envs/myenv/bin/activate
+source ./conda/envs/myenv/bin/activate
 
 # Verify all results
 python -c "
