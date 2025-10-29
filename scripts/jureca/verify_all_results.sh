@@ -5,7 +5,7 @@
 # budget account where contingent is taken from
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --partition=dc-cpu
+#SBATCH --partition=dc-cpu-devel
 #SBATCH --output=logs/cascade_verify_all_%j.out
 #SBATCH --error=logs/cascade_verify_all_%j.err
 

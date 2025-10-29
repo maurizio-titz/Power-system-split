@@ -4,7 +4,7 @@
 # budget account where contingent is taken from
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --partition=dc-cpu
+#SBATCH --partition=dc-cpu-devel
 #SBATCH --job-name=cascade_batch_co2_%A_%a
 #SBATCH --array=0-999  # 1000 batches per CO2 level (adjusted by submission script if TEST_MODE=1)
 #SBATCH --time=01:00:00
