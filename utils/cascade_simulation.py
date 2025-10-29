@@ -216,6 +216,9 @@ def calc_possible_double_line_failures(
                 count_1 = circuit_counts_per_line.iloc[idx_1][f"num_par_{line_type_1}"]
                 if count_1 > 0:
                     for line_type_2 in line_type_num_parallels:
+                        if idx_1 == idx_2 and line_type_2 < line_type_1:
+                            continue  # this prevents double counting same combinations
+
                         count_2 = circuit_counts_per_line.iloc[idx_2][
                             f"num_par_{line_type_2}"
                         ]
@@ -228,8 +231,10 @@ def calc_possible_double_line_failures(
                         if count_2 > 0:
                             possible_failures.append(
                                 {
-                                    idx_1: line_type_1,
-                                    idx_2: line_type_2,
+                                    "failures": [
+                                        (idx_1, line_type_1),
+                                        (idx_2, line_type_2),
+                                    ],
                                     "weight": (
                                         count_1 * count_2 / 2
                                         if is_double_counting_case
@@ -268,7 +273,7 @@ def calc_possible_single_line_failures(num_parallels, ignored_idxs=None):
             if count_1 > 0:
                 possible_failures.append(
                     {
-                        idx_1: line_type_1,
+                        "failures": [(idx_1, line_type_1)],
                         "weight": count_1,
                     }
                 )
@@ -359,7 +364,7 @@ def simulate_cascade(
     P0,
     line_limits_in,
     num_parallel_in,
-    failure_lines: dict,
+    failures: list,
     epsilon=1e-4,
     max_cascade_length=np.inf,
     use_sclopf: bool = True,
@@ -375,7 +380,7 @@ def simulate_cascade(
         line_limits_in (1d numpy array): Limits of of power lines. 's_nom' in PyPSA
         num_parallel_in (1d numpy array): List with 'num_parallel' that gives a effective number
             for each edge the line quantifying different and also multiple lines between two nodes.
-        failure_lines (dict): Holds the initial failure lines and their respective reductions in num_parallel.
+        failure_lines (list): Holds the tuples of the initial failure lines and their respective reductions in num_parallel. [(idx, line_type), ...]
         epsilon (float): Margin above capacity that has to be exceeded for a link to fail.
             he margin should be given as a share of the capacity (between 0 and 1).
         max_cascade_length (int): Maximum number of secondary failures to investigate.
@@ -392,23 +397,23 @@ def simulate_cascade(
 
     if any(
         [
-            not any(line_type_num_parallels - num_par_red < 1e-6)
-            for num_par_red in failure_lines.values()
+            not any(line_type_num_parallels - failure_tuple[1] < 1e-6)
+            for failure_tuple in failures
         ]
     ):
         raise ValueError(
-            "A num_parallel reduction value in failure_lines is not valid."
+            "A num_parallel reduction value in failures is not valid."
             + f" Valid reductions are: {line_type_num_parallels}"
         )
 
     # Remove initial failures
-    for del_idx in failure_lines.keys():
+    for del_idx, line_type in failures:
         remove_line_from_Bd(
             B_d,
             num_parallel_ls,
             line_limits,
             del_idx,
-            num_parallel_reduction=failure_lines[del_idx],
+            num_parallel_reduction=line_type,
             use_sclopf=use_sclopf,
             remove_all_circuits=initial_remove_all,
         )
