@@ -28,7 +28,7 @@ START_DATE=${START_DATE:-"2013-01-01 00:00"}
 END_DATE=${END_DATE:-"2013-12-31 23:00"}
 
 # Load environment
-conda activate myenv
+source /p/project1/iek-10/power-system-split/conda/bin/activate /p/project1/iek-10/power-system-split/conda/envs/myenv
 
 # Collect results
 python -c "
