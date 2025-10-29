@@ -19,6 +19,9 @@ echo "=================================="
 # Load environment
 source /p/project1/iek-10/power-system-split/conda/bin/activate /p/project1/iek-10/power-system-split/conda/envs/myenv
 
+# Change to project root directory
+cd $(dirname "$0")/../..
+
 # Create logs directory
 mkdir -p logs
 
