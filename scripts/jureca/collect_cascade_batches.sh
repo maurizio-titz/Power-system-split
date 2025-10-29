@@ -30,11 +30,10 @@ END_DATE=${END_DATE:-"2013-12-31 23:00"}
 # Load environment
 source /p/project1/iek-10/power-system-split/conda/bin/activate /p/project1/iek-10/power-system-split/conda/envs/myenv
 
-# Collect results
+# Change to project root directory and collect results
 python -c "
 import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append('.')
 from scripts.run_cascade_code import collect_batch_results
 
 co2l = float('${CO2L}')

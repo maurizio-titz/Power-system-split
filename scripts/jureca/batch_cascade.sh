@@ -37,11 +37,10 @@ source /p/project1/iek-10/power-system-split/conda/bin/activate /p/project1/iek-
 # Create logs directory
 mkdir -p logs
 
-# Run the batch
+# Change to project root directory and run the batch
 python -c "
 import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append('.')
 from scripts.run_cascade_code import run_cascade_dual_line_failures_batch
 
 batch_id = int('${SLURM_ARRAY_TASK_ID}')
