@@ -1,8 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=cascade_verify_all
 #SBATCH --time=01:00:00
-#SBATCH --mem=4G
-#SBATCH --cpus-per-task=1
+#SBATCH --account=iek-10
+# budget account where contingent is taken from
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --partition=dc-cpu
 #SBATCH --output=logs/cascade_verify_all_%j.out
 #SBATCH --error=logs/cascade_verify_all_%j.err
 

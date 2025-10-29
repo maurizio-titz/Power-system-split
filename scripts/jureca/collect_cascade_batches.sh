@@ -1,12 +1,13 @@
 #!/bin/bash
+#SBATCH --account=iek-10
+# budget account where contingent is taken from
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --partition=dc-cpu
 #SBATCH --job-name=cascade_collect_co2
 #SBATCH --time=01:00:00
-#SBATCH --mem=16G
-#SBATCH --cpus-per-task=1
 #SBATCH --output=logs/cascade_collect_co2_${CO2L}_%j.out
 #SBATCH --error=logs/cascade_collect_co2_${CO2L}_%j.err
-#SBATCH --account=YOUR_PROJECT_ACCOUNT  # Replace with your project account
-#SBATCH --partition=dc-cpu
 
 # CO2L should be passed as environment variable
 if [ -z "$CO2L" ]; then

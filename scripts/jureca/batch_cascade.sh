@@ -1,9 +1,13 @@
 #!/bin/bash
+#!/bin/bash -x
+#SBATCH --account=iek-10
+# budget account where contingent is taken from
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --partition=dc-cpu
 #SBATCH --job-name=cascade_batch_co2_%A_%a
 #SBATCH --array=0-999  # 1000 batches per CO2 level (adjusted by submission script if TEST_MODE=1)
 #SBATCH --time=01:00:00
-#SBATCH --mem=8G
-#SBATCH --cpus-per-task=1
 #SBATCH --output=logs/cascade_batch_co2_${CO2L}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.out
 #SBATCH --error=logs/cascade_batch_co2_${CO2L}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.err
 
