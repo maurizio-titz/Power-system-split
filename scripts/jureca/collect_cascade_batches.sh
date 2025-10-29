@@ -6,14 +6,21 @@
 #SBATCH --partition=dc-cpu
 #SBATCH --job-name=cascade_collect_co2
 #SBATCH --time=01:00:00
-#SBATCH --output=logs/cascade_collect_co2_${CO2L}_%j.out
-#SBATCH --error=logs/cascade_collect_co2_${CO2L}_%j.err
+#SBATCH --output=logs/cascade_collect_co2_%j.out
+#SBATCH --error=logs/cascade_collect_co2_%j.err
 
 # CO2L should be passed as environment variable
 if [ -z "$CO2L" ]; then
     echo "Error: CO2L environment variable not set"
     exit 1
 fi
+
+echo "=== COLLECTION JOB START ==="
+echo "Job ID: ${SLURM_JOB_ID}"
+echo "CO2 Level: ${CO2L}"
+echo "Node: $(hostname)"
+echo "Start time: $(date)"
+echo "============================="
 
 # Set defaults for optional parameters
 TOTAL_BATCHES=${TOTAL_BATCHES:-1000}

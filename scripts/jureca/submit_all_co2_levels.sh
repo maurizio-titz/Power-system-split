@@ -44,6 +44,7 @@ for co2l in "${CO2_LEVELS[@]}"; do
     
     # Submit batch job array with all environment variables
     BATCH_JOB_ID=$(sbatch --parsable $sbatch_array \
+        --job-name="cascade_batch_co2_${co2l}_%A_%a" \
         --export=CO2L=$co2l,TOTAL_BATCHES=$TOTAL_BATCHES,START_DATE="$START_DATE",END_DATE="$END_DATE" \
         $(dirname "$0")/batch_cascade.sh)
     BATCH_JOB_IDS+=($BATCH_JOB_ID)
@@ -63,6 +64,7 @@ for i in "${!CO2_LEVELS[@]}"; do
     
     # Submit collection job with dependency and all environment variables
     COLLECT_JOB_ID=$(sbatch --parsable --dependency=afterok:$batch_job_id \
+        --job-name="cascade_collect_co2_${co2l}" \
         --export=CO2L=$co2l,TOTAL_BATCHES=$TOTAL_BATCHES,START_DATE="$START_DATE",END_DATE="$END_DATE" \
         $(dirname "$0")/collect_cascade_batches.sh)
     COLLECT_JOB_IDS+=($COLLECT_JOB_ID)

@@ -8,14 +8,23 @@
 #SBATCH --job-name=cascade_batch_co2_%A_%a
 #SBATCH --array=0-999  # 1000 batches per CO2 level (adjusted by submission script if TEST_MODE=1)
 #SBATCH --time=01:00:00
-#SBATCH --output=logs/cascade_batch_co2_${CO2L}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.out
-#SBATCH --error=logs/cascade_batch_co2_${CO2L}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.err
+#SBATCH --output=logs/cascade_batch_co2_%A_%a.out
+#SBATCH --error=logs/cascade_batch_co2_%A_%a.err
 
 # CO2L should be passed as environment variable
 if [ -z "$CO2L" ]; then
     echo "Error: CO2L environment variable not set"
     exit 1
 fi
+
+echo "=== BATCH JOB START ==="
+echo "Job ID: ${SLURM_JOB_ID}"
+echo "Array Job ID: ${SLURM_ARRAY_JOB_ID}"
+echo "Array Task ID: ${SLURM_ARRAY_TASK_ID}"
+echo "CO2 Level: ${CO2L}"
+echo "Node: $(hostname)"
+echo "Start time: $(date)"
+echo "========================"
 
 # Set defaults for optional parameters
 TOTAL_BATCHES=${TOTAL_BATCHES:-1000}
