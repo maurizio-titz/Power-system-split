@@ -4,7 +4,7 @@ use_extensions = False  # set to False if no line extensions should be considere
 if use_extensions:
     root_path = "./"  # add the root path for your data and results here
 else:
-    root_path = "/."  # add the root path for your data and results here
+    root_path = "./"  # add the root path for your data and results here
 
 data_path = root_path + "/data/"
 path_to_grid_data = root_path + "/grid_params/"
