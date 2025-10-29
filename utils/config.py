@@ -1,17 +1,21 @@
 #!/usr/bin/env python
 
-use_extensions = True  # set to False if no line extensions should be considered
+use_extensions = False  # set to False if no line extensions should be considered
 if use_extensions:
-    root_path = "/srv/data/jlange/power-system-split/w_extensions/"  # add the root path for your data and results here
+    root_path = "./"  # add the root path for your data and results here
 else:
-    root_path = "/srv/data/jlange/power-system-split/no_extensions/"  # add the root path for your data and results here
+    root_path = "/."  # add the root path for your data and results here
 
 data_path = root_path + "/data/"
 path_to_grid_data = root_path + "/grid_params/"
 results_path = root_path + "/results/"
+if use_extensions:
+    results_path += "w_extensions/"
+else:
+    results_path += "no_extensions/"
 path_to_sclopf_data = root_path + "/data/European_networks_sclopf/"
-# path_to_lopf_data = root_path + "/data/European_networks_lopf/"
-path_to_lopf_data = "/srv/data/jlange/PYPSA3/sclopf-iter/workflow/submodules/pypsa-eur/s_max_pu_0.7/results/networks/"
+path_to_lopf_data = root_path + "/data/European_networks_lopf/"
+# path_to_lopf_data = "/srv/data/jlange/PYPSA3/sclopf-iter/workflow/submodules/pypsa-eur/s_max_pu_0.7/results/networks/"
 path_to_pypsa_network_lopf = path_to_lopf_data
 
 
