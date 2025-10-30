@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Parse command line arguments
-TEST_MODE=true
 if [[ "$1" == "--test" ]] || [[ "$1" == "-t" ]]; then
     TEST_MODE=true
     echo "Running in TEST MODE: 2 batches, short time range"
