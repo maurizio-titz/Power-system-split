@@ -5,6 +5,8 @@ TEST_MODE=true
 if [[ "$1" == "--test" ]] || [[ "$1" == "-t" ]]; then
     TEST_MODE=true
     echo "Running in TEST MODE: 2 batches, short time range"
+else
+    echo "Running in PRODUCTION MODE: 1000 batches, full year"
 fi
 
 # Define CO2 levels (matching your plot script)

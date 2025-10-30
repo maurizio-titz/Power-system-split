@@ -2,11 +2,10 @@
 #!/bin/bash -x
 #SBATCH --account=iek-10
 # budget account where contingent is taken from
-#SBATCH --nodes=64
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=dc-cpu-devel
 #SBATCH --job-name=casc_batch_co2_%A_%a
-#SBATCH --array=0-999  # 1000 batches per CO2 level (adjusted by submission script if TEST_MODE=1)
 #SBATCH --time=01:00:00
 #SBATCH --output=logs/cascade_batch_co2_%A_%a.out
 #SBATCH --error=logs/cascade_batch_co2_%A_%a.err
@@ -34,10 +33,13 @@ END_DATE=${END_DATE:-"2013-12-31 23:00"}
 # Load environment
 source /p/project1/iek-10/power-system-split/conda/bin/activate /p/project1/iek-10/power-system-split/conda/envs/myenv
 
+# Change to project root directory
+cd $(dirname "$0")/../..
+
 # Create logs directory
 mkdir -p logs
 
-# Change to project root directory and run the batch
+# Run the batch
 python -c "
 import sys
 sys.path.append('.')
