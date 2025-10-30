@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=dc-cpu-devel
-#SBATCH --job-name=cascade_collect_co2
+#SBATCH --job-name=casc_collect_batches
 #SBATCH --time=01:00:00
 #SBATCH --output=logs/cascade_collect_co2_%j.out
 #SBATCH --error=logs/cascade_collect_co2_%j.err
@@ -52,7 +52,7 @@ collect_batch_results(
     start_date=start_date,
     end_date=end_date,
     use_sclopf=True,
-    save_whole_cascades=False,
-    cleanup_batch_files=True
+    save_whole_cascades=True,
+    cleanup_batch_files=False
 )
 "

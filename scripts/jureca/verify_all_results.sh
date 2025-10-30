@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cascade_verify_all
+#SBATCH --job-name=casc_verify_all
 #SBATCH --time=01:00:00
 #SBATCH --account=iek-10
 # budget account where contingent is taken from

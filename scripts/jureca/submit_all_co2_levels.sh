@@ -15,10 +15,10 @@ if [ "$TEST_MODE" = true ]; then
     END_DATE="2013-01-01 04:00"
     ARRAY_RANGE="0-1"  # 2 batches (0,1)
 else
-    CO2_LEVELS=(0.6 0.4 0.2 0.1 0.05 0.0)
+    CO2_LEVELS=(0.6, 0.5, 0.4, 0.3, 0.2 0.1 0.05 0.0)
     TOTAL_BATCHES=1000
     START_DATE="2013-01-01 00:00"
-    END_DATE="2013-12-31 23:00"
+    END_DATE="2014-01-01 01:00"
     ARRAY_RANGE="0-999"  # 1000 batches
 fi
 

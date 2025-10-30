@@ -2,10 +2,10 @@
 #!/bin/bash -x
 #SBATCH --account=iek-10
 # budget account where contingent is taken from
-#SBATCH --nodes=1
+#SBATCH --nodes=64
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=dc-cpu-devel
-#SBATCH --job-name=cascade_batch_co2_%A_%a
+#SBATCH --job-name=casc_batch_co2_%A_%a
 #SBATCH --array=0-999  # 1000 batches per CO2 level (adjusted by submission script if TEST_MODE=1)
 #SBATCH --time=01:00:00
 #SBATCH --output=logs/cascade_batch_co2_%A_%a.out
@@ -59,7 +59,7 @@ run_cascade_dual_line_failures_batch(
     n_nodes=600,
     start_date=start_date,
     end_date=end_date,
-    save_whole_cascades=False,
+    save_whole_cascades=True,
     use_sclopf=True,
     check_n1_security=True,
     overwrite=True,
