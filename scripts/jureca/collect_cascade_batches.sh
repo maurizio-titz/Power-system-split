@@ -3,7 +3,7 @@
 # budget account where contingent is taken from
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --partition=dc-cpu-devel
+#SBATCH --partition=dc-cpu
 #SBATCH --job-name=casc_collect_batches
 #SBATCH --time=01:00:00
 #SBATCH --output=logs/cascade_collect_co2_%j.out
