@@ -12,7 +12,7 @@
 # Set defaults for optional parameters
 TOTAL_BATCHES=${TOTAL_BATCHES:-1000}
 START_DATE=${START_DATE:-"2013-01-01 00:00"}
-END_DATE=${END_DATE:-"2013-12-31 23:00"}
+END_DATE=${END_DATE:-"2014-01-01 00:00"}
 
 # Load environment
 source /p/project1/iek-10/power-system-split/conda/bin/activate /p/project1/iek-10/power-system-split/conda/envs/myenv
@@ -30,10 +30,10 @@ end_date = '${END_DATE}'
 
 # Determine CO2 levels based on total batches (test vs production)
 if total_batches == 2:
-    co2_levels = [0.6, 0.4]  # Test mode
+    co2_levels = [0.6, 0.0]  # Test mode
     print('=== TEST MODE: Verifying 2 CO2 Levels ===')
 else:
-    co2_levels = [0.6, 0.4, 0.2, 0.1, 0.05, 0.0]  # Production mode
+    co2_levels = [0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.0]  # Production mode
     print('=== PRODUCTION MODE: Verifying All CO2 Levels ===')
 
 print(f'Parameters:')
