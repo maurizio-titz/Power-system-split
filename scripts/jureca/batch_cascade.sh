@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=dc-cpu
 #SBATCH --job-name=casc_batch_co2_%A_%a
-#SBATCH --time=01:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=logs/cascade_batch_co2_%A_%a.out
 #SBATCH --error=logs/cascade_batch_co2_%A_%a.err
 
@@ -26,15 +26,15 @@ echo "Start time: $(date)"
 echo "========================"
 
 # Set defaults for optional parameters
-TOTAL_BATCHES=${TOTAL_BATCHES:-1000}
+TOTAL_BATCHES=${TOTAL_BATCHES:-256}
 START_DATE=${START_DATE:-"2013-01-01 00:00"}
-END_DATE=${END_DATE:-"2013-12-31 23:00"}
+END_DATE=${END_DATE:-"2014-01-01 01:00"}
 
 # Load environment
 source /p/project1/iek-10/power-system-split/conda/bin/activate /p/project1/iek-10/power-system-split/conda/envs/myenv
 
-# # Change to project root directory
-# cd $(dirname "$0")/../..
+# # Change to project root directory 
+# cd $(dirname "$0")/../.. # this is commented out because I run the script from the project root directly
 
 # Create logs directory
 mkdir -p logs

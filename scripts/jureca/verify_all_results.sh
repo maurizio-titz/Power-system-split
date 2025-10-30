@@ -10,7 +10,7 @@
 #SBATCH --error=logs/cascade_verify_all_%j.err
 
 # Set defaults for optional parameters
-TOTAL_BATCHES=${TOTAL_BATCHES:-1000}
+TOTAL_BATCHES=${TOTAL_BATCHES:-256}
 START_DATE=${START_DATE:-"2013-01-01 00:00"}
 END_DATE=${END_DATE:-"2014-01-01 00:00"}
 
