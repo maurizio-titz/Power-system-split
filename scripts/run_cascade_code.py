@@ -23,7 +23,7 @@ import utils.config as cfg
 from utils import (
     cascade_simulation,
     data_handling,
-    extend_transmission_capacity,
+    # extend_transmission_capacity,
     send_mattermost_messages,
 )
 from utils.config import (
@@ -288,7 +288,7 @@ def run_cascade_dual_line_failures(
                 + " First, likelihoods of primary and secondary failures are being evaluated:"
             )
         nx_graph_mod, importance_all_lines, selected_edges = (
-            extend_transmission_capacity.increase_capacity_most_important_lines(
+            # extend_transmission_capacity.increase_capacity_most_important_lines(
                 network,
                 nx_graph,
                 nn_links_extended,
