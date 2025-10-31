@@ -11,13 +11,13 @@ fi
 # Define CO2 levels (matching your plot script)
 if [ "$TEST_MODE" = true ]; then
     CO2_LEVELS=(0.1 0.0)  # Only test with 2 CO2 levels
-    TOTAL_BATCHES=128
+    TOTAL_BATCHES=256
     START_DATE="2013-01-01 00:00"
     END_DATE="2013-01-17 01:00"
     ARRAY_RANGE="0-1"  # 2 nodes (each processes 128 batches)
 else
     CO2_LEVELS=(0.5)
-    TOTAL_BATCHES=128
+    TOTAL_BATCHES=256
     START_DATE="2013-01-01 00:00"
     END_DATE="2014-01-01 01:00"
     ARRAY_RANGE="0-1"  # 2 nodes (each processes 128 batches)

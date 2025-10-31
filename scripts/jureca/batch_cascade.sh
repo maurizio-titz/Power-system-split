@@ -2,11 +2,11 @@
 #!/bin/bash -x
 #SBATCH --account=iek-10
 # budget account where contingent is taken from
-#SBATCH --nodes=1
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=128
 #SBATCH --partition=dc-cpu
 #SBATCH --job-name=casc_batch_co2_%A_%a
-#SBATCH --time=12:00:00
+#SBATCH --time=06:00:00
 #SBATCH --output=logs/cascade_batch_co2_%A_%a.out
 #SBATCH --error=logs/cascade_batch_co2_%A_%a.err
 
