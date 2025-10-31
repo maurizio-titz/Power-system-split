@@ -36,15 +36,8 @@ fi
 for co2l in "${CO2_LEVELS[@]}"; do
     echo "Submitting batch jobs for CO2 level: $co2l"
     
-    # Update array range based on mode
-    if [ "$TEST_MODE" = true ]; then
-        sbatch_array="--array=$ARRAY_RANGE"
-    else
-        sbatch_array="--array=$ARRAY_RANGE"
-    fi
-    
     # Submit batch job array with all environment variables
-    BATCH_JOB_ID=$(sbatch --parsable $sbatch_array \
+    BATCH_JOB_ID=$(sbatch --parsable --array=$ARRAY_RANGE \
         --job-name="cascade_batch_co2_${co2l}_%A_%a" \
         --export=CO2L=$co2l,TOTAL_BATCHES=$TOTAL_BATCHES,START_DATE="$START_DATE",END_DATE="$END_DATE" \
         $(dirname "$0")/batch_cascade.sh)
