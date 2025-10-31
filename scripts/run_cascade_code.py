@@ -350,20 +350,19 @@ def run_cascade_dual_line_failures(
     print("\n#### N-2 failures: Co2 level", co2l, " | #Nodes:", n_nodes, " ####")
     splitting_cascades = dict()
 
+    snapshots_within_bounds = snapshots
+    if start_timestamp_str is not None:
+        snapshots_within_bounds = snapshots_within_bounds[
+            snapshots_within_bounds
+            >= dt.strptime(start_timestamp_str, "%Y-%m-%d %H:%M")
+        ]
+    if stop_timestamp_str is not None:
+        snapshots_within_bounds = snapshots_within_bounds[
+            snapshots_within_bounds <= dt.strptime(stop_timestamp_str, "%Y-%m-%d %H:%M")
+        ]
     if n_checkpoints == 0:
         checkpoint_snaphots = []
     else:
-        snapshots_within_bounds = snapshots
-        if start_timestamp_str is not None:
-            snapshots_within_bounds = snapshots_within_bounds[
-                snapshots_within_bounds
-                >= dt.strptime(start_timestamp_str, "%Y-%m-%d %H:%M")
-            ]
-        if stop_timestamp_str is not None:
-            snapshots_within_bounds = snapshots_within_bounds[
-                snapshots_within_bounds
-                <= dt.strptime(stop_timestamp_str, "%Y-%m-%d %H:%M")
-            ]
         if n_checkpoints < 0:
             n_checkpoints = len(snapshots)
 
@@ -381,7 +380,7 @@ def run_cascade_dual_line_failures(
         print(f"Checkpoints will be created at {checkpoint_snaphots}.")
     last_checkpoint_snapshot = None
 
-    for i, snapshot in tqdm(enumerate(snapshots)):
+    for i, snapshot in enumerate(tqdm(snapshots_within_bounds)):
         key_now = snapshot.strftime("%Y-%m-%d %H:%M")
 
         if start_timestamp_str is not None:
@@ -395,7 +394,8 @@ def run_cascade_dual_line_failures(
         P_0 = injections_all_snapshots[snapshot]
 
         res_dict = dict()
-        for initial_failure in tqdm(n_2_failures, leave=False):
+        # for initial_failure in tqdm(n_2_failures, leave=False):
+        for initial_failure in n_2_failures:
             failing_links, system_split = cascade_simulation.simulate_cascade(
                 I_m,
                 B_d,
@@ -797,7 +797,7 @@ if __name__ == "__main__":
     #         overwrite=True,
     #     )
     start_date = "2013-01-01 00:00"
-    end_date = "2013-12-01 07:04"
+    end_date = "2013-11-01 04:04"
     use_sclopf = True
 
     total_batches = 2
@@ -812,7 +812,7 @@ if __name__ == "__main__":
             check_n1_security=False,
             start_date=start_date,
             end_date=end_date,
-            overwrite=False,
+            overwrite=True,
             n_checkpoints=2,
         )
 
