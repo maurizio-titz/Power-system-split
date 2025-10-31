@@ -218,6 +218,55 @@ def run_cascade_dual_line_failures(
     if line_mitigation_dict is not None:
         fpath_out += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4g}"
 
+    snapshots = data_handling.load_snapshot_list(co2lvl=co2l)
+    snapshots = data_handling.load_snapshot_list(co2lvl=co2l)
+
+    # If a start timestamp string was provided, snap it to the last available snapshot
+    # that is not larger than the requested start_timestamp_str.
+    if start_timestamp_str is not None or stop_timestamp_str is not None:
+        # Ensure we have a sorted list of snapshot datetimes
+        snapshots_list = sorted(list(snapshots))
+
+    if start_timestamp_str is not None:
+        target_dt = dt.strptime(start_timestamp_str, "%Y-%m-%d %H:%M")
+        eligible = [s for s in snapshots_list if s <= target_dt]
+        if eligible:
+            snapped = eligible[-1]
+            old = start_timestamp_str
+            start_timestamp_str = snapped.strftime("%Y-%m-%d %H:%M")
+            print(
+                f"Adjusted start_timestamp_str from {old} to nearest snapshot {start_timestamp_str}"
+            )
+        else:
+            # If no snapshot is <= target, use the first snapshot
+            snapped = snapshots_list[0]
+            start_timestamp_str = snapped.strftime("%Y-%m-%d %H:%M")
+            print(
+                f"Provided start_timestamp_str {target_dt} is earlier than first snapshot. "
+                f"Using first snapshot {start_timestamp_str} as start."
+            )
+
+    # If a stop timestamp string was provided, snap it to the first available snapshot
+    # that is not smaller than the requested stop_timestamp_str.
+    if stop_timestamp_str is not None:
+        target_dt = dt.strptime(stop_timestamp_str, "%Y-%m-%d %H:%M")
+        # Ensure snapshots_list exists (handled above when either timestamp is provided)
+        eligible = [s for s in snapshots_list if s >= target_dt]
+        if eligible:
+            snapped = eligible[0]
+            old = stop_timestamp_str
+            stop_timestamp_str = snapped.strftime("%Y-%m-%d %H:%M")
+            print(
+                f"Adjusted stop_timestamp_str from {old} to nearest snapshot {stop_timestamp_str}"
+            )
+        else:
+            # If no snapshot is >= target, use the last snapshot
+            snapped = snapshots_list[-1]
+            stop_timestamp_str = snapped.strftime("%Y-%m-%d %H:%M")
+            print(
+                f"Provided stop_timestamp_str {target_dt} is later than last snapshot. "
+                f"Using last snapshot {stop_timestamp_str} as stop."
+            )
     if start_timestamp_str is not None:
         fpath_out += f"_from{start_timestamp_str.replace(' ', '_')}"
 
@@ -237,7 +286,6 @@ def run_cascade_dual_line_failures(
 
     # Load PyPSA network, the graph of the subnetwork and its matrices
     nx_graph = data_handling.load_networkx_graph(snet_index=snet_index, co2lvl=co2l)
-    snapshots = data_handling.load_snapshot_list(co2lvl=co2l)
     injections_all_snapshots = data_handling.load_effective_injections(co2lvl=co2l)
 
     # Check if line extension mitigation is supposed to be run.
@@ -305,12 +353,32 @@ def run_cascade_dual_line_failures(
     if n_checkpoints == 0:
         checkpoint_snaphots = []
     else:
+        snapshots_within_bounds = snapshots
+        if start_timestamp_str is not None:
+            snapshots_within_bounds = snapshots_within_bounds[
+                snapshots_within_bounds
+                >= dt.strptime(start_timestamp_str, "%Y-%m-%d %H:%M")
+            ]
+        if stop_timestamp_str is not None:
+            snapshots_within_bounds = snapshots_within_bounds[
+                snapshots_within_bounds
+                <= dt.strptime(stop_timestamp_str, "%Y-%m-%d %H:%M")
+            ]
         if n_checkpoints < 0:
             n_checkpoints = len(snapshots)
 
-        checkpoint_idxs = np.arange(0, len(snapshots), len(snapshots) // n_checkpoints)
-        print(checkpoint_idxs)
-        checkpoint_snaphots = snapshots[checkpoint_idxs]
+        if n_checkpoints <= 0:
+            checkpoint_idxs = np.array([], dtype=int)
+        else:
+            N = len(snapshots_within_bounds)
+            # Need at least 3 snapshots to have interior points (exclude first and last)
+            if N <= 2:
+                checkpoint_idxs = np.array([], dtype=int)
+            else:
+                idxs = np.linspace(0, N, num=n_checkpoints + 2)[1:-1]
+                checkpoint_idxs = np.unique(np.round(idxs).astype(int))
+        checkpoint_snaphots = snapshots_within_bounds[checkpoint_idxs]
+        print(f"Checkpoints will be created at {checkpoint_snaphots}.")
     last_checkpoint_snapshot = None
 
     for i, snapshot in tqdm(enumerate(snapshots)):
@@ -710,7 +778,7 @@ if __name__ == "__main__":
     # Load arguments
     n_nodes = 600
     co2l = get_co2_levels(n_nodes)
-    co2l = [0.6]
+    co2l = [0.5]
     if isinstance(co2l, float):
         co2l = [co2l]
     save_whole_cascades = False
@@ -729,10 +797,10 @@ if __name__ == "__main__":
     #         overwrite=True,
     #     )
     start_date = "2013-01-01 00:00"
-    end_date = "2013-01-02 00:00"
+    end_date = "2013-12-01 07:04"
     use_sclopf = True
 
-    total_batches = 8
+    total_batches = 2
     for batch_id in range(total_batches):
         output_filename = run_cascade_dual_line_failures_batch(
             batch_id=batch_id,
@@ -741,41 +809,41 @@ if __name__ == "__main__":
             n_nodes=600,
             save_whole_cascades=True,
             use_sclopf=use_sclopf,
-            check_n1_security=True,
+            check_n1_security=False,
             start_date=start_date,
             end_date=end_date,
-            overwrite=True,
-            n_checkpoints=0,
+            overwrite=False,
+            n_checkpoints=2,
         )
 
-    output_filename = f"system_splits_Co2L{co2l}_n{n_nodes}"
+    # output_filename = f"system_splits_Co2L{co2l}_n{n_nodes}"
 
-    if not use_sclopf:
-        output_filename += "_lopf"
+    # if not use_sclopf:
+    #     output_filename += "_lopf"
 
-    if save_whole_cascades:
-        output_filename += "_allcascades"
+    # if save_whole_cascades:
+    #     output_filename += "_allcascades"
 
-    if start_date is not None:
-        output_filename += f"_from{start_date.replace(' ', '_')}"
+    # if start_date is not None:
+    #     output_filename += f"_from{start_date.replace(' ', '_')}"
 
-    if end_date is not None:
-        output_filename += f"_to{end_date.replace(' ', '_')}"
-    output_filename = output_filename + "_collected.pklz"
+    # if end_date is not None:
+    #     output_filename += f"_to{end_date.replace(' ', '_')}"
+    # output_filename = output_filename + "_collected.pklz"
 
-    collect_batch_results(
-        co2l=0.6,
-        n_nodes=600,
-        total_batches=total_batches,
-        start_date=start_date,
-        end_date=end_date,
-        use_sclopf=True,
-        save_whole_cascades=True,
-        output_filename=output_filename,
-        cleanup_batch_files=False,
-    )
-    verify_collected_results(
-        collected_filepath=save_path_sclopf + output_filename,
-        expected_start_date=start_date,
-        expected_end_date=end_date,
-    )
+    # collect_batch_results(
+    #     co2l=0.6,
+    #     n_nodes=600,
+    #     total_batches=total_batches,
+    #     start_date=start_date,
+    #     end_date=end_date,
+    #     use_sclopf=True,
+    #     save_whole_cascades=True,
+    #     output_filename=output_filename,
+    #     cleanup_batch_files=False,
+    # )
+    # verify_collected_results(
+    #     collected_filepath=save_path_sclopf + output_filename,
+    #     expected_start_date=start_date,
+    #     expected_end_date=end_date,
+    # )
