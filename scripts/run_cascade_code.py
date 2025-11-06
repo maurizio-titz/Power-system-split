@@ -422,7 +422,9 @@ def run_cascade_dual_line_failures(
         splitting_cascades[key_now] = res_dict
 
         if snapshot in checkpoint_snaphots:
-            with gzip.open(fpath_out + "_" + str(snapshot) + "_.pklz", "wb") as handle:
+            with gzip.open(
+                fpath_out + "_checkpoint" + str(snapshot) + ".pklz", "wb"
+            ) as handle:
                 if line_mitigation_dict is None:
                     pickle.dump(
                         splitting_cascades, handle, protocol=pickle.HIGHEST_PROTOCOL
@@ -437,12 +439,10 @@ def run_cascade_dual_line_failures(
                     #     protocol=pickle.HIGHEST_PROTOCOL,
                     # )
                 if last_checkpoint_snapshot:
-                    os.remove(
-                        fpath_out + "_" + str(last_checkpoint_snapshot) + "_.pklz"
-                    )
+                    os.remove(fpath_out + "_checkpoint" + str(snapshot) + ".pklz")
                 print(
                     f"######### Savepoint {i}, at snapshot {snapshot}. saved to",
-                    fpath_out + "_" + str(snapshot) + "_.pklz #########",
+                    fpath_out + "_checkpoint" + str(snapshot) + ".pklz #########",
                 )
                 last_checkpoint_snapshot = snapshot
 
@@ -529,179 +529,85 @@ def run_cascade_dual_line_failures_batch(
 
 
 def collect_batch_results(
+    path_to_results: str,
     co2l: float,
     n_nodes: int,
-    total_batches: int,
-    start_date: str = "2013-01-01 00:00",
-    end_date: str = "2013-12-31 23:00",
-    use_sclopf: bool = True,
-    save_whole_cascades: bool = False,
-    line_mitigation_dict: dict = None,
-    output_filename: str = None,
-    cleanup_batch_files: bool = False,
+    required_str: list = [],
+    exclude_str: list = [],
+    save_dir: str = None,
+    all_cascades: bool = True,
 ):
-    """Collect results from all batch runs and save in a single file.
+    """Collect batch results based on required strings in filenames.
 
     Args:
-        co2l (float): CO2 level
-        n_nodes (int): Number of nodes
-        total_batches (int): Total number of batches to collect
-        start_date (str): Start date used in batching
-        end_date (str): End date used in batching
-        use_sclopf (bool): Whether SCLOPF was used
-        save_whole_cascades (bool): Whether whole cascades were saved
-        line_mitigation_dict (dict): Line mitigation dictionary if used
-        output_filename (str): Custom output filename (optional)
-        cleanup_batch_files (bool): Whether to delete individual batch files after collection
+        required_str (list(str)): List of strings that must be in the
+        filenames to include the batch results.
+        exclude_str (list(str)): List of strings that must not be in the
+        filenames to include the batch results.
 
     Returns:
-        str: Path to the collected results file
+        dict: A dictionary with batch IDs as keys and their results as values.
     """
-    from datetime import datetime, timedelta
-    import glob
-
-    # Determine save path
-    if use_sclopf:
-        save_path = save_path_sclopf
-    else:
-        save_path = save_path_lopf
-
-    # Build expected filename pattern for batch files
-    base_filename = f"system_splits_Co2L{co2l}_n{n_nodes}"
-
-    if not use_sclopf:
-        base_filename += "_lopf"
-
-    if save_whole_cascades:
-        base_filename += "_allcascades"
-
-    if line_mitigation_dict is not None:
-        nn_links_extended = line_mitigation_dict["nn_links"]
-        delta_num_parallel = line_mitigation_dict["delta_num_parallel"]
-        base_filename += f"_lineextension_nnlines{nn_links_extended}_deltanumpara{delta_num_parallel:.4g}"
-
-    # Parse dates for batch calculation
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d %H:%M")
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d %H:%M")
-    total_duration = end_dt - start_dt
-    batch_duration = total_duration / total_batches
-
-    # Collect all batch results
+    batch_files = []
     collected_results = {}
-    missing_batches = []
+    collected_results_splitting = {}
 
-    print(f"Collecting results from {total_batches} batches...")
+    candidate_files = os.listdir(path_to_results)
+    print(f"Scanning {len(candidate_files)} files in {path_to_results}. Filtering....")
 
-    for batch_id in tqdm(range(total_batches)):
-        # Calculate batch timestamps
-        batch_start = start_dt + batch_id * batch_duration
-        batch_end = start_dt + (batch_id + 1) * batch_duration
+    required_str += [f"Co2L{co2l}", f"n{n_nodes}"]
+    for filename in tqdm(candidate_files):
+        if not filename.endswith(".pklz"):
+            continue
+        if any(req not in filename for req in required_str):
+            continue
+        if any(exc in filename for exc in exclude_str):
+            continue
+        batch_files.append(filename)
 
-        start_timestamp_str = batch_start.strftime("%Y-%m-%d %H:%M")
-        end_timestamp_str = batch_end.strftime("%Y-%m-%d %H:%M")
+    print(f"Found {len(batch_files)} batch files matching criteria. Concatenating...")
 
-        # Build expected batch filename
-        batch_filename = base_filename
-        batch_filename += f"_from{start_timestamp_str.replace(' ', '_')}"
-        batch_filename += f"_to{end_timestamp_str.replace(' ', '_')}"
-        batch_filepath = save_path + batch_filename + ".pklz"
+    for filename in tqdm(batch_files):
+        with gzip.open(os.path.join(path_to_results, filename), "rb") as handle:
+            result = pickle.load(handle)
+        if all_cascades:
+            collected_results.update(result)
 
-        # Try to load the batch file
-        if os.path.exists(batch_filepath):
-            try:
-                with gzip.open(batch_filepath, "rb") as handle:
-                    batch_data = pickle.load(handle)
-
-                # Handle different data structures (with or without line mitigation)
-                if line_mitigation_dict is not None:
-                    raise NotImplementedError(
-                        "Line extension mitigation not implemented yet."
+        for timestamp, failure_to_cascades in tqdm(result.items(), leave=False):
+            if timestamp not in collected_results_splitting.keys():
+                collected_results_splitting[timestamp] = {}
+            for failure, (
+                cascades,
+                system_split,
+                weight,
+            ) in failure_to_cascades.items():
+                if system_split:
+                    collected_results_splitting[timestamp][failure] = (
+                        cascades,
+                        weight,
                     )
-                    # # Data structure: (importance_all_lines, selected_edges, splitting_cascades)
-                    # if batch_id == 0:
-                    #     # Store metadata from first batch
-                    #     importance_all_lines, selected_edges, batch_cascades = (
-                    #         batch_data
-                    #     )
-                    #     collected_metadata = (importance_all_lines, selected_edges)
-                    # else:
-                    #     _, _, batch_cascades = batch_data
-                else:
-                    # Data structure: splitting_cascades dict
-                    batch_cascades = batch_data
 
-                # Merge batch results into collected results
-                collected_results.update(batch_cascades)
+    print(f"{len(collected_results)} snapshots collected from batch results.")
 
-            except Exception as e:
-                print(f"Error loading batch {batch_id} from {batch_filepath}: {e}")
-                missing_batches.append(batch_id)
-        else:
-            print(f"Missing batch file: {batch_filepath}")
-            missing_batches.append(batch_id)
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+        with gzip.open(
+            save_dir + f"system_splits_Co2L{co2l}_n{n_nodes}.pklz", "wb"
+        ) as handle:
+            pickle.dump(
+                collected_results_splitting, handle, protocol=pickle.HIGHEST_PROTOCOL
+            )
+        print(f"Collected results saved to: {save_dir}")
 
-    if missing_batches:
-        print(f"Warning: Missing {len(missing_batches)} batch files: {missing_batches}")
-
-    print(f"Collected results from {total_batches - len(missing_batches)} batches")
-    print(f"Total timestamps in collected results: {len(collected_results)}")
-
-    # Create output filename
-    if output_filename is None:
-        output_filename = base_filename + "_collected.pklz"
-    else:
-        if not output_filename.endswith(".pklz"):
-            output_filename += ".pklz"
-
-    output_filepath = save_path + output_filename
-
-    # Save collected results
-    with gzip.open(output_filepath, "wb") as handle:
-        if line_mitigation_dict is not None:
-            raise NotImplementedError("Line extension mitigation not implemented yet.")
-            # pickle.dump(
-            #     (collected_metadata[0], collected_metadata[1], collected_results),
-            #     handle,
-            #     protocol=pickle.HIGHEST_PROTOCOL,
-            # )
-        else:
+    if all_cascades and save_dir is not None:
+        with gzip.open(
+            save_dir + f"system_splits_Co2L{co2l}_n{n_nodes}_allcascades.pklz",
+            "wb",
+        ) as handle:
             pickle.dump(collected_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        print(f"All cascades results saved to: {save_dir}")
 
-    print(f"Collected results saved to: {output_filepath}")
-
-    # Optionally clean up individual batch files
-    if cleanup_batch_files:
-        print("Cleaning up individual batch files...")
-        for batch_id in range(total_batches):
-            if batch_id not in missing_batches:
-                # Calculate batch timestamps
-                batch_start = start_dt + batch_id * batch_duration
-                batch_end = start_dt + (batch_id + 1) * batch_duration
-
-                start_timestamp_str = batch_start.strftime("%Y-%m-%d %H:%M")
-                end_timestamp_str = batch_end.strftime("%Y-%m-%d %H:%M")
-
-                # Build batch filename
-                batch_filename = base_filename
-                batch_filename += f"_from{start_timestamp_str.replace(' ', '_')}"
-                batch_filename += f"_to{end_timestamp_str.replace(' ', '_')}"
-                batch_filepath = save_path + batch_filename + ".pklz"
-
-                try:
-                    os.remove(batch_filepath)
-                    print(f"Removed: {batch_filepath}")
-                except Exception as e:
-                    print(f"Error removing {batch_filepath}: {e}")
-
-    # Create summary report
-    print("\n=== Collection Summary ===")
-    print(f"Total batches expected: {total_batches}")
-    print(f"Batches successfully collected: {total_batches - len(missing_batches)}")
-    print(f"Missing batches: {len(missing_batches)}")
-    print(f"Total timestamps collected: {len(collected_results)}")
-    print(f"Output file: {output_filepath}")
-
-    return output_filepath
+    return collected_results
 
 
 def verify_collected_results(
@@ -777,59 +683,63 @@ if __name__ == "__main__":
 
     # Load arguments
     n_nodes = 600
-    co2l = get_co2_levels(n_nodes)
-    co2l = [0.5]
-    if isinstance(co2l, float):
-        co2l = [co2l]
+    co2ls = get_co2_levels(n_nodes)
+    # co2l = [0.5]
+    if isinstance(co2ls, float):
+        co2ls = [co2ls]
     save_whole_cascades = False
 
-    # for co2l in co2l_in:
-    #     run_cascade_dual_line_failures(
-    #         co2l,
-    #         n_nodes_in,
-    #         save_whole_cascades=save_whole_cascades,
-    #         use_sclopf=True,
-    #         n_checkpoints=20,
-    #         check_n1_security=True,
-    #         # line_mitigation_dict=None,
-    #         start_timestamp_str="2013-01-01 03:00:00",
-    #         stop_timestamp_str="2013-01-01 06:00:00",
-    #         overwrite=True,
-    #     )
+    for co2l in co2ls:
+        if co2l > 0.4:
+            continue
+        run_cascade_dual_line_failures(
+            co2l,
+            n_nodes,
+            save_whole_cascades=save_whole_cascades,
+            use_sclopf=True,
+            n_checkpoints=0,
+            check_n1_security=True,
+            # line_mitigation_dict=None,
+            # start_timestamp_str="2013-01-01 03:00:00",
+            # stop_timestamp_str="2014-12-31 06:00",
+            overwrite=True,
+        )
+    exit()
+
     start_date = "2013-01-01 00:00"
     end_date = "2013-11-01 04:04"
     use_sclopf = True
 
-    total_batches = 2
-    for batch_id in range(total_batches):
-        output_filename = run_cascade_dual_line_failures_batch(
-            batch_id=batch_id,
-            total_batches=total_batches,
-            co2l=0.6,
-            n_nodes=600,
-            save_whole_cascades=True,
-            use_sclopf=use_sclopf,
-            check_n1_security=False,
-            start_date=start_date,
-            end_date=end_date,
-            overwrite=True,
-            n_checkpoints=2,
-        )
+    # total_batches = 2
+    # for batch_id in range(total_batches):
+    #     output_filename = run_cascade_dual_line_failures_batch(
+    #         batch_id=batch_id,
+    #         total_batches=total_batches,
+    #         co2l=0.6,
+    #         n_nodes=600,
+    #         save_whole_cascades=True,
+    #         use_sclopf=use_sclopf,
+    #         check_n1_security=False,
+    #         start_date=start_date,
+    #         end_date=end_date,
+    #         overwrite=True,
+    #         n_checkpoints=2,
+    #     )
 
-    # output_filename = f"system_splits_Co2L{co2l}_n{n_nodes}"
+    output_filename = f"system_splits_Co2L{co2l}_n{n_nodes}"
 
-    # if not use_sclopf:
-    #     output_filename += "_lopf"
+    if not use_sclopf:
+        output_filename += "_lopf"
 
-    # if save_whole_cascades:
-    #     output_filename += "_allcascades"
+    if save_whole_cascades:
+        output_filename += "_allcascades"
 
-    # if start_date is not None:
-    #     output_filename += f"_from{start_date.replace(' ', '_')}"
+    if start_date is not None:
+        output_filename += f"_from{start_date.replace(' ', '_')}"
 
-    # if end_date is not None:
-    #     output_filename += f"_to{end_date.replace(' ', '_')}"
-    # output_filename = output_filename + "_collected.pklz"
+    if end_date is not None:
+        output_filename += f"_to{end_date.replace(' ', '_')}"
+    output_filename = output_filename + "_collected.pklz"
 
     # collect_batch_results(
     #     co2l=0.6,
