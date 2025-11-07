@@ -138,6 +138,47 @@ def get_circuit_counts_in_all_lines(num_parallels, use_sclopf: bool = True):
     return line_type_counts
 
 
+def get_partition(total_weight, weights: tuple = (0.29, 0.59, 1)):
+    """get the partition of the total weight into the given weights.
+    This function was graciously contributed by M. Titz"""
+    import numpy as np
+    from scipy.optimize import nnls
+
+    # Convert to numpy array for easier manipulation
+    weights_array = np.array(weights)
+
+    # Try all possible combinations up to reasonable limits
+    max_coeff = int(total_weight / min(weights)) + 1
+
+    for c0 in range(max_coeff):
+        for c1 in range(max_coeff - c0):
+            for c2 in range(max_coeff - c0 - c1):
+                candidate = np.array([c0, c1, c2])
+                if np.isclose(
+                    np.dot(candidate, weights_array), total_weight, atol=1e-6
+                ):
+                    return candidate
+    raise ValueError("No valid partition found for the given total weight.")
+
+
+def infer_circuit_counts_extension(
+    num_parallels, num_parallels_extension, use_sclopf: bool = True
+) -> pd.DataFrame:
+    """Get the counts of different line types by which each line was extended.
+    Args:
+        num_parallels (list-like): Effective number of parallel lines per edge.
+        num_parallels_extension (list-like): the per line num_parallel values by which each line was extended
+    Returns:
+        pd.DataFrame: DataFrame where each row corresponds to a line and each column to a
+            line type (defined by num_parallel reduction when one circuit is removed).
+    """
+    raise NotImplementedError("Function not yet implemented.")
+    if use_sclopf:
+        look_up_table = LOOKUP_TABLE_NP
+    else:
+        look_up_table = LOOKUP_TABLE_NP_non_sclopf
+
+
 def remove_highest_volt_lvl_circuit(
     num_parallel: float,
     use_sclopf: bool = True,
@@ -185,7 +226,10 @@ def remove_highest_volt_lvl_circuit(
 
 
 def calc_possible_double_line_failures(
-    num_parallels, ignored_idxs=None, use_sclopf: bool = True
+    num_parallels,
+    ignored_idxs=None,
+    use_sclopf: bool = True,
+    num_parallels_extension=None,
 ):
     """Determine the set of possible double line failures.
 
@@ -193,6 +237,7 @@ def calc_possible_double_line_failures(
         num_parallels (list-like): Effective number of parallel lines per edge.
         ignored_idxs (list-like, optional): Edges that should not fail.
         use_sclopf (bool): If 'True' use num_parallel lookup table for non sclopf PyPSA network.
+        num_parallels_extension (list-like, optional): the per line num_parallel values by which each line was extended
 
     Returns:
         list: List of dicts, where each dict contains two matrix indices of lines
@@ -200,6 +245,8 @@ def calc_possible_double_line_failures(
     circuit_counts_per_line = get_circuit_counts_in_all_lines(
         num_parallels, use_sclopf=use_sclopf
     )
+    if num_parallels_extension is not None:
+        raise NotImplementedError("Function not yet implemented.")
 
     if not ignored_idxs:
         edge_indices = range(len(num_parallels))
