@@ -2,10 +2,11 @@ import gzip
 import os
 import pickle
 import sys
-from typing import Callable
+from typing import Callable, Union
 
 import numpy as np
 import scipy
+from scipy import sparse
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.preprocessing import normalize
 from tqdm import tqdm
@@ -83,6 +84,84 @@ def typed_katz_centrality_batch(
 
     return abs(c)
     # return c
+
+
+def neighborhood_impurity_batch(
+    adjacency_matrix: Union[np.matrix, sparse.csr_matrix],
+    node_class_vectors: np.ndarray,
+    decay_factor: float = 1.5,
+    max_distance: int = 10,
+    impurity_type: str = "normalized_shannon",
+    neg_val_tolerance: float = 1e-6,
+) -> np.ndarray:
+    """calculates the nodewise neighbourhood impurity, i.e. how close the node is to nodes of the opposite class.
+    adjacency_matrix: adjacency matrix of the graph
+    node_class_vectors_one_hot: one-hot encoded node class vectors, shape (n_instances, n_nodes, n_classes)
+    decay_factor: decay factor for the Katz centrality
+    max_distance: maximum distance to consider
+    impurity_type: type of impurity to calculate, either "normalized_shannon" or "gini"
+    neg_val_tolerance: tolerance for negative impurity values due to numerical errors
+    returns: nodewise impurity values, shape (n_instances, n_nodes)
+    """
+
+    if len(node_class_vectors.shape) == 3:
+        n_classes = node_class_vectors.shape[2]
+        if n_classes > 1:
+            node_class_vectors_one_hot = node_class_vectors
+        else:
+            raise ValueError(
+                "node_class_vectors seems to be one-hot encoded but has only one class"
+            )
+    else:
+        n_classes = len(np.unique(node_class_vectors))
+        if n_classes > 1:
+            # one-hot encode the node class vectors
+            node_class_vectors_one_hot = np.stack(
+                [(node_class_vectors == cls).astype(int) for cls in range(n_classes)],
+                axis=0,
+            )
+        else:
+            raise ValueError(
+                "node_class_vectors is not one-hot encoded but has only one unique value"
+            )
+
+    print(f"number of classes: {n_classes}")
+
+    if scipy.sparse.issparse(adjacency_matrix):
+        adjacency_matrix = adjacency_matrix.toarray()
+
+    c = np.sum(
+        [
+            node_class_vectors_one_hot
+            @ normalize(np.linalg.matrix_power(adjacency_matrix, d), axis=0, norm="l1")
+            * d ** (-decay_factor)
+            for d in range(
+                1, max_distance + 1
+            )  # +1 because 0 would be the identity matrix
+        ],
+        axis=0,
+    )
+    c = c / (
+        np.sum(c, axis=0, keepdims=True)
+    )  # normalize across classes to get probabilities
+
+    assert (
+        c.shape == node_class_vectors_one_hot.shape
+    ), "c.shape != node_class_vectors.shape"
+
+    if impurity_type == "normalized_shannon":
+        c = -np.sum(c * np.log(c + 1e-10), axis=0) / np.log(n_classes)
+    elif impurity_type == "gini":
+        c = 1 - np.sum(c**2, axis=0)
+
+    if np.min(c) < 0:
+        if np.min(c) > -neg_val_tolerance:
+            c = np.clip(c, 0, 1)
+        else:
+            raise ValueError(
+                f"negative impurity values encountered, smallest value: {np.min(c)}"
+            )
+    return c
 
 
 def product_weighted_hamming_distance(
@@ -194,6 +273,54 @@ def balanced_overlap_distance_weighted(
         )
         / 2
     )
+
+
+def multi_balanced_overlap_distance_weighted(
+    node_classes0: np.ndarray,
+    node_classes1: np.ndarray,
+    node_weights0: np.ndarray,
+    node_weights1: np.ndarray,
+    dtype=np.float16,
+) -> np.float16:
+    """calculates the balanced overlap distance between two indicator vectors with an arbitrary number of classes, weighted by the sum of the node uncertainties."""
+
+    assert (
+        node_classes0.shape == node_classes1.shape
+    ), "node_classes0 and node_classes1 must have the same shape"
+    assert (
+        node_weights0.shape == node_weights1.shape
+    ), "node_weights0 and node_weights1 must have the same shape"
+    assert (
+        node_classes0.shape == node_weights0.shape
+    ), "node_classes0 and node_weights0 must have the same shape"
+
+    assert all(node_weights0 >= 0), "node_weights0 must be non-negative"
+    assert all(node_weights1 >= 0), "node_weights1 must be non-negative"
+
+    classes = np.unique(np.concatenate([node_classes0, node_classes1]))
+    # print(f"classes: {classes}")
+
+    per_class_score = [
+        ((node_classes0 == cls) * (node_classes1 == cls))
+        @ (node_weights0 + node_weights1)
+        / (
+            np.inner(node_classes0 == cls, node_weights0)
+            + np.inner(node_classes1 == cls, node_weights1)
+        )
+        for cls in classes
+    ]
+    # print(per_class_score)
+
+    distance = 1 - sum(per_class_score) / len(classes)
+
+    # raise error if distance is nan
+    if np.isnan(distance):
+        raise ValueError("distance is nan")
+
+    if dtype is not None:
+        distance = dtype(distance)
+
+    return distance
 
 
 def balanced_overlap_distance(
