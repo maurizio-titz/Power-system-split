@@ -39,10 +39,7 @@ def update_line_params(n: pypsa.Network):
 
     if isinstance(n, pypsa.SubNetwork):
         n = n.network
-    # ext_i = n.get_extendable_i("Line")
-    # typed_i = n.lines.query('type != ""').index
-    # ext_untyped_i = ext_i.difference(typed_i)
-    # ext_typed_i = ext_i.intersection(typed_i)
+
     base_s_nom = (
         np.sqrt(3)
         * n.lines["type"].map(n.line_types.i_nom)
@@ -51,17 +48,8 @@ def update_line_params(n: pypsa.Network):
     # s_nom_prev = n.lines.num_parallel * base_s_nom
     factor = n.lines.s_nom_opt / n.lines.s_nom
     print("mean extension level= ", factor.mean())
-    # print("mean num_parallel prev= ", n.lines.num_parallel.mean())
-    # print("mean num_parallel post= ", n.lines.num_parallel.mean())
 
-    # for attr, carrier in (("x", "AC"), ("r", "DC")):
-    #     ln_i = n.lines.query("carrier == @carrier").index.intersection(ext_untyped_i)
-    #     n.lines.loc[ln_i, attr] /= factor[ln_i]
-    carrier = "AC"
     n.lines.loc[:, "x_pu_eff"] /= factor
-
-    # ln_i = ext_i.intersection(typed_i)
-
     n.lines.loc[:, "num_parallel"] = n.lines.s_nom_opt / base_s_nom
 
     # return n.lines
