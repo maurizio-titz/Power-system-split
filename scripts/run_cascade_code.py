@@ -555,6 +555,18 @@ def collect_batch_results(
     candidate_files = os.listdir(path_to_results)
     print(f"Scanning {len(candidate_files)} files in {path_to_results}. Filtering....")
 
+    splitting_cascades_save_path = (
+        save_dir + f"system_splits_Co2L{co2l}_n{n_nodes}.pklz"
+    )
+    if all_cascades and save_dir is not None:
+        all_cascades_save_path = (
+            save_dir + f"system_splits_Co2L{co2l}_n{n_nodes}_allcascades.pklz"
+        )
+
+    if os.path.exists(splitting_cascades_save_path):
+        print("Collected results file already exists at:", splitting_cascades_save_path)
+        return
+
     required_str += [f"Co2L{co2l}", f"n{n_nodes}"]
     for filename in tqdm(candidate_files):
         if not filename.endswith(".pklz"):
@@ -567,7 +579,7 @@ def collect_batch_results(
 
     print(f"Found {len(batch_files)} batch files matching criteria. Concatenating...")
 
-    for filename in tqdm(batch_files):
+    for filename in tqdm(batch_files, desc=f"Collecting batch results of co2l {co2l}"):
         with gzip.open(os.path.join(path_to_results, filename), "rb") as handle:
             result = pickle.load(handle)
         if all_cascades:
@@ -591,9 +603,7 @@ def collect_batch_results(
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
-        with gzip.open(
-            save_dir + f"system_splits_Co2L{co2l}_n{n_nodes}.pklz", "wb"
-        ) as handle:
+        with gzip.open(splitting_cascades_save_path, "wb") as handle:
             pickle.dump(
                 collected_results_splitting, handle, protocol=pickle.HIGHEST_PROTOCOL
             )
@@ -601,7 +611,7 @@ def collect_batch_results(
 
     if all_cascades and save_dir is not None:
         with gzip.open(
-            save_dir + f"system_splits_Co2L{co2l}_n{n_nodes}_allcascades.pklz",
+            all_cascades_save_path,
             "wb",
         ) as handle:
             pickle.dump(collected_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
