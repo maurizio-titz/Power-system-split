@@ -70,9 +70,9 @@ for co2l in tqdm(co2l_list):
 
     # Load PyPSA network and the graph of the subnetwork
     network = data_handling.load_pypsa_network(
-        co2lvl=0.0, n_nodes=n_nodes, use_sclopf=use_sclopf
+        co2lvl=co2l, n_nodes=n_nodes, use_sclopf=use_sclopf
     )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    nx_graph = data_handling.load_networkx_graph(co2lvl=co2l, snet_index=snet_index)
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
         nx_graph
     )
@@ -92,10 +92,18 @@ for co2l in tqdm(co2l_list):
     component_props = pd.concat(
         [component_props, component_props_level], ignore_index=True
     )
+component_props.to_hdf(
+    save_path + f"component_properties_all_n{n_nodes}.h5", key="df", mode="w"
+)
 
 #### Cluster splits ####
 print("\n### Extracting splits ###\n")
 print("Current time:", datetime.datetime.now())
+
+if "component_props" not in locals():
+    component_props = pd.read_hdf(
+        save_path + f"component_properties_all_n{n_nodes}.h5", key="df"
+    )
 
 snapshot_weightings = data_handling.load_pypsa_network(
     co2lvl=0.0, n_nodes=n_nodes, use_sclopf=use_sclopf
@@ -115,9 +123,12 @@ if use_sclopf:
     triggers_0 = [ii[0] for ii in triggers_0.values]
     triggers_1 = split_groups.init_failure_1.unique()
     triggers_1 = [ii[0] for ii in triggers_1.values]
+    trigger_weighting = split_groups.trigger_weighting.unique()
+    trigger_weighting = [ii[0] for ii in trigger_weighting.values]
 
     split_props["init_failure_0"] = triggers_0
     split_props["init_failure_1"] = triggers_1
+    split_props["trigger_weighting"] = trigger_weighting
 else:
     triggers = split_groups.init_failure.unique()
     triggers = [ii[0] for ii in triggers.values]
@@ -144,9 +155,6 @@ split_props["snapshot_weighting"] = snapshot_weightings.generators.loc[
 split_props["co2l"] = split_props.index.get_level_values("co2l")
 
 
-component_props.to_hdf(
-    save_path + f"component_properties_all_n{n_nodes}.h5", key="df", mode="w"
-)
 split_props.to_hdf(
     save_path + f"split_properties_all_n{n_nodes}.h5", key="df", mode="w"
 )
@@ -167,9 +175,9 @@ for co2l in co2l_list[::-1]:
     network = data_handling.load_pypsa_network(
         co2lvl=co2l, n_nodes=n_nodes, use_sclopf=use_sclopf
     )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
-    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
-        nx_graph
+    nx_graph = data_handling.load_networkx_graph(co2lvl=co2l, snet_index=snet_index)
+    I_m, B_d, num_parallels, line_limits = data_handling.load_grid_matrices(
+        snet_index=snet_index, co2lvl=co2l
     )
     bridge_idxs = data_handling.nx_edges_to_matrix_indices(
         nx.bridges(nx_graph), nx_graph
