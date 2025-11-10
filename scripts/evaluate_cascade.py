@@ -127,7 +127,7 @@ def evaluate_cascade(
     os.makedirs(save_path, exist_ok=True)
 
     network = data_handling.load_pypsa_network(co2l, n_nodes, use_sclopf)
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    nx_graph = data_handling.load_networkx_graph(snet_index=snet_index, co2lvl=co2l)
 
     data_handling.check_if_edges_sorted(nx_graph)
 
@@ -139,8 +139,11 @@ def evaluate_cascade(
     if use_sclopf:
         comp_cols = [
             "time_stamp",
+            "trigger_weighting",
             "init_failure_0",
+            "num_par_failure_0",
             "init_failure_1",
+            "num_par_failure_1",
             "split_number",
             "rot_energy",
             "power_imbalance",
@@ -194,11 +197,11 @@ def evaluate_cascade(
     out_dict_key = 0
     # idx_indi_vec = 0
 
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
-    data_handling.check_if_edges_sorted(nx_graph)
-    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
-        nx_graph
-    )
+    # nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    # data_handling.check_if_edges_sorted(nx_graph)
+    # I_m, B_d, num_parallels, line_limits = data_handling.load_grid_matrices(
+    #     snet_index=snet_index, co2lvl=co2l
+    # )
     split_number_total = 0
     split_numbers = []
 
@@ -213,11 +216,19 @@ def evaluate_cascade(
         # flows = solve_lpf(P_0, B_d, I_m)
         # flows_dict = dict(zip(networkx.get_edge_attributes(nx_graph, "orientation").values(), flows))
 
-        for split_number_snapshot, (init_failure, cascade) in enumerate(
+        for split_number_snapshot, (init_failures, cascade_weight_tuple) in enumerate(
             # tqdm(splits.items(), leave=False, disable=not show_progress)
             splits.items()
         ):
             split_number_total += 1
+
+            trigger0 = init_failures[0][0]
+            num_par_failure0 = init_failures[0][1]
+            trigger1 = init_failures[1][0]
+            num_par_failure1 = init_failures[1][1]
+
+            cascade = cascade_weight_tuple[0]
+            weight = cascade_weight_tuple[1]
 
             subgraphs = data_handling.get_subgraphs_from_edges(cascade, nx_graph)
 
@@ -238,15 +249,20 @@ def evaluate_cascade(
                     else 0
                 )
                 blackout_load_loss = (
-                    int(observables_single_component[3] < -1)
+                    int(
+                        abs(observables_single_component[3]) > 1
+                    )  # if |RoCoF| > 1 Hz/s, consider it a blackout
                     * observables_single_component[4]
                 )
                 total_load_loss_share = max(load_shedded, blackout_load_loss)
                 if use_sclopf:
                     dict_out_ele = [
                         timestamp,
-                        init_failure[0],
-                        init_failure[1],
+                        weight,
+                        trigger0,
+                        num_par_failure0,
+                        trigger1,
+                        num_par_failure1,
                         split_number_snapshot,
                         *observables_single_component,
                         load_shedded,
@@ -256,7 +272,7 @@ def evaluate_cascade(
                 else:
                     dict_out_ele = [
                         timestamp,
-                        init_failure,
+                        init_failures,
                         split_number_snapshot,
                         *observables_single_component,
                         load_shedded,
@@ -434,6 +450,7 @@ if __name__ == "__main__":
 
         if isinstance(co2l_list, float):
             co2l_list = [co2l_list]
+        co2l_list = sorted(co2l_list, reverse=False)
 
         for co2l_in in co2l_list:
             print(f"###############################################################")
@@ -447,7 +464,7 @@ if __name__ == "__main__":
                     n_nodes_in,
                     use_sclopf=True,
                     eval_indicator_vectors=True,
-                    overrwrite=True,
+                    overrwrite=False,
                     # end_time_str="2013-01-02 00:00",
                 )
             except FileExistsError as e:
