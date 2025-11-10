@@ -7,6 +7,7 @@ Defines consistent styling constants and helper functions for all plots in the p
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
+import os
 
 
 # === FONT SIZES ===
@@ -119,6 +120,36 @@ MAP_YLIM = (35, 70)  # Latitude range
 PANEL_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]
 
 
+# === ENVIRONMENT VARIABLE CONFIGURATION ===
+def get_plot_config():
+    """Get plot configuration from environment variables."""
+    config = {
+        "panel_lowercase": os.getenv("PLOT_PANEL_LOWERCASE", "true").lower() == "true",
+        "save_with_config": os.getenv("PLOT_SAVE_WITH_CONFIG", "false").lower()
+        == "true",
+        "dpi": int(os.getenv("PLOT_DPI", "300")),
+    }
+    return config
+
+
+def get_config_suffix():
+    """Generate filename suffix based on current configuration."""
+    config = get_plot_config()
+    suffix_parts = []
+
+    # Add panel label style indicator
+    if config["panel_lowercase"]:
+        suffix_parts.append("pLC")
+    else:
+        suffix_parts.append("pUC")
+
+    # Add DPI if different from default
+    if config["dpi"] != 300:
+        suffix_parts.append(f"dpi{config['dpi']}")
+
+    return "_" + "_".join(suffix_parts) if suffix_parts else ""
+
+
 def get_panel_label(index, bold=True, lowercase=False):
     """Get formatted panel label."""
     label = PANEL_LABELS[index] if index < len(PANEL_LABELS) else f"Panel{index}"
@@ -162,9 +193,24 @@ def setup_colormap_scientific_notation(colorbar, power_limits=(-3, -3)):
 
 
 def add_panel_label(
-    ax, label_index, x_offset=-0.1, y_offset=0.05, lowercase=True, **kwargs
+    ax, label_index, x_offset=-0.1, y_offset=0.05, lowercase=None, **kwargs
 ):
-    """Add panel label to subplot."""
+    """Add panel label to subplot.
+
+    Args:
+        ax: matplotlib axes object
+        label_index: index for panel label (0=A, 1=B, etc.)
+        x_offset: horizontal offset for label position
+        y_offset: vertical offset for label position
+        lowercase: if True, use lowercase labels; if False, use uppercase;
+                  if None, use environment variable PLOT_PANEL_LOWERCASE
+        **kwargs: additional text formatting arguments
+    """
+    # Use environment variable if lowercase not explicitly set
+    if lowercase is None:
+        config = get_plot_config()
+        lowercase = config["panel_lowercase"]
+
     default_kwargs = {
         "fontsize": PANEL_LABEL_FONTSIZE,
         "weight": PANEL_LABEL_WEIGHT,
@@ -241,11 +287,61 @@ def create_unified_legend(
 
 
 # === SAVE FUNCTIONS ===
-def save_figure(
-    fig, save_path, filename, formats=["pdf"], dpi=300, bbox_inches="tight"
-):
-    """Save figure with consistent settings."""
+def save_figure(fig, arg2, arg3=None, formats=None, dpi=None, bbox_inches="tight"):
+    """Save figure with consistent settings and optional configuration suffix.
+
+    Supports both old and new function signatures for backward compatibility:
+    - New: save_figure(fig, filename, save_path, formats=None, dpi=None, bbox_inches="tight")
+    - Old: save_figure(fig, save_path, filename, formats=["pdf"], dpi=300, bbox_inches="tight")
+
+    Args:
+        fig: matplotlib figure object
+        arg2: filename (new signature) or save_path (old signature)
+        arg3: save_path (new signature) or filename (old signature) or None
+        formats: list of formats to save (default: ["pdf"])
+        dpi: figure DPI (if None, uses environment variable PLOT_DPI)
+        bbox_inches: bounding box setting for saving
+    """
     import os
+
+    # Detect which signature is being used
+    if arg3 is None:
+        # Old signature: save_figure(fig, save_path, filename, ...)
+        # arg2 is save_path, need to find filename in kwargs or use default
+        raise ValueError("save_figure requires both filename and save_path arguments")
+
+    # Determine if this is old or new signature based on argument patterns
+    # Old: save_figure(fig, save_path, filename, ...)
+    # New: save_figure(fig, filename, save_path, ...)
+
+    # Check if arg2 looks like a path (contains / or is a directory)
+    if os.path.isdir(arg2) or ("/" in arg2 and not arg2.endswith(".pdf")):
+        # Old signature: save_figure(fig, save_path, filename, ...)
+        save_path = arg2
+        filename = arg3
+    else:
+        # New signature: save_figure(fig, filename, save_path, ...)
+        filename = arg2
+        save_path = arg3
+
+    # Get configuration
+    config = get_plot_config()
+
+    # Use environment variable defaults if not specified
+    if formats is None:
+        formats = ["pdf"]
+    if dpi is None:
+        dpi = config["dpi"]
+
+    # Add config suffix to filename if enabled
+    if config["save_with_config"]:
+        config_suffix = get_config_suffix()
+        # Remove extension from filename if present
+        if "." in filename:
+            base_filename, ext = filename.rsplit(".", 1)
+            filename = base_filename + config_suffix
+        else:
+            filename = filename + config_suffix
 
     os.makedirs(save_path, exist_ok=True)
 

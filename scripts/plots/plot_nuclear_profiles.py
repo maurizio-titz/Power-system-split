@@ -40,6 +40,8 @@ from utils.plot_style import (
 )
 
 
+setup_matplotlib_style()
+
 fig, axes = plt.subplots(2, 3, figsize=(12, 6), sharex=True, sharey=True)
 axes = axes.flatten()
 

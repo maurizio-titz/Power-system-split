@@ -728,7 +728,7 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
         #     verticalalignment="center",
         #     transform=ax.transAxes,
         # )
-        add_panel_label(ax, i, x_offset=-0.10, y_offset=0.1, lowercase=True)
+        add_panel_label(ax, i, x_offset=-0.10, y_offset=0.1)
 
     # === APPLY CONSISTENT STYLING TO ALL AXES ===
     # Apply consistent font styling to all text elements
@@ -755,10 +755,10 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
             ax.set_title(ax.get_title(), fontsize=TITLE_FONTSIZE)
 
     plt.tight_layout()
-    f_name = f"combined_mitigation_plot_{co2_lvl_map}.pdf"
+    f_name = f"combined_mitigation_plot_{co2_lvl_map}"
     if use_annualized_costs:
-        f_name = f_name.replace(".pdf", "_annualized.pdf")
-    plt.savefig(save_path + f_name, bbox_inches="tight")
+        f_name = f_name + "_annualized"
+    save_figure(f, save_path, f_name)
     plt.show()
 
 
