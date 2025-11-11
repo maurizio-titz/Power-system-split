@@ -3,6 +3,7 @@ import os
 import pickle
 import sys
 from typing import Callable, Union
+from joblib import Parallel, delayed
 
 import numpy as np
 import scipy
@@ -275,7 +276,7 @@ def balanced_overlap_distance_weighted(
     )
 
 
-def multi_balanced_overlap_distance_weighted(
+def multiclass_balanced_distance_weighted(
     node_classes0: np.ndarray,
     node_classes1: np.ndarray,
     node_weights0: np.ndarray,
@@ -371,7 +372,6 @@ def calc_distance_matrix(
     Parameters:
         data (np.ndarray): The input data for which to calculate distances.
         metric (callable): The distance metric to use.
-        n_jobs (int): The number of jobs to run in parallel.
 
     Returns:
         np.ndarray: The calculated distance matrix.
@@ -384,6 +384,41 @@ def calc_distance_matrix(
             d[j, i] = d[i, j]
 
     np.fill_diagonal(d, 0)  # Set diagonal to zero
+    return d
+
+
+def calc_distance_matrix_joblib(
+    data, metric=balanced_overlap_distance_weighted, n_jobs=-1
+):
+    """
+    Calculate the distance matrix using joblib parallelization.
+
+    Parameters:
+        data (np.ndarray): The input data for which to calculate distances.
+        metric (callable): The distance metric to use.
+        n_jobs (int): The number of parallel jobs to run. Default is -1 (use all available cores).
+
+    Returns:
+        np.ndarray: The calculated distance matrix.
+    """
+    n_samples = data.shape[0]
+
+    def compute_distance(i, j):
+        return i, j, metric(data[i], data[j])
+
+    # Generate all (i,j) pairs where i < j
+    pairs = [(i, j) for i in range(n_samples) for j in range(i + 1, n_samples)]
+
+    # Parallel computation
+    results = Parallel(n_jobs=n_jobs)(delayed(compute_distance)(i, j) for i, j in pairs)
+
+    # Fill the distance matrix
+    d = np.zeros((n_samples, n_samples), dtype=np.float64)
+    for i, j, distance in results:
+        d[i, j] = distance
+        d[j, i] = distance
+
+    np.fill_diagonal(d, 0)
     return d
 
 

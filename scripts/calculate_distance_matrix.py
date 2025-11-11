@@ -27,13 +27,16 @@ from utils.clustering import (
     balanced_overlap_distance,
     balanced_overlap_distance_weighted,
     calc_distance_matrix,
+    calc_distance_matrix_joblib,
     get_unique_vectors_with_weights,
+    multiclass_balanced_distance_weighted,
+    neighborhood_impurity_batch,
     prepare_clusters_for_analysis,
     typed_katz_centrality_batch,
     weighted_distance_wrapper,
 )
 from utils.indicator_utils import load_indicator_vectors
-from utils.data_handling import get_co2_levels
+from utils.data_handling import get_co2_levels, load_networkx_graph, load_networkx_graph
 
 from utils import data_handling
 from utils.clustering import (
@@ -275,6 +278,43 @@ def calc_katz_centralities(
     return typed_katz_centralities, nx_graph, pos, adjacency_matrix
 
 
+def calc_neighborhood_impurity(
+    save_dir,
+    unique_vecs,
+    decay_factor,
+    max_distance,
+    adjacency_matrix=None,
+):
+    save_path_centralities = (
+        save_dir + f"indicator_vector_impurity_maxD{max_distance}_decay{decay_factor}"
+    )
+
+    try:
+        neighbourhood_impurities = np.load(save_path_centralities + ".npy")
+
+    except FileNotFoundError:
+        logger.info(
+            f"Computing neighbourhood impurities (decay={decay_factor}, max_dist={max_distance})..."
+        )
+        if adjacency_matrix is None:
+            nx_graph = load_networkx_graph(
+                snet_index=0, co2lvl=0.0
+            )  # adjacency_matrix is independent of co2 level
+            adjacency_matrix = data_handling.get_adjacency_matrix_from_nx_graph(
+                nx_graph
+            )
+        neighbourhood_impurities = neighborhood_impurity_batch(
+            adjacency_matrix=adjacency_matrix,
+            node_class_vectors=unique_vecs,
+            decay_factor=decay_factor,
+            max_distance=max_distance,
+        )
+
+        np.save(save_path_centralities, neighbourhood_impurities)
+
+    return neighbourhood_impurities
+
+
 def plot_blackout_and_katz(
     save_dir,
     unique_vecs,
@@ -400,14 +440,16 @@ if __name__ == "__main__":
         save_dir,
     )
 
-    typed_katz_centralities_dict = {}
+    neighbourhood_impurities_dict = {}
     nx_graph = None
     adjacency_matrix = None
     pos = None
 
-    for sample_weights_type in ["katz", ""]:
-        if sample_weights_type == "katz":
-            logger.info("Computing Katz-weighted distance matrix...")
+    for sample_weights_type in ["neighbourhood_impurities", ""]:
+        if sample_weights_type == "neighbourhood_impurities":
+            logger.info(
+                "Computing neighbourhood impurities weighted distance matrix..."
+            )
             katz_param_grid = ParameterGrid(
                 {
                     "decay_factor": [1, 1.2, 1.5, 2],
@@ -419,42 +461,36 @@ if __name__ == "__main__":
                 decay_factor = katz_params["decay_factor"]
                 max_distance = katz_params["max_distance"]
 
-                typed_katz_centralities, nx_graph, pos, adjacency_matrix = (
-                    calc_katz_centralities(
-                        use_sclopf,
-                        n_nodes,
-                        save_dir,
-                        unique_vecs,
-                        decay_factor,
-                        max_distance,
-                        network,
-                        nx_graph,
-                        adjacency_matrix,
-                    )
+                neighborhood_impurities = calc_neighborhood_impurity(
+                    save_dir,
+                    unique_vecs,
+                    decay_factor,
+                    max_distance,
+                    adjacency_matrix,
                 )
-                typed_katz_centralities_dict[(decay_factor, max_distance)] = (
-                    typed_katz_centralities
+                neighbourhood_impurities_dict[(decay_factor, max_distance)] = (
+                    neighborhood_impurities
                 )
 
             # # calculate distance matrix
             decay_factor = decay_factor_clustering
             max_distance = max_distance_clustering
 
-            typed_katz_centralities = typed_katz_centralities_dict[
+            neighborhood_impurities = neighbourhood_impurities_dict[
                 (decay_factor, max_distance)
             ]
-            blackout_katz_centralities = np.concatenate(
-                (unique_vecs, typed_katz_centralities), axis=1
+            blackout_neighbourhood_impurities = np.concatenate(
+                (unique_vecs, neighborhood_impurities), axis=1
             )
 
             plot_blackout_and_katz(
                 save_dir,
                 unique_vecs,
-                typed_katz_centralities_dict,
+                neighbourhood_impurities_dict,
                 katz_param_grid,
                 nx_graph,
                 pos,
-                blackout_katz_centralities,
+                blackout_neighbourhood_impurities,
             )
 
             dist_metric_str = f"bACC"
@@ -469,11 +505,11 @@ if __name__ == "__main__":
                 distance_matrix = np.load(save_path_distance_matrix + ".npy")
             else:
                 logger.info("Computing Katz-weighted distance matrix...")
-                distance_matrix = calc_distance_matrix(
-                    blackout_katz_centralities,
+                distance_matrix = calc_distance_matrix_joblib(
+                    blackout_neighbourhood_impurities,
                     metric=partial(
                         weighted_distance_wrapper,
-                        weighted_distance_metric=balanced_overlap_distance_weighted,
+                        weighted_distance_metric=multiclass_balanced_distance_weighted,
                     ),
                 )
                 np.save(save_path_distance_matrix, distance_matrix)
