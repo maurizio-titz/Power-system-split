@@ -59,7 +59,7 @@ def evaluate_cascade(
     show_progress: bool = True,
     use_sclopf=True,
     overrwrite: bool = False,
-    # calc_split_indicator_vectors:bool=False
+    calc_split_indicator_vectors: bool = True,
 ):
     """Find the properties of the splits (i.e., RoCoF or lost load) and
     indicator vectors describing the network.
@@ -72,8 +72,6 @@ def evaluate_cascade(
         start_time_str, end_time_str (str Format "YYYY-mm-dd HH:MM"): If either or both are not None, the evaluation will only be
                     done between start_time and end_time.
     """
-
-    calc_split_indicator_vectors = False  # does not work currently
 
     if start_time_str is not None or end_time_str is not None:
         raise NotImplementedError(
@@ -185,13 +183,13 @@ def evaluate_cascade(
         ### this is not used in the current implementation, since the alternative split indicator functions work just fine
         if calc_split_indicator_vectors:
             rocof_indicator_vectors_ls = list()
-            lshare_indicator_vectors_ls = list()
+            # lshare_indicator_vectors_ls = list()
 
-            total_nr_splits = sum(len(vv) for vv in splitting_cascades.values())
+            # total_nr_splits = sum(len(vv) for vv in splitting_cascades.values())
 
-            indicator_vector_rocof = np.full(
-                (total_nr_splits, nx_graph.number_of_nodes), np.nan, dtype=float
-            )
+            # indicator_vector_rocof = np.full(
+            #     (total_nr_splits, nx_graph.number_of_nodes()), np.nan, dtype=float
+            # )
 
     component_props_dict = dict()
     out_dict_key = 0
@@ -216,9 +214,8 @@ def evaluate_cascade(
         # flows = solve_lpf(P_0, B_d, I_m)
         # flows_dict = dict(zip(networkx.get_edge_attributes(nx_graph, "orientation").values(), flows))
 
-        for split_number_snapshot, (init_failures, cascade_weight_tuple) in enumerate(
-            # tqdm(splits.items(), leave=False, disable=not show_progress)
-            splits.items()
+        for component_number, (init_failures, cascade_weight_tuple) in enumerate(
+            tqdm(splits.items(), leave=False, disable=not show_progress)
         ):
             split_number_total += 1
 
@@ -263,7 +260,7 @@ def evaluate_cascade(
                         num_par_failure0,
                         trigger1,
                         num_par_failure1,
-                        split_number_snapshot,
+                        component_number,
                         *observables_single_component,
                         load_shedded,
                         blackout_load_loss,
@@ -273,7 +270,7 @@ def evaluate_cascade(
                     dict_out_ele = [
                         timestamp,
                         init_failures,
-                        split_number_snapshot,
+                        component_number,
                         *observables_single_component,
                         load_shedded,
                         blackout_load_loss,
@@ -296,19 +293,19 @@ def evaluate_cascade(
 
             # Split-wise indicator vectors
             if calc_split_indicator_vectors:
-                rocof_vector = np.empty((n_nodes, 1), dtype=float)
-                for split_number_snapshot in range(len(subgraphs)):
-                    rocof_vector[indi_vec_r[split_number_snapshot]] = (
-                        observables_split_components[split_number_snapshot][3]
+                rocof_vector = np.empty(nx_graph.number_of_nodes(), dtype=float)
+                for component_number, component_indicator_vec in enumerate(indi_vec_r):
+                    rocof_vector[component_indicator_vec.astype(bool)] = (
+                        observables_split_components[component_number][3]
                     )
                 rocof_indicator_vectors_ls.append(rocof_vector)
 
-                lshare_vector = np.empty((n_nodes, 1), dtype=float)
-                for split_number_snapshot in range(len(subgraphs)):
-                    lshare_vector[indi_vec_r[split_number_snapshot]] = (
-                        observables_split_components[split_number_snapshot][4]
-                    )
-                lshare_indicator_vectors_ls.append(lshare_vector)
+                # lshare_vector = np.empty((n_nodes, 1), dtype=float)
+                # for split_number_snapshot in range(len(subgraphs)):
+                #     lshare_vector[indi_vec_r[split_number_snapshot]] = (
+                #         observables_split_components[split_number_snapshot][4]
+                #     )
+                # lshare_indicator_vectors_ls.append(lshare_vector)
 
             # only one timestamp for testing
             # break
@@ -329,17 +326,18 @@ def evaluate_cascade(
             )
             with gzip.open(rocof_indi_vec_save_path, "wb") as fh_vec_out:
                 pickle.dump(
-                    np.array(rocof_indicator_vectors_ls, dtype=float).squeeze(-1),
+                    np.array(rocof_indicator_vectors_ls, dtype=float),
                     fh_vec_out,
                 )
+            print(f"Saved RoCoF indicator vectors to {rocof_indi_vec_save_path}")
 
-            lshare_indi_vec_save_path = (
-                save_path + f"load_share_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
-            )
-            with gzip.open(lshare_indi_vec_save_path, "wb") as fh_vec_out:
-                pickle.dump(
-                    np.array(lshare_indicator_vectors_ls, dtype=float), fh_vec_out
-                )
+            # lshare_indi_vec_save_path = (
+            #     save_path + f"load_share_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
+            # )
+            # with gzip.open(lshare_indi_vec_save_path, "wb") as fh_vec_out:
+            #     pickle.dump(
+            #         # np.array(lshare_indicator_vectors_ls, dtype=float), fh_vec_out
+            #     )
 
     component_props = pd.DataFrame.from_dict(
         component_props_dict, orient="index", columns=comp_cols
@@ -374,7 +372,10 @@ if __name__ == "__main__":
     parser.add_argument("--co2l", type=float, help="CO2 level to process")
     parser.add_argument("--n_nodes", type=int, default=600, help="Number of nodes")
     parser.add_argument(
-        "--all", action="store_true", help="Process all CO2 levels sequentially"
+        "--all",
+        action="store_true",
+        help="Process all CO2 levels sequentially",
+        default=True,
     )
 
     args = parser.parse_args()
@@ -400,20 +401,8 @@ if __name__ == "__main__":
             print(
                 f"Skipping evaluation for {co2l_in} and {n_nodes_in} due to existing results."
             )
+        exit()
 
-        print(f"###############################################################")
-        print(
-            f"Getting edge indicator vecs for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
-        )
-        print(f"###############################################################")
-        find_failed_edge_indicator_vector_for_cascade_results(
-            co2l_in,
-            n_nodes_in,
-            save_res=True,
-            verbose=True,
-            overwrite=False,
-            use_sclopf=True,
-        )
         print(f"###############################################################")
         print(
             f"Extracting nodal RoCoF and load share for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
@@ -471,7 +460,7 @@ if __name__ == "__main__":
                 print(
                     f"Skipping evaluation for {co2l_in} and {n_nodes_in} due to existing results."
                 )
-
+            exit()
             print(f"###############################################################")
             print(
                 f"Getting edge indicator vecs for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
