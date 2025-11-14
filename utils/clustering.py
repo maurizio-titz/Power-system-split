@@ -324,6 +324,42 @@ def multiclass_balanced_distance_weighted(
     return distance
 
 
+def multiclass_accuracy_distance_weighted(
+    node_classes0: np.ndarray,
+    node_classes1: np.ndarray,
+    node_weights0: np.ndarray,
+    node_weights1: np.ndarray,
+    dtype=np.float16,
+) -> np.float16:
+    """calculates the accuracy distance between two indicator vectors with an arbitrary number of classes, weighted by the sum of the node uncertainties."""
+
+    assert (
+        node_classes0.shape == node_classes1.shape
+    ), "node_classes0 and node_classes1 must have the same shape"
+    assert (
+        node_weights0.shape == node_weights1.shape
+    ), "node_weights0 and node_weights1 must have the same shape"
+    assert (
+        node_classes0.shape == node_weights0.shape
+    ), "node_classes0 and node_weights0 must have the same shape"
+
+    assert all(node_weights0 >= 0), "node_weights0 must be non-negative"
+    assert all(node_weights1 >= 0), "node_weights1 must be non-negative"
+
+    distance = 1 - (node_classes0 == node_classes1) @ (
+        node_weights0 * node_weights1
+    ) / (node_weights0 @ node_weights1)
+
+    # raise error if distance is nan
+    if np.isnan(distance):
+        raise ValueError("distance is nan")
+
+    if dtype is not None:
+        distance = dtype(distance)
+
+    return distance
+
+
 def balanced_overlap_distance(
     node_classes0: np.ndarray,
     node_classes1: np.ndarray,
