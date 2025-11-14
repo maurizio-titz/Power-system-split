@@ -16,14 +16,10 @@ def load_indicator_vectors(
     transformation,
     path_to_indicator_vectors=path_to_indicator_vectors_sclopf,
     mask=None,
-    weights=None,
     split_props=None,
     co2_list=(),
 ) -> "tuple[dict, dict, pd.DataFrame]":
 
-    assert isinstance(
-        weights, pd.Series
-    ), f"weights must be a Series but is {type(weights)}"
     assert isinstance(
         split_props, pd.DataFrame
     ), f"split_props must be a DataFrame but is {type(split_props)}"
@@ -35,7 +31,6 @@ def load_indicator_vectors(
             transformation,
             path_to_indicator_vectors,
             mask,
-            weights,
             split_props,
             co2list=co2_list,
         )
@@ -49,7 +44,6 @@ def load_indicator_vectors_weighted_multiple_lvl(
     transformation,
     path_to_indicator_vectors,
     mask,
-    weights,
     split_props: pd.DataFrame,
     co2list=(),
 ) -> "tuple[dict, dict, pd.DataFrame]":
@@ -67,9 +61,7 @@ def load_indicator_vectors_weighted_multiple_lvl(
         with gzip.open(path_to_indicator_vectors + "/" + file_name, "rb") as out:
             vectors_tuple = pickle.load(out)
         vectors_lvl = vectors_tuple[-1]
-        weights_lvl = np.array(
-            [int(weights[time_stamp[0]]) for time_stamp in vectors_tuple[0]]
-        )
+        weights_lvl = np.array([index_tuple[2] for index_tuple in vectors_tuple[0]])
 
         split_props_level = split_props[split_props.co2l == co2lvl]
 

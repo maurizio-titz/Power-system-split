@@ -228,6 +228,114 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
     return index_tuple_time_split, indicator_vector_rocof, indicator_vector_load_share
 
 
+def add_indices_to_indicator_vectors(
+    co2_lvl: float,
+    n_nodes: int,
+    save_res: bool = True,
+    verbose: bool = True,
+    overwrite: bool = False,
+    use_sclopf: bool = True,
+):
+    """Use the results from the old indicator vectors to arrive at the
+    vectors that give the RoCoF for every node's component"""
+
+    # Check before if the results already exists
+    if use_sclopf:
+        path_to_evaluation_results = path_to_evaluation_results_sclopf
+    else:
+        path_to_evaluation_results = path_to_evaluation_results_lopf
+
+    if save_res:
+        fpath_indi_vec_rocof_out = (
+            path_to_evaluation_results
+            + "/indicator_vector_rocof_Co2L"
+            + f"{co2_lvl}_n{n_nodes}.pklz"
+        )
+        print(fpath_indi_vec_rocof_out)
+
+        if (os.path.exists(fpath_indi_vec_rocof_out)) and not overwrite:
+            raise IOError(
+                "Output was written previously. "
+                + "Please move or delete the previous results, or chose 'overwrite=True'."
+            )
+
+    if verbose:
+        print(
+            "Loading cascade results, indicator vectors and split component properties:",
+            flush=True,
+        )
+
+    # Load component properties and indicator vector
+    indicator_vectors_file_path = (
+        path_to_evaluation_results
+        + f"rocof_indicator_vectors_Co2L{co2_lvl}_n{n_nodes}.pklz"
+    )
+    with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
+        indicator_vector_rocof = pickle.load(fh_in_indi)
+
+    df_comp_props = pd.read_hdf(
+        path_to_evaluation_results
+        + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
+        key="df",
+    )
+    if verbose:
+        print("Finished loading data.\n")
+
+    # Convert index to datetime
+    df_comp_props.time_stamp = pd.to_datetime(df_comp_props.time_stamp)
+
+    # Add list of tuples of initial failures
+    if use_sclopf:
+        df_comp_props["weight"] = (
+            df_comp_props.trigger_weighting * df_comp_props.snapshot_weighting
+        )
+        df_comp_props["init_failure_tuples"] = list(
+            zip(
+                df_comp_props.init_failure_0.astype(int),
+                df_comp_props.num_par_failure_0.astype(int),
+                df_comp_props.init_failure_1.astype(int),
+                df_comp_props.num_par_failure_1.astype(int),
+                df_comp_props.weight.astype(int),
+            )
+        )
+
+    # iterate through each time
+    unique_times = pd.unique(df_comp_props.time_stamp)
+    total_nr_splits = df_comp_props.split_number[-1] + 1
+
+    assert total_nr_splits == indicator_vector_rocof.shape[0]
+
+    if verbose:
+        print("Starting to extract rocof and load share indicator vectors:")
+
+    index_tuple_time_split = list()
+    for idx_time, time_stamp_r in enumerate(tqdm(unique_times, disable=not verbose)):
+        df_time_r = df_comp_props.loc[df_comp_props.time_stamp == time_stamp_r]
+
+        # Find the number of unique tuples aka number of splits
+        if use_sclopf:
+            unique_init_tuples = pd.unique(df_time_r["init_failure_tuples"])
+        else:
+            unique_init_tuples = pd.unique(df_time_r["init_failure"])
+
+        for idx_split, init_tuple_r in enumerate(unique_init_tuples):
+
+            index_tuple_time_split.append(
+                (
+                    time_stamp_r,
+                    init_tuple_r[:-1],  # initial failures
+                    init_tuple_r[-1],  # weight
+                    idx_split,
+                )
+            )
+
+    if save_res:
+        with gzip.open(fpath_indi_vec_rocof_out, "wb") as fh_rocof_out:
+            pickle.dump((index_tuple_time_split, indicator_vector_rocof), fh_rocof_out)
+
+    return index_tuple_time_split, indicator_vector_rocof
+
+
 def find_failed_edge_indicator_vector_for_cascade_results(
     co2_lvl: float,
     n_nodes: int,
@@ -326,10 +434,14 @@ def find_failed_edge_indicator_vector_for_cascade_results(
     for idx_time, [time_str, trigger_split_dict] in enumerate(
         tqdm(cascade_dict.items(), disable=not verbose)
     ):
-        for idx_split, [trigger_tuple, failing_links] in enumerate(
+        for idx_split, [init_falures, cascade_weight_tuple] in enumerate(
             trigger_split_dict.items()
         ):
-            index_tuple_splits.append((time_str, trigger_tuple, idx_split))
+
+            failing_links = cascade_weight_tuple[0]
+            weight = cascade_weight_tuple[1]
+
+            index_tuple_splits.append((time_str, init_falures, weight, idx_split))
 
             indicator_failed_edges_arr[out_idx, failing_links] = True
             out_idx += 1
