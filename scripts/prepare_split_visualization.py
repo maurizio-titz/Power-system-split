@@ -7,6 +7,8 @@ import pickle
 import sys
 import warnings
 
+from utils.alternative_split_indicator_vectors import add_indices_to_indicator_vectors
+
 
 # from glob import glob
 
@@ -31,6 +33,8 @@ from utils.config import (
     path_to_evaluation_results_sclopf,
     path_to_vis_results_lopf,
     path_to_vis_results_sclopf,
+    path_to_indicator_vectors_sclopf,
+    path_to_indicator_vectors_lopf,
 )
 
 use_sclopf = True
@@ -56,7 +60,7 @@ import datetime
 print("Available CO2 Levels:")
 co2l_list = get_co2_levels(n_nodes)
 
-print(sorted(co2l_list))
+print(co2l_list)
 
 #### Cluster split components ####
 print("\nClustering split components...\n")
@@ -64,18 +68,9 @@ print("\nClustering split components...\n")
 # Initialize results
 component_props = pd.DataFrame()
 
-# Append all indicator vectors and components props
+# Append all components props
 print("Concatenate components...")
 for co2l in tqdm(co2l_list):
-
-    # Load PyPSA network and the graph of the subnetwork
-    network = data_handling.load_pypsa_network(
-        co2lvl=co2l, n_nodes=n_nodes, use_sclopf=use_sclopf
-    )
-    nx_graph = data_handling.load_networkx_graph(co2lvl=co2l, snet_index=snet_index)
-    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
-        nx_graph
-    )
 
     if use_sclopf:
         component_props_level = pd.read_hdf(
@@ -96,8 +91,8 @@ component_props.to_hdf(
     save_path + f"component_properties_all_n{n_nodes}.h5", key="df", mode="w"
 )
 
-#### Cluster splits ####
-print("\n### Extracting splits ###\n")
+#### Extract split properties ####
+print("\n### Extracting split properties ###\n")
 print("Current time:", datetime.datetime.now())
 
 if "component_props" not in locals():
@@ -120,10 +115,15 @@ split_props.index = split_props.index.rename(
 
 if use_sclopf:
     triggers_0 = split_groups.init_failure_0.unique()
+    assert all([len(ii) == 1 for ii in triggers_0.values])
     triggers_0 = [ii[0] for ii in triggers_0.values]
+
     triggers_1 = split_groups.init_failure_1.unique()
+    assert all([len(ii) == 1 for ii in triggers_1.values])
     triggers_1 = [ii[0] for ii in triggers_1.values]
+
     trigger_weighting = split_groups.trigger_weighting.unique()
+    assert all([len(ii) == 1 for ii in trigger_weighting.values])
     trigger_weighting = [ii[0] for ii in trigger_weighting.values]
 
     split_props["init_failure_0"] = triggers_0
@@ -163,6 +163,19 @@ for lvl in split_props["co2l"].unique():
     split_props_lvl.to_csv(save_path + f"split_props_Co2L{lvl}_n{n_nodes}.csv")
 
 
+### add indices to indicator vectors for backward compatibility ###
+print("\n### Adding indices to indicator vectors ###\n")
+for co2l in co2l_list:
+    add_indices_to_indicator_vectors(
+        co2_lvl=co2l,
+        n_nodes=n_nodes,
+        save_res=True,
+        verbose=True,
+        overwrite=False,
+        use_sclopf=use_sclopf,
+    )
+
+
 ### Calculate likelihoods #####
 
 print("\nCalculate likelihoods of primary/secondary failures...\n")
@@ -186,9 +199,12 @@ for co2l in co2l_list[::-1]:
         n_2_failures = cascade_simulation.calc_possible_double_line_failures(
             num_parallels, ignored_idxs=bridge_idxs
         )
+        weighted_trigger_count = sum(
+            [initial_failure["weight"] for initial_failure in n_2_failures]
+        )
         # incorporating the weighting of the snapshots
         number_of_simulations = (
-            len(n_2_failures) * network.snapshot_weightings.generators.sum()
+            weighted_trigger_count * network.snapshot_weightings.generators.sum()
         )
     else:
         number_of_simulations = (
