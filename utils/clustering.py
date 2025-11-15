@@ -1,9 +1,11 @@
+import contextlib
 import gzip
 import os
 import pickle
 import sys
 from typing import Callable, Union
 from joblib import Parallel, delayed
+import joblib
 
 import numpy as np
 import scipy
@@ -423,8 +425,30 @@ def calc_distance_matrix(
     return d
 
 
+@contextlib.contextmanager
+def tqdm_joblib(tqdm_object):
+    """Context manager to patch joblib to report into tqdm progress bar given as argument"""
+
+    class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
+        def __call__(self, *args, **kwargs):
+            tqdm_object.update(n=self.batch_size)
+            return super().__call__(*args, **kwargs)
+
+    old_batch_callback = joblib.parallel.BatchCompletionCallBack
+    joblib.parallel.BatchCompletionCallBack = TqdmBatchCompletionCallback
+    try:
+        yield tqdm_object
+    finally:
+        joblib.parallel.BatchCompletionCallBack = old_batch_callback
+        tqdm_object.close()
+
+
 def calc_distance_matrix_joblib(
-    data, metric=balanced_overlap_distance_weighted, n_jobs=-1
+    data,
+    metric=balanced_overlap_distance_weighted,
+    n_jobs=-1,
+    show_progress=True,
+    test_mode=True,
 ):
     """
     Calculate the distance matrix using joblib parallelization.
@@ -444,9 +468,21 @@ def calc_distance_matrix_joblib(
 
     # Generate all (i,j) pairs where i < j
     pairs = [(i, j) for i in range(n_samples) for j in range(i + 1, n_samples)]
+    if test_mode:
+        pairs = pairs[:100]  # Limit to first 100 pairs for testing
 
     # Parallel computation
-    results = Parallel(n_jobs=n_jobs)(delayed(compute_distance)(i, j) for i, j in pairs)
+    if show_progress:
+        with tqdm_joblib(
+            tqdm(desc="Distance Calculation", total=len(pairs))
+        ) as progress_bar:
+            results = Parallel(n_jobs=n_jobs)(
+                delayed(compute_distance)(i, j) for i, j in pairs
+            )
+    else:
+        results = Parallel(n_jobs=n_jobs)(
+            delayed(compute_distance)(i, j) for i, j in pairs
+        )
 
     # Fill the distance matrix
     d = np.zeros((n_samples, n_samples), dtype=np.float64)
