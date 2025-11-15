@@ -57,25 +57,37 @@ def calc_likelihood_failure(
     # total_nr_splits = sum(len(vv) for vv in splitting_cascades.values())
 
     for timestamp, splits in tqdm(splitting_cascades.items()):
-        weight = generator_snapshot_weightings[timestamp]
+        snapshot_weight = generator_snapshot_weightings[timestamp]
 
-        for init_failure, cascade in splits.items():
+        for init_failure, cascade_weight_tuple in splits.items():
+
+            cascade = cascade_weight_tuple[0]
+            trigger_weight = cascade_weight_tuple[1]
 
             cascade_edges = data_handling.matrix_indices_to_nx_edges(cascade, nx_graph)
 
             for failed_edge in cascade_edges:
-                likelihood_secondary[failed_edge] += weight / number_of_simulations
-                likelihood_total[failed_edge] += weight / number_of_simulations
+                likelihood_secondary[failed_edge] += (
+                    snapshot_weight * trigger_weight / number_of_simulations
+                )
+                likelihood_total[failed_edge] += (
+                    snapshot_weight * trigger_weight / number_of_simulations
+                )
 
             init_edges = data_handling.matrix_indices_to_nx_edges(
-                init_failure, nx_graph
+                (init_failure[0][0], init_failure[1][0]), nx_graph
             )
 
-            # for single line failures init_edges is a list of tuples with one element
             for init_edge in init_edges:
-                likelihood_primary[init_edge] += weight / number_of_simulations
-                if not init_edge in cascade_edges:
-                    likelihood_total[init_edge] += weight / number_of_simulations
+                likelihood_primary[init_edge] += (
+                    snapshot_weight * trigger_weight / number_of_simulations
+                )
+                if (
+                    not init_edge in cascade_edges
+                ):  # for total likelihood, avoid double counting
+                    likelihood_total[init_edge] += (
+                        snapshot_weight * trigger_weight / number_of_simulations
+                    )
 
     return likelihood_primary, likelihood_secondary, likelihood_total
 
