@@ -301,9 +301,13 @@ def add_indices_to_indicator_vectors(
 
     # iterate through each time
     unique_times = pd.unique(df_comp_props.time_stamp)
-    total_nr_splits = df_comp_props.split_number[-1] + 1
+    total_nr_splits = df_comp_props.split_number.max()  # counting is 1 based
 
-    assert total_nr_splits == indicator_vector_rocof.shape[0]
+    assert (
+        total_nr_splits
+        == indicator_vector_rocof.shape[0]
+        == df_comp_props.split_number.nunique()
+    )
 
     if verbose:
         print("Starting to extract rocof and load share indicator vectors:")
