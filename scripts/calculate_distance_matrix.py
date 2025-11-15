@@ -315,7 +315,7 @@ def calc_neighborhood_impurity(
     return neighbourhood_impurities
 
 
-def plot_blackout_and_katz(
+def plot_blackout_and_nodeWeights(
     save_dir,
     unique_vecs,
     typed_katz_centralities_dict,
@@ -445,19 +445,19 @@ if __name__ == "__main__":
     adjacency_matrix = None
     pos = None
 
-    for sample_weights_type in ["neighbourhood_impurities", ""]:
-        if sample_weights_type == "neighbourhood_impurities":
+    for node_weights in ["neighbourhood_impurities"]:
+        if node_weights == "neighbourhood_impurities":
             logger.info(
                 "Computing neighbourhood impurities weighted distance matrix..."
             )
-            katz_param_grid = ParameterGrid(
+            node_weights_params = ParameterGrid(
                 {
                     "decay_factor": [1, 1.2, 1.5, 2],
                     "max_distance": [1, 2, 3],
                 }
             )
 
-            for i, katz_params in enumerate(katz_param_grid):
+            for i, katz_params in enumerate(node_weights_params):
                 decay_factor = katz_params["decay_factor"]
                 max_distance = katz_params["max_distance"]
 
@@ -483,38 +483,42 @@ if __name__ == "__main__":
                 (unique_vecs, neighborhood_impurities), axis=1
             )
 
-            plot_blackout_and_katz(
+            plot_blackout_and_nodeWeights(
                 save_dir,
                 unique_vecs,
                 neighbourhood_impurities_dict,
-                katz_param_grid,
+                node_weights_params,
                 nx_graph,
                 pos,
                 blackout_neighbourhood_impurities,
             )
+            distance_metrics = {
+                "bACC": balanced_overlap_distance_weighted,
+                "ACC": multiclass_balanced_distance_weighted,
+            }
+            for dist_metric_str, dist_metric in distance_metrics.items():
+                weighting_str = f"_impurity_maxD{max_distance}_decay{decay_factor}"
 
-            dist_metric_str = f"bACC"
-            weighting_str = f"_katz_maxD{max_distance}_decay{decay_factor}"
+                save_path_distance_matrix = (
+                    save_dir
+                    + f"/distance_matrix_n{n_nodes}_{dist_metric_str}{weighting_str}"
+                )
 
-            save_path_distance_matrix = (
-                save_dir
-                + f"/distance_matrix_n{n_nodes}_{dist_metric_str}{weighting_str}"
-            )
-
-            if os.path.exists(save_path_distance_matrix + ".npy"):
-                distance_matrix = np.load(save_path_distance_matrix + ".npy")
-            else:
-                logger.info("Computing Katz-weighted distance matrix...")
+                if os.path.exists(save_path_distance_matrix + ".npy"):
+                    raise FileNotFoundError(
+                        "Distance matrix with neighbourhood impurities already exists."
+                    )
+                logger.info("Computing weighted distance matrix...")
                 distance_matrix = calc_distance_matrix_joblib(
                     blackout_neighbourhood_impurities,
                     metric=partial(
                         weighted_distance_wrapper,
-                        weighted_distance_metric=multiclass_balanced_distance_weighted,
+                        weighted_distance_metric=dist_metric,
                     ),
                 )
                 np.save(save_path_distance_matrix, distance_matrix)
 
-        elif sample_weights_type == "":
+        elif node_weights == "":
             dist_metric_str = f"bACC"
             weighting_str = f""
             save_path_distance_matrix = (
