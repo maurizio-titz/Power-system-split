@@ -1,4 +1,4 @@
-"""clusters the filtered indicator vectors using kmeans and saves the results to disk"""
+"""calculated the distance matrix for the indicator vectors and saves the results to disk"""
 
 from datetime import datetime
 from functools import partial
@@ -36,7 +36,12 @@ from utils.clustering import (
     weighted_distance_wrapper,
 )
 from utils.indicator_utils import load_indicator_vectors
-from utils.data_handling import get_co2_levels, load_networkx_graph, load_networkx_graph
+from utils.data_handling import (
+    get_co2_levels,
+    load_networkx_graph,
+    load_networkx_graph,
+    load_pypsa_network,
+)
 
 from utils import data_handling
 from utils.clustering import (
@@ -97,7 +102,6 @@ def filter_splits_events(
     transformation,
     save_dir,
     split_props=None,
-    network=None,
 ):
     os.makedirs(save_dir, exist_ok=True)
     logger_num = logger.add(f"{save_dir}/log.txt")
@@ -135,14 +139,11 @@ def filter_splits_events(
     if os.path.exists(save_path_unique_vecs):
         with gzip.open(save_path_unique_vecs, "rb") as fh_in:
             unique_vecs_dict = pickle.load(fh_in)
+        split_props_filtered = pd.read_hdf(
+            f"{save_dir}/data_filtered_{n_nodes}.h5", key="split_props"
+        )
     else:
         logger.info("Loading indicator vectors and computing unique vectors...")
-
-        if network is None:
-            network = data_handling.load_pypsa_network(
-                co2lvl=0.0, n_nodes=n_nodes, use_sclopf=use_sclopf
-            )
-        snapshot_weights = network.snapshot_weightings.objective
 
         if split_props is None:
             split_props = pd.read_hdf(
@@ -159,7 +160,6 @@ def filter_splits_events(
             transformation,
             path_to_indicator_vectors=path_to_evaluation_results,
             mask=masks_dict,
-            weights=snapshot_weights,
             split_props=split_props,
             co2_list=co2l_list,
         )
@@ -193,7 +193,7 @@ def filter_splits_events(
 
     unique_vecs = np.array(list(unique_vecs_dict.keys()))
     weights_filtered = [d["weight"] for d in unique_vecs_dict.values()]
-    return unique_vecs, network, split_props
+    return unique_vecs, split_props_filtered
 
 
 def calc_katz_centralities(
@@ -335,9 +335,9 @@ def plot_blackout_and_nodeWeights(
 
     for plot_count in tqdm(range(n_outages_to_plots), desc="Generating plots"):
         fig_path = save_dir + f"/blackout_vec_{plot_count}.png"
-        if os.path.exists(fig_path):
-            plots_skipped += 1
-            continue
+        # if os.path.exists(fig_path):
+        #     plots_skipped += 1
+        #     continue
 
         random_idx = np.random.randint(0, blackout_katz_centralities.shape[0])
 
@@ -388,7 +388,7 @@ def plot_blackout_and_nodeWeights(
             blackout_vec,
             # ax=ax,
             save_dir=None,
-            cmap="YlOrBr",  # Use string colormap name instead
+            cmap="coolwarm",  # Use string colormap name instead
             # vmax=vmax,
             # vmin=vmin,
         )
@@ -408,7 +408,7 @@ if __name__ == "__main__":
     co2l_list = get_co2_levels(n_nodes)
     # co2l_list = [0.6]
 
-    indicator_type, transformation = "rocof", "blackout"
+    indicator_type, transformation = "rocof", "overUnder"
 
     if transformation is None:
         transformation_string = "_" + transformation
@@ -428,7 +428,7 @@ if __name__ == "__main__":
     #     rename_old_files(params, save_dir)
 
     logger.info("Starting data preprocessing...")
-    unique_vecs, network, split_props = filter_splits_events(
+    unique_vecs, split_props = filter_splits_events(
         use_sclopf,
         path_to_evaluation_results,
         path_to_vis_results,
@@ -439,102 +439,107 @@ if __name__ == "__main__":
         transformation,
         save_dir,
     )
+    print(f"Found {unique_vecs.shape[0]} blackout unique vectors.")
 
     neighbourhood_impurities_dict = {}
-    nx_graph = None
-    adjacency_matrix = None
-    pos = None
+    nx_graph = load_networkx_graph(snet_index=0, co2lvl=0.0)
+    adjacency_matrix = data_handling.get_adjacency_matrix_from_nx_graph(nx_graph)
+    pos = nx.get_node_attributes(nx_graph, "pos")
 
-    for node_weights in ["neighbourhood_impurities"]:
-        if node_weights == "neighbourhood_impurities":
-            logger.info(
-                "Computing neighbourhood impurities weighted distance matrix..."
+    logger.info("Computing neighbourhood impurities ")
+    node_weights_params = ParameterGrid(
+        {
+            "decay_factor": [1, 1.2, 1.5, 2],
+            "max_distance": [1, 2, 3],
+        }
+    )
+
+    for i, katz_params in enumerate(node_weights_params):
+        decay_factor = katz_params["decay_factor"]
+        max_distance = katz_params["max_distance"]
+
+        neighborhood_impurities = calc_neighborhood_impurity(
+            save_dir,
+            unique_vecs,
+            decay_factor,
+            max_distance,
+            adjacency_matrix,
+        )
+        neighbourhood_impurities_dict[(decay_factor, max_distance)] = (
+            neighborhood_impurities
+        )
+
+    # # calculate distance matrix
+    decay_factor = decay_factor_clustering
+    max_distance = max_distance_clustering
+
+    neighborhood_impurities = neighbourhood_impurities_dict[
+        (decay_factor, max_distance)
+    ]
+    blackout_neighbourhood_impurities = np.concatenate(
+        (unique_vecs, neighborhood_impurities), axis=1
+    )
+    print("plotting blackout and node weights...")
+    plot_blackout_and_nodeWeights(
+        save_dir,
+        unique_vecs,
+        neighbourhood_impurities_dict,
+        node_weights_params,
+        nx_graph,
+        pos,
+        blackout_neighbourhood_impurities,
+    )
+    exit()
+
+    distance_metrics = {
+        "bACC": balanced_overlap_distance_weighted,
+        "ACC": multiclass_balanced_distance_weighted,
+    }
+    for dist_metric_str, dist_metric in distance_metrics.items():
+        weighting_str = f"_impurity_maxD{max_distance}_decay{decay_factor}"
+
+        save_path_distance_matrix = (
+            save_dir + f"/distance_matrix_n{n_nodes}_{dist_metric_str}{weighting_str}"
+        )
+
+        if os.path.exists(save_path_distance_matrix + ".npy"):
+            raise FileNotFoundError(
+                "Distance matrix with neighbourhood impurities already exists."
             )
-            node_weights_params = ParameterGrid(
-                {
-                    "decay_factor": [1, 1.2, 1.5, 2],
-                    "max_distance": [1, 2, 3],
-                }
-            )
+        logger.info(
+            f"Computing weighted distance matrix for metric {dist_metric_str}..."
+        )
+        # distance_matrix = calc_distance_matrix_joblib(
+        distance_matrix = calc_distance_matrix(
+            blackout_neighbourhood_impurities,
+            parallel=False,
+            test_mode=True,
+            metric=partial(
+                weighted_distance_wrapper,
+                weighted_distance_metric=dist_metric,
+            ),
+        )
+        exit()
+        np.save(save_path_distance_matrix, distance_matrix)
 
-            for i, katz_params in enumerate(node_weights_params):
-                decay_factor = katz_params["decay_factor"]
-                max_distance = katz_params["max_distance"]
+        # elif node_weights == "":
 
-                neighborhood_impurities = calc_neighborhood_impurity(
-                    save_dir,
-                    unique_vecs,
-                    decay_factor,
-                    max_distance,
-                    adjacency_matrix,
-                )
-                neighbourhood_impurities_dict[(decay_factor, max_distance)] = (
-                    neighborhood_impurities
-                )
+        #     dist_metric_str = f"bACC"
+        #     weighting_str = f""
+        #     save_path_distance_matrix = (
+        #         save_dir
+        #         + f"/distance_matrix_n{n_nodes}_{dist_metric_str}{weighting_str}"
+        #     )
 
-            # # calculate distance matrix
-            decay_factor = decay_factor_clustering
-            max_distance = max_distance_clustering
-
-            neighborhood_impurities = neighbourhood_impurities_dict[
-                (decay_factor, max_distance)
-            ]
-            blackout_neighbourhood_impurities = np.concatenate(
-                (unique_vecs, neighborhood_impurities), axis=1
-            )
-
-            plot_blackout_and_nodeWeights(
-                save_dir,
-                unique_vecs,
-                neighbourhood_impurities_dict,
-                node_weights_params,
-                nx_graph,
-                pos,
-                blackout_neighbourhood_impurities,
-            )
-            distance_metrics = {
-                "bACC": balanced_overlap_distance_weighted,
-                "ACC": multiclass_balanced_distance_weighted,
-            }
-            for dist_metric_str, dist_metric in distance_metrics.items():
-                weighting_str = f"_impurity_maxD{max_distance}_decay{decay_factor}"
-
-                save_path_distance_matrix = (
-                    save_dir
-                    + f"/distance_matrix_n{n_nodes}_{dist_metric_str}{weighting_str}"
-                )
-
-                if os.path.exists(save_path_distance_matrix + ".npy"):
-                    raise FileNotFoundError(
-                        "Distance matrix with neighbourhood impurities already exists."
-                    )
-                logger.info("Computing weighted distance matrix...")
-                distance_matrix = calc_distance_matrix_joblib(
-                    blackout_neighbourhood_impurities,
-                    metric=partial(
-                        weighted_distance_wrapper,
-                        weighted_distance_metric=dist_metric,
-                    ),
-                )
-                np.save(save_path_distance_matrix, distance_matrix)
-
-        elif node_weights == "":
-            dist_metric_str = f"bACC"
-            weighting_str = f""
-            save_path_distance_matrix = (
-                save_dir
-                + f"/distance_matrix_n{n_nodes}_{dist_metric_str}{weighting_str}"
-            )
-
-            if os.path.exists(save_path_distance_matrix + ".npy"):
-                distance_matrix = np.load(save_path_distance_matrix + ".npy")
-            else:
-                logger.info("Computing standard distance matrix...")
-                distance_matrix = calc_distance_matrix(
-                    unique_vecs,
-                    metric=balanced_overlap_distance,
-                )
-                np.save(save_path_distance_matrix, distance_matrix)
+        #     if os.path.exists(save_path_distance_matrix + ".npy"):
+        #         distance_matrix = np.load(save_path_distance_matrix + ".npy")
+        #     else:
+        #         logger.info("Computing standard distance matrix...")
+        #         distance_matrix = calc_distance_matrix(
+        #             unique_vecs,
+        #             metric=balanced_overlap_distance,
+        #         )
+        #         np.save(save_path_distance_matrix, distance_matrix)
 
     end_time = datetime.now()
     total_time = end_time - start_time
