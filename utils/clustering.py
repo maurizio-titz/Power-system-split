@@ -6,6 +6,7 @@ import sys
 from typing import Callable, Union
 from joblib import Parallel, delayed
 import joblib
+import time
 
 import numpy as np
 import scipy
@@ -14,6 +15,7 @@ from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.preprocessing import normalize
 from tqdm import tqdm
 from collections import OrderedDict
+from datetime import datetime, timedelta
 
 from utils.config import (
     path_to_clustering_results_lopf,
@@ -89,7 +91,7 @@ def typed_katz_centrality_batch(
     # return c
 
 
-def neighborhood_impurity_batch(
+def neighborhood_homo_batch(
     adjacency_matrix: Union[np.matrix, sparse.csr_matrix],
     node_class_vectors: np.ndarray,
     decay_factor: float = 1.5,
@@ -97,7 +99,7 @@ def neighborhood_impurity_batch(
     impurity_type: str = "normalized_shannon",
     neg_val_tolerance: float = 1e-6,
 ) -> np.ndarray:
-    """calculates the nodewise neighbourhood impurity, i.e. how close the node is to nodes of the opposite class.
+    """calculates the nodewise neighbourhood homogeneity, i.e. how close the node is to nodes of the opposite class.
     adjacency_matrix: adjacency matrix of the graph
     node_class_vectors_one_hot: one-hot encoded node class vectors, shape (n_instances, n_nodes, n_classes)
     decay_factor: decay factor for the Katz centrality
@@ -108,6 +110,9 @@ def neighborhood_impurity_batch(
     """
 
     if len(node_class_vectors.shape) == 3:
+        raise NotImplementedError(
+            "neighborhood_impurity_batch does not support one hote encoding of node class vectors"
+        )
         n_classes = node_class_vectors.shape[2]
         if n_classes > 1:
             node_class_vectors_one_hot = node_class_vectors
@@ -116,11 +121,12 @@ def neighborhood_impurity_batch(
                 "node_class_vectors seems to be one-hot encoded but has only one class"
             )
     else:
-        n_classes = len(np.unique(node_class_vectors))
+        classes = np.sort(np.unique(node_class_vectors))
+        n_classes = len(classes)
         if n_classes > 1:
             # one-hot encode the node class vectors
             node_class_vectors_one_hot = np.stack(
-                [(node_class_vectors == cls).astype(int) for cls in range(n_classes)],
+                [(node_class_vectors == cls).astype(int) for cls in classes],
                 axis=0,
             )
         else:
@@ -128,7 +134,7 @@ def neighborhood_impurity_batch(
                 "node_class_vectors is not one-hot encoded but has only one unique value"
             )
 
-    print(f"number of classes: {n_classes}")
+    print(f"{n_classes} classes found in node_class_vectors: {classes}")
 
     if scipy.sparse.issparse(adjacency_matrix):
         adjacency_matrix = adjacency_matrix.toarray()
@@ -144,6 +150,8 @@ def neighborhood_impurity_batch(
         ],
         axis=0,
     )
+    assert not np.isnan(np.sum(c)), "nan values encountered in impurity calculation"
+
     c = c / (
         np.sum(c, axis=0, keepdims=True)
     )  # normalize across classes to get probabilities
@@ -153,9 +161,13 @@ def neighborhood_impurity_batch(
     ), "c.shape != node_class_vectors.shape"
 
     if impurity_type == "normalized_shannon":
-        c = -np.sum(c * np.log(c + 1e-10), axis=0) / np.log(n_classes)
+        c = -np.sum(c * np.log(c + 1e-10), axis=0) / np.log(
+            n_classes
+        )  # high values mean high heterogeneity
     elif impurity_type == "gini":
-        c = 1 - np.sum(c**2, axis=0)
+        c = 1 - np.sum(c**2, axis=0)  # high values mean high heterogeneity
+
+    c = 1 - c  # convert to homogeneity: high values mean high homogeneity
 
     if np.min(c) < 0:
         if np.min(c) > -neg_val_tolerance:
@@ -164,6 +176,7 @@ def neighborhood_impurity_batch(
             raise ValueError(
                 f"negative impurity values encountered, smallest value: {np.min(c)}"
             )
+    assert np.isnan(c).sum() == 0, "nan values encountered in impurity calculation"
     return c
 
 
@@ -258,7 +271,7 @@ def balanced_overlap_distance_weighted(
     node_classes0 = node_classes0.astype(bool)
     node_classes1 = node_classes1.astype(bool)
 
-    return (
+    dist = (
         1
         - (
             (node_classes0 * node_classes1)
@@ -276,6 +289,9 @@ def balanced_overlap_distance_weighted(
         )
         / 2
     )
+    if np.isnan(dist):
+        raise ValueError("distance is nan")
+    return dist
 
 
 def multiclass_balanced_distance_weighted(
@@ -284,7 +300,7 @@ def multiclass_balanced_distance_weighted(
     node_weights0: np.ndarray,
     node_weights1: np.ndarray,
     dtype=np.float16,
-) -> np.float16:
+) -> float:
     """calculates the balanced overlap distance between two indicator vectors with an arbitrary number of classes, weighted by the sum of the node uncertainties."""
 
     assert (
@@ -362,6 +378,173 @@ def multiclass_accuracy_distance_weighted(
     return distance
 
 
+def balanced_overlap_distance_weighted_pairwise(
+    node_classes_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
+    node_classes_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+    node_weights_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
+    node_weights_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+) -> np.ndarray:
+    """
+    Calculate pairwise distances between all vectors in two matrices.
+
+    Returns:
+        np.ndarray: Distance matrix of shape (n1, n2)
+    """
+    n1, n_nodes = node_classes_matrix1.shape
+    n2, _ = node_classes_matrix2.shape
+
+    # Convert to boolean for overlap calculations
+    classes1 = node_classes_matrix1.astype(bool)  # (n1, n_nodes)
+    classes2 = node_classes_matrix2.astype(bool)  # (n2, n_nodes)
+
+    # Expand dimensions for broadcasting: (n1, 1, n_nodes) and (1, n2, n_nodes)
+    classes1_exp = classes1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    classes2_exp = classes2[np.newaxis, :, :]  # (1, n2, n_nodes)
+    weights1_exp = node_weights_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    weights2_exp = node_weights_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
+
+    # Calculate overlaps using broadcasting
+    both_true = classes1_exp & classes2_exp  # (n1, n2, n_nodes)
+    both_false = ~classes1_exp & ~classes2_exp  # (n1, n2, n_nodes)
+
+    # Weight the overlaps
+    weighted_both_true = both_true * weights1_exp * weights2_exp  # (n1, n2, n_nodes)
+    weighted_both_false = both_false * weights1_exp * weights2_exp  # (n1, n2, n_nodes)
+
+    # Sum across nodes
+    overlap_true = weighted_both_true.sum(axis=2)  # (n1, n2)
+    overlap_false = weighted_both_false.sum(axis=2)  # (n1, n2)
+
+    # Calculate denominators
+    weighted_sum1 = (classes1_exp * weights1_exp).sum(axis=2)  # (n1, n2)
+    weighted_sum2 = (classes2_exp * weights2_exp).sum(axis=2)  # (n1, n2)
+    weighted_sum_not1 = ((~classes1_exp) * weights1_exp).sum(axis=2)  # (n1, n2)
+    weighted_sum_not2 = ((~classes2_exp) * weights2_exp).sum(axis=2)  # (n1, n2)
+
+    # Calculate balanced overlap distance
+    true_overlap_normalized = overlap_true / (weighted_sum1 + weighted_sum2 + 1e-10)
+    false_overlap_normalized = overlap_false / (
+        weighted_sum_not1 + weighted_sum_not2 + 1e-10
+    )
+
+    distance = 1 - (true_overlap_normalized + false_overlap_normalized) / 2
+
+    return distance
+
+
+def multiclass_balanced_distance_weighted_pairwise(
+    node_classes_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
+    node_classes_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+    node_weights_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
+    node_weights_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+    dtype=np.float32,
+) -> np.ndarray:
+    """
+    Calculate pairwise multiclass balanced distances.
+
+    Returns:
+        np.ndarray: Distance matrix of shape (n1, n2)
+    """
+    n1, n_nodes = node_classes_matrix1.shape
+    n2, _ = node_classes_matrix2.shape
+
+    # Get all unique classes
+    all_classes = np.unique(
+        np.concatenate([node_classes_matrix1.ravel(), node_classes_matrix2.ravel()])
+    )
+    n_classes = len(all_classes)
+
+    distances = np.zeros((n1, n2), dtype=dtype)
+
+    # Calculate balanced accuracy for each class and average
+    for class_val in all_classes:
+        # Create binary masks for current class
+        binary1 = (node_classes_matrix1 == class_val).astype(dtype)  # (n1, n_nodes)
+        binary2 = (node_classes_matrix2 == class_val).astype(dtype)  # (n2, n_nodes)
+
+        # Use broadcasting for pairwise calculation
+        binary1_exp = binary1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+        binary2_exp = binary2[np.newaxis, :, :]  # (1, n2, n_nodes)
+        weights1_exp = node_weights_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+        weights2_exp = node_weights_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
+
+        # Calculate weighted true positives, false positives, etc.
+        tp = (
+            ((binary1_exp == 1) & (binary2_exp == 1)) * weights1_exp * weights2_exp
+        ).sum(axis=2)
+        tn = (
+            ((binary1_exp == 0) & (binary2_exp == 0)) * weights1_exp * weights2_exp
+        ).sum(axis=2)
+        fp = (
+            ((binary1_exp == 0) & (binary2_exp == 1)) * weights1_exp * weights2_exp
+        ).sum(axis=2)
+        fn = (
+            ((binary1_exp == 1) & (binary2_exp == 0)) * weights1_exp * weights2_exp
+        ).sum(axis=2)
+
+        # Calculate balanced accuracy
+        sensitivity = tp / (tp + fn + 1e-10)
+        specificity = tn / (tn + fp + 1e-10)
+        balanced_acc = (sensitivity + specificity) / 2
+
+        # Convert to distance (1 - accuracy)
+        distances += 1 - balanced_acc
+
+    # Average across classes
+    distances /= n_classes
+
+    return distances
+
+
+def compute_distance_matrix_vectorized(
+    data_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
+    weights_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
+    metric_func,
+    chunk_size: int = 1000,
+    test_mode: bool = False,
+) -> np.ndarray:
+    """
+    Compute distance matrix using vectorized operations with chunking to manage memory.
+
+    Returns:
+        np.ndarray: Distance matrix of shape (n_samples, n_samples)
+    """
+    if test_mode:
+        data_matrix = data_matrix[:10000, :]
+        weights_matrix = weights_matrix[:10000, :]
+    n_samples = data_matrix.shape[0]
+    distance_matrix = np.zeros((n_samples, n_samples), dtype=np.float32)
+
+    pbar = tqdm(total=(n_samples * (n_samples - 1)) // 2, desc="Distance Calculation")
+    # Process in chunks to manage memory
+    for i in range(0, n_samples, chunk_size):
+        for j in range(i, n_samples, chunk_size):
+            i_end = min(i + chunk_size, n_samples)
+            j_end = min(j + chunk_size, n_samples)
+
+            # Extract chunks
+            chunk1_data = data_matrix[i:i_end]
+            chunk1_weights = weights_matrix[i:i_end]
+            chunk2_data = data_matrix[j:j_end]
+            chunk2_weights = weights_matrix[j:j_end]
+
+            # Calculate pairwise distances for this chunk
+            chunk_distances = metric_func(
+                chunk1_data, chunk2_data, chunk1_weights, chunk2_weights
+            )
+
+            # Fill the distance matrix
+            distance_matrix[i:i_end, j:j_end] = chunk_distances
+
+            # Fill symmetric part (unless it's the diagonal chunk)
+            if i != j:
+                distance_matrix[j:j_end, i:i_end] = chunk_distances.T
+                pbar.update((i_end - i) * (j_end - j))
+
+    pbar.close()
+    return distance_matrix
+
+
 def balanced_overlap_distance(
     node_classes0: np.ndarray,
     node_classes1: np.ndarray,
@@ -402,7 +585,41 @@ def get_order_by_blackout_size(indicator_vectors: np.ndarray):
 
 def calc_distance_matrix(
     data,
+    mode: str = "sequential",
     metric=balanced_overlap_distance_weighted,
+    n_jobs=-1,
+    show_progress=True,
+    test_mode=True,
+):
+    """Calculate the distance matrix."""
+    if mode == "parallel":
+        return calc_distance_matrix_joblib_chunked(
+            data,
+            metric=metric,
+            n_jobs=n_jobs,
+            show_progress=show_progress,
+            test_mode=test_mode,
+        )
+    elif mode == "sequential":
+        return calc_distance_matrix_sequential(data, metric=metric, test_mode=test_mode)
+    elif mode == "vectorized":
+        # split data into classes and weights
+        n_nodes = int(data.shape[1] / 2)
+        node_classes_matrix = data[:, :n_nodes]
+        node_weights_matrix = data[:, n_nodes:]
+        return compute_distance_matrix_vectorized(
+            node_classes_matrix,
+            node_weights_matrix,
+            multiclass_balanced_distance_weighted_pairwise,
+            chunk_size=500,
+            test_mode=test_mode,
+        )
+
+
+def calc_distance_matrix_sequential(
+    data,
+    metric=balanced_overlap_distance_weighted,
+    test_mode=False,
 ):
     """
     Calculate the distance matrix for the given data using the specified metric.
@@ -414,12 +631,20 @@ def calc_distance_matrix(
     Returns:
         np.ndarray: The calculated distance matrix.
     """
+    n_samples = data.shape[0]
+    if test_mode:
+        data = data[:100]  # Limit to first 100 samples for testing
+
     d = np.zeros((data.shape[0], data.shape[0]), dtype=np.float64)
-    for i in range(data.shape[0]):
-        for j in range(i + 1, data.shape[0]):
-            d[i, j] = metric(data[i], data[j])
-            # Store the distance in the appropriate place in the matrix
-            d[j, i] = d[i, j]
+    with tqdm(
+        total=(n_samples * (n_samples - 1)) // 2, desc="Distance Calculation"
+    ) as pbar:
+        for i in range(data.shape[0]):
+            for j in range(i + 1, data.shape[0]):
+                d[i, j] = metric(data[i], data[j])
+                # Store the distance in the appropriate place in the matrix
+                d[j, i] = d[i, j]
+                pbar.update(1)
 
     np.fill_diagonal(d, 0)  # Set diagonal to zero
     return d
@@ -466,21 +691,32 @@ def calc_distance_matrix_joblib(
     def compute_distance(i, j):
         return i, j, metric(data[i], data[j])
 
+    # measure total passed time
+    t_now = time.time()
+    human_time = datetime.fromtimestamp(t_now).strftime("%Y-%m-%d %H:%M:%S")
+    print(
+        f"Starting distance matrix calculation for {n_samples} samples at {human_time}"
+    )
+
     # Generate all (i,j) pairs where i < j
     pairs = [(i, j) for i in range(n_samples) for j in range(i + 1, n_samples)]
     if test_mode:
-        pairs = pairs[:100]  # Limit to first 100 pairs for testing
+        n_test_size = 100000
+        print(
+            f"Test mode: limiting to {n_test_size/(n_samples*(n_samples-1)//2)*100:.1f}% of all pairs"
+        )
+        pairs = pairs[:n_test_size]  # Limit to first 100 pairs for testing
 
     # Parallel computation
     if show_progress:
         with tqdm_joblib(
             tqdm(desc="Distance Calculation", total=len(pairs))
         ) as progress_bar:
-            results = Parallel(n_jobs=n_jobs)(
+            results = Parallel(n_jobs=n_jobs, prefer="processes")(
                 delayed(compute_distance)(i, j) for i, j in pairs
             )
     else:
-        results = Parallel(n_jobs=n_jobs)(
+        results = Parallel(n_jobs=n_jobs, prefer="processes")(
             delayed(compute_distance)(i, j) for i, j in pairs
         )
 
@@ -489,6 +725,162 @@ def calc_distance_matrix_joblib(
     for i, j, distance in results:
         d[i, j] = distance
         d[j, i] = distance
+    t_end = time.time()
+    time_passed = t_end - t_now
+    human_time_end = datetime.fromtimestamp(t_end).strftime("%Y-%m-%d %H:%M:%S")
+    time_str = str(timedelta(seconds=time_passed))
+    print(
+        f"Finished distance matrix calculation at {human_time_end}, total time: {time_str}"
+    )
+
+    np.fill_diagonal(d, 0)
+    return d
+
+
+def compute_distance_chunk(data, pairs_chunk, metric):
+    """Compute distances for a chunk of pairs - data is only serialized once per chunk"""
+    results = []
+    for i, j in pairs_chunk:
+        distance = metric(data[i], data[j])
+        results.append((i, j, distance))
+    return results
+
+
+def calc_distance_matrix_joblib_chunked(
+    data,
+    metric=balanced_overlap_distance_weighted,
+    n_jobs=-1,
+    show_progress=True,
+    test_mode=True,
+    chunk_size=1000,  # Tune this based on your data size
+):
+    """
+    Calculate distance matrix with chunked processing - reduces process overhead.
+    """
+    raise NotImplementedError(
+        "This implementation does not work yet, maybe the chunk size is too small? Massive overhead."
+    )
+    n_samples = data.shape[0]
+
+    # measure total passed time
+    t_now = time.time()
+    human_time = datetime.fromtimestamp(t_now).strftime("%Y-%m-%d %H:%M:%S")
+    print(
+        f"Starting chunked distance matrix calculation for {n_samples} samples at {human_time}"
+    )
+
+    # Generate all (i,j) pairs where i < j
+    pairs = [(i, j) for i in range(n_samples) for j in range(i + 1, n_samples)]
+    if test_mode:
+        n_test_size = 100000
+        print(
+            f"Test mode: limiting to {n_test_size/(n_samples*(n_samples-1)//2)*100:.1f}% of all pairs"
+        )
+        pairs = pairs[:n_test_size]
+
+    # Split pairs into chunks - this is the key optimization
+    chunks = [pairs[i : i + chunk_size] for i in range(0, len(pairs), chunk_size)]
+    print(f"Processing {len(pairs)} pairs in {len(chunks)} chunks of size {chunk_size}")
+
+    # Parallel computation with chunked processing
+    if show_progress:
+        with tqdm_joblib(
+            tqdm(desc="Distance Calculation", total=len(chunks))
+        ) as progress_bar:
+            chunk_results = Parallel(n_jobs=n_jobs, prefer="processes")(
+                delayed(compute_distance_chunk)(data, chunk, metric) for chunk in chunks
+            )
+    else:
+        chunk_results = Parallel(n_jobs=n_jobs, prefer="processes")(
+            delayed(compute_distance_chunk)(data, chunk, metric) for chunk in chunks
+        )
+
+    # Flatten results
+    results = [result for chunk_result in chunk_results for result in chunk_result]
+
+    # Fill the distance matrix
+    d = np.zeros((n_samples, n_samples), dtype=np.float64)
+    for i, j, distance in results:
+        d[i, j] = distance
+        d[j, i] = distance
+
+    t_end = time.time()
+    time_passed = t_end - t_now
+    human_time_end = datetime.fromtimestamp(t_end).strftime("%Y-%m-%d %H:%M:%S")
+    time_str = str(timedelta(seconds=time_passed))
+    print(
+        f"Finished distance matrix calculation at {human_time_end}, total time: {time_str}"
+    )
+
+    np.fill_diagonal(d, 0)
+    return d
+
+
+def generate_chunks_on_demand(n_samples, chunk_size, test_mode=False):
+    """Generator that yields chunks without storing them"""
+    pairs_generated = 0
+    current_chunk = []
+
+    for i in range(n_samples):
+        for j in range(i + 1, n_samples):
+            if test_mode and pairs_generated >= 100000:
+                break
+
+            current_chunk.append((i, j))
+            pairs_generated += 1
+
+            if len(current_chunk) >= chunk_size:
+                yield current_chunk
+                current_chunk = []
+
+        if test_mode and pairs_generated >= 100000:
+            break
+
+    if current_chunk:
+        yield current_chunk
+
+
+def calc_distance_matrix_memory_efficient(
+    data,
+    metric=balanced_overlap_distance_weighted,
+    n_jobs=-1,
+    show_progress=True,
+    test_mode=True,
+    n_chunks=None,
+):
+    """Ultra memory-efficient version"""
+    n_samples = data.shape[0]
+
+    if n_chunks is None:
+        n_cores = n_jobs if n_jobs > 0 else os.cpu_count()
+        n_chunks = n_cores * 3
+
+    total_pairs = n_samples * (n_samples - 1) // 2
+    if test_mode:
+        total_pairs = min(100000, total_pairs)
+
+    chunk_size = max(1, total_pairs // n_chunks)
+
+    # Process chunks one by one to minimize memory
+    d = np.zeros((n_samples, n_samples), dtype=np.float64)
+
+    chunk_generator = generate_chunks_on_demand(n_samples, chunk_size, test_mode)
+
+    if show_progress:
+        chunk_generator = tqdm(
+            chunk_generator, total=n_chunks, desc="Processing chunks"
+        )
+
+    # Process chunks sequentially but with parallel distance computation within each chunk
+    for chunk in chunk_generator:
+        chunk_results = Parallel(n_jobs=n_jobs, prefer="processes")(
+            delayed(lambda pair: (*pair, metric(data[pair[0]], data[pair[1]])))(pair)
+            for pair in chunk
+        )
+
+        for i, j, distance in chunk_results:
+            d[i, j] = distance
+            d[j, i] = distance
 
     np.fill_diagonal(d, 0)
     return d
