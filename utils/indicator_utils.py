@@ -64,14 +64,14 @@ def load_indicator_vectors_weighted_multiple_lvl(
         weights_lvl = np.array([index_tuple[2] for index_tuple in vectors_tuple[0]])
 
         split_props_level = split_props[split_props.co2l == co2lvl]
-
-        vectors_lvl = transform_indicator_vectors(
-            vectors_lvl, transformation, indicator_type
-        )
         if mask is not None:
             vectors_lvl = vectors_lvl[np.array(mask[co2lvl])]
             weights_lvl = weights_lvl[np.array(mask[co2lvl])]
             split_props_level = split_props_level.iloc[np.array(mask[co2lvl])]
+
+        vectors_lvl = transform_indicator_vectors(
+            vectors_lvl, transformation, indicator_type
+        )
 
         all_weights_dict[co2lvl] = weights_lvl
         all_vectors_dict[co2lvl] = vectors_lvl
@@ -257,6 +257,11 @@ def transform_indicator_vectors(indicator_vectors, transformation, indicator_typ
         transformed_indicator_vectors = np.array(indicator_vectors < -1, dtype=int)
     elif transformation == "not_zero":
         transformed_indicator_vectors = np.array(indicator_vectors != 0, dtype=int)
+    elif transformation == "overUnder":
+        transformed_indicator_vectors = np.zeros_like(indicator_vectors)
+        transformed_indicator_vectors[indicator_vectors > 1] = 1
+        transformed_indicator_vectors[indicator_vectors < -1] = -1
+        transformed_indicator_vectors = transformed_indicator_vectors.astype(int)
     else:
         raise ValueError(f"transformation {transformation} not implemented")
 
