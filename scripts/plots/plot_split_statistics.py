@@ -99,9 +99,9 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
         )
 
     # Add snapshot weighting
-    component_props["snapshot_weighting"] = network.snapshot_weightings.generators[
-        component_props.time_stamp
-    ].values
+    component_props["total_weighting"] = (
+        component_props["snapshot_weighting"] * component_props["trigger_weighting"]
+    )
 
     # Setup matplotlib styling
     setup_matplotlib_style()
@@ -227,7 +227,7 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
     for co2l in selected_co2ls:
         vals = ax2_inertia.hist(
             rot_energy[component_props_filtered.co2l == co2l],
-            weights=component_props_filtered.snapshot_weighting[
+            weights=component_props_filtered.total_weighting[
                 component_props_filtered.co2l == co2l
             ],
             bins=bins,
@@ -262,7 +262,7 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
     for co2l in selected_co2ls:
         h = ax1_imbalance.hist(
             power_imbalance[component_props_filtered.co2l == co2l],
-            weights=component_props_filtered.snapshot_weighting[
+            weights=component_props_filtered.total_weighting[
                 component_props_filtered.co2l == co2l
             ],
             bins=bins,
@@ -352,6 +352,9 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
     )
+    split_props["total_weighting"] = (
+        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    )
 
     # Setup matplotlib styling
     setup_matplotlib_style()
@@ -372,7 +375,11 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
         vals = (
             split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
         )
-        counts, _ = np.histogram(vals, bins=bins)
+        counts, _ = np.histogram(
+            vals,
+            weights=split_props[split_props.co2l == co2l].total_weighting,
+            bins=bins,
+        )
         data.append(counts)
 
     data = np.stack(data)
