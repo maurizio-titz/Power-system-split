@@ -7,8 +7,6 @@ import pickle
 import sys
 import warnings
 
-from utils.alternative_split_indicator_vectors import add_indices_to_indicator_vectors
-
 
 # from glob import glob
 
@@ -23,6 +21,11 @@ from tqdm import tqdm
 
 sys.path.append("./")
 
+from utils.alternative_split_indicator_vectors import (
+    add_indices_to_indicator_vectors,
+    extract_nodal_rocof_and_load_share_in_split_from_old_results,
+    validate_rocofVec_splitProps_match,
+)
 from utils.data_handling import get_co2_levels
 from utils import cascade_simulation, data_handling
 from utils import visualization as vis
@@ -82,14 +85,25 @@ for co2l in tqdm(co2l_list):
             path_to_evaluation_results_lopf
             + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
         )
+    if component_props_level.trigger_weighting.nunique() == 1:
+        raise ValueError("trigger weighting has only one unique value")
 
     component_props_level.loc[:, "co2l"] = co2l
     component_props = pd.concat(
         [component_props, component_props_level], ignore_index=True
     )
+
+for co2l in component_props["co2l"].unique():
+    assert (
+        component_props[component_props["co2l"] == co2l].trigger_weighting.nunique() > 1
+    ), (
+        "trigger weighting has only one unique value for co2l %.2f" % co2l,
+        "in concatenated dataframe",
+    )
 component_props.to_hdf(
     save_path + f"component_properties_all_n{n_nodes}.h5", key="df", mode="w"
 )
+
 
 #### Extract split properties ####
 print("\n### Extracting split properties ###\n")
@@ -103,8 +117,9 @@ if "component_props" not in locals():
 snapshot_weightings = data_handling.load_pypsa_network(
     co2lvl=0.0, n_nodes=n_nodes, use_sclopf=use_sclopf
 ).snapshot_weightings
-
+print("Grouping components...")
 split_groups = component_props.groupby(["co2l", "time_stamp", "split_number"])
+print("Adding split properties...")
 split_props = pd.DataFrame(
     index=split_groups.groups.keys(),
     # columns=["n_components"],
@@ -114,20 +129,16 @@ split_props.index = split_props.index.rename(
 )
 
 if use_sclopf:
-    triggers_0 = split_groups.init_failure_0.unique()
-    assert all([len(ii) == 1 for ii in triggers_0.values])
-    triggers_0 = [ii[0] for ii in triggers_0.values]
-
-    triggers_1 = split_groups.init_failure_1.unique()
-    assert all([len(ii) == 1 for ii in triggers_1.values])
-    triggers_1 = [ii[0] for ii in triggers_1.values]
-
-    trigger_weighting = split_groups.trigger_weighting.unique()
-    assert all([len(ii) == 1 for ii in trigger_weighting.values])
-    trigger_weighting = [ii[0] for ii in trigger_weighting.values]
+    triggers_0 = split_groups.init_failure_0.unique().astype(int)
+    triggers_1 = split_groups.init_failure_1.unique().astype(int)
+    num_par_failure_0 = split_groups.num_par_failure_0.unique().astype(float)
+    num_par_failure_1 = split_groups.num_par_failure_1.unique().astype(float)
+    trigger_weighting = split_groups.trigger_weighting.unique().astype(int)
 
     split_props["init_failure_0"] = triggers_0
     split_props["init_failure_1"] = triggers_1
+    split_props["num_par_failure_0"] = num_par_failure_0
+    split_props["num_par_failure_1"] = num_par_failure_1
     split_props["trigger_weighting"] = trigger_weighting
 else:
     triggers = split_groups.init_failure.unique()
@@ -152,8 +163,10 @@ split_props["load"] = split_groups.load.sum().astype(float)
 split_props["snapshot_weighting"] = snapshot_weightings.generators.loc[
     split_props.index.get_level_values("time_stamp")
 ].values.astype(int)
+split_props["total_weighting"] = (
+    split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+)
 split_props["co2l"] = split_props.index.get_level_values("co2l")
-
 
 split_props.to_hdf(
     save_path + f"split_properties_all_n{n_nodes}.h5", key="df", mode="w"
@@ -164,26 +177,39 @@ for lvl in split_props["co2l"].unique():
 
 
 ### add indices to indicator vectors for backward compatibility ###
-print("\n### Adding indices to indicator vectors ###\n")
 for co2l in co2l_list:
+    print(f"\n### Adding indices to rocof vectors for Co2L {co2l} ###\n")
     add_indices_to_indicator_vectors(
         co2_lvl=co2l,
         n_nodes=n_nodes,
         save_res=True,
         verbose=True,
-        overwrite=False,
+        overwrite=True,
         use_sclopf=use_sclopf,
     )
+    # validate_rocofVec_splitProps_match(n_nodes, co2l)
 
+# # for co2l in co2l_list:
+# #     print(f"\n### Extracting indicator vectors for Co2L {co2l} ###\n")
+# #     extract_nodal_rocof_and_load_share_in_split_from_old_results(
+# #         co2_lvl=co2l,
+# #         n_nodes=n_nodes,
+# #         save_res=True,
+# #         verbose=True,
+# #         overwrite=False,
+# #         use_sclopf=use_sclopf,
+# #     )
 
-### Calculate likelihoods #####
+## Calculate likelihoods #####
 
 print("\nCalculate likelihoods of primary/secondary failures...\n")
 likelihoods_primary = dict(keys=co2l_list)
 likelihoods_secondary = dict(keys=co2l_list)
 likelihoods_total = dict(keys=co2l_list)
 
-for co2l in co2l_list[::-1]:
+number_of_simulations = None
+
+for co2l in co2l_list:
 
     network = data_handling.load_pypsa_network(
         co2lvl=co2l, n_nodes=n_nodes, use_sclopf=use_sclopf
@@ -196,16 +222,17 @@ for co2l in co2l_list[::-1]:
         nx.bridges(nx_graph), nx_graph
     )
     if use_sclopf:
-        n_2_failures = cascade_simulation.calc_possible_double_line_failures(
-            num_parallels, ignored_idxs=bridge_idxs
-        )
-        weighted_trigger_count = sum(
-            [initial_failure["weight"] for initial_failure in n_2_failures]
-        )
-        # incorporating the weighting of the snapshots
-        number_of_simulations = (
-            weighted_trigger_count * network.snapshot_weightings.generators.sum()
-        )
+        if number_of_simulations is None:
+            n_2_failures = cascade_simulation.calc_possible_double_line_failures(
+                num_parallels, ignored_idxs=bridge_idxs
+            )
+            weighted_trigger_count = sum(
+                [initial_failure["weight"] for initial_failure in n_2_failures]
+            )
+            # incorporating the weighting of the snapshots
+            number_of_simulations = (
+                weighted_trigger_count * network.snapshot_weightings.generators
+            ).sum()
     else:
         number_of_simulations = (
             nx_graph.number_of_edges() - len(bridge_idxs)
