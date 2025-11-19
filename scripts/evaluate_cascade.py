@@ -242,11 +242,11 @@ def evaluate_cascade(
             # each entry holds: [rot_energy, power_imbalance, load, rocof, load_share]
 
             for observables_single_component in observables_split_components:
+                # the shedded and blackout load losses are given in share of total system load!
                 load_shedded = (
                     abs(min(0, observables_single_component[1]))
                     / observables_single_component[2]
-                    if observables_single_component[2] != 0
-                    else 0
+                    * observables_single_component[4]
                 )
                 blackout_load_loss = (
                     int(
