@@ -69,7 +69,7 @@ def get_lost_load_in_member_components(
     snapshot_weightings_arr: np.ndarray,
     node_to_split_idx_ls: list,
     change_rot_energy: float,
-    rocof_neg_threshold: float,
+    rocof_abs_threshold: float,
     freq_ref: float = 50.0,
 ) -> np.ndarray:
     """Get how much load would still be lost after adding an additional Erot at each node in 'node_arr'.
@@ -106,7 +106,7 @@ def get_lost_load_in_member_components(
         node_cut_comp_arr[:, 2] = new_rocof
 
         # See where rocof exceeds threshold and how much load is therefore lost
-        lost_idx = node_cut_comp_arr[:, 2] < rocof_neg_threshold
+        lost_idx = np.abs(node_cut_comp_arr[:, 2]) > rocof_abs_threshold
         lost_load_member_comps[idx_ele] = (
             node_cut_comp_arr[lost_idx, 3] * cut_snapshow_weighting[lost_idx]
         ).sum()
@@ -117,17 +117,16 @@ def get_lost_load_in_member_components(
 def greedy_inertia_placement_step(
     component_props_arr: np.ndarray,
     indicator_vectors: np.ndarray,
-    snapshot_weightings_arr: np.ndarray,
     split_to_node_list: list,
     delta_rot_energy: float,
-    rocof_neg_threshold: float,
+    rocof_abs_threshold: float,
     load_share_threshold: float,
     freq_ref: float = 50.0,
 ) -> np.ndarray:
     """Place inertia according to the highest amount of mitigated load.
 
     Args:
-        component_props_arr (np.ndarray): Component properties of each split. columns: ["rot_energy", "power_imbalance", "rocof", "load", "load_share"]
+        component_props_arr (np.ndarray): Component properties of each split. columns: ["rot_energy", "power_imbalance", "rocof", "load", "load_share", "total_weighting"]
         indicator_vectors (np.ndarray): Vector having ones in every row k showing
             nodes being in split k.
         snapshot_weightings_arr (np.ndarray): Array with snapshot weightings showing
@@ -153,14 +152,14 @@ def greedy_inertia_placement_step(
 
         modified_rocof = freq_ref * (split_r[1] / (2 * (split_r[0] + delta_rot_energy)))
         if (
-            split_r[2] < rocof_neg_threshold
-            and modified_rocof > rocof_neg_threshold
+            np.abs(split_r[2]) > rocof_abs_threshold
+            and modified_rocof < rocof_abs_threshold
             and split_r[3] > load_share_threshold
         ):
             idx_node_for_split = split_to_node_list[idx_split]
             mitigated_load_share_loss_r = split_r[3]
             mitigate_load_share_loss_node_arr[idx_node_for_split] += (
-                mitigated_load_share_loss_r * snapshot_weightings_arr[idx_split]
+                mitigated_load_share_loss_r * split_r[4]
             )
 
     return mitigate_load_share_loss_node_arr
@@ -246,7 +245,7 @@ def run_greedy_inertia_placement(
     indicator_vec_arr: np.ndarray,
     snapshot_weightings_generators: pd.DataFrame,
     delta_rot_energy: float,
-    rocof_threshold_Hz_s: float = -1.0,
+    rocof_threshold_Hz_s: float = 1.0,
     max_iter: int = 10000,
     freq_ref: float = 50,
     load_share_threshold: float = 0,
@@ -258,15 +257,15 @@ def run_greedy_inertia_placement(
     initial_added_inertia_by_node: np.ndarray = None,
 ) -> tuple:
     """Run inertia placement to reduce the amount of lost load, which is defined as the
-    load in a component that suffers a rocof smaller than 'rocof_threshold_Hz_s'.
+    load in a component that suffers an absolute rocof smaller than 'rocof_threshold_Hz_s'.
 
     Args:
         component_df (pd.DataFrame): Dataframe with information on components of splits.
         indicator_vec_arr (np.ndarray): Vector with entries for each split
         snapshot_weightings_generators (pd.DataFrame): Snapshot weightings to show how many
         delta_rot_energy (float): Change of rotational energy per step.
-        rocof_threshold_Hz_s (float, optional): Threshold for RoCoF below which a split component is considered
-            to be unrecoverable. Defaults to -1. .
+        rocof_threshold_Hz_s (float, optional): Threshold for absolute RoCoF above which a split component is considered
+            to be unrecoverable. Defaults to 1. .
         max_iter (int, optional): Number of iterations. Note, simulation will be stopped if
             every split is below the threshold. Defaults to 10000.
         freq_ref (float, optional): Reference frequency in Hz. Defaults to 50.
@@ -287,10 +286,12 @@ def run_greedy_inertia_placement(
         resolve_equality_counter, still_used_random_node_choice
     """
 
-    assert rocof_threshold_Hz_s < 0
+    assert (
+        rocof_threshold_Hz_s > 0
+    ), "rocof_threshold_Hz_s has to be positive. We consider absolute RoCoF."
 
     # Find out significant splits and reduce comp and ind
-    cut_idxs = (component_df["rocof"] < rocof_threshold_Hz_s).values
+    cut_idxs = (component_df["rocof"].abs() > rocof_threshold_Hz_s).values
 
     component_df_cut = component_df[cut_idxs]
     len_cut_df = len(component_df_cut.index)
@@ -300,9 +301,12 @@ def run_greedy_inertia_placement(
     cut_time_stamps = component_df.time_stamp[cut_idxs].values
     snapshot_weightings_arr_cut = snapshot_weightings_generators[cut_time_stamps].values
 
+    component_df_cut["total_weighting"] = (
+        component_df_cut.trigger_weighting * component_df_cut.snapshot_weighting
+    )
     # convert component_df to array
     modified_component_df = component_df_cut.loc[
-        :, ["rot_energy", "power_imbalance", "rocof", "load_share"]
+        :, ["rot_energy", "power_imbalance", "rocof", "load_share", "total_weighting"]
     ].copy()
     loss_share_before_mitigation = modified_component_df["load_share"].sum()
 
@@ -334,7 +338,7 @@ def run_greedy_inertia_placement(
     pbar = tqdm(range(max_iter), disable=not show_progress)
     for idx_step in pbar:
         count_beyond_threshold = np.count_nonzero(
-            modified_comp_arr[:, 2] < rocof_threshold_Hz_s
+            np.abs(modified_comp_arr[:, 2]) > rocof_threshold_Hz_s
         )
         pbar.set_description(
             f"Bey. thres.: {count_beyond_threshold/ len_cut_df*100:.1f}%, fac: {int(delta_rot_energy_factor):d} "
@@ -345,7 +349,6 @@ def run_greedy_inertia_placement(
         potential_load_loss_change_by_selected_node = greedy_inertia_placement_step(
             modified_comp_arr,
             indicator_vec_arr_cut,
-            snapshot_weightings_arr_cut,
             split_to_node_idx_ls,
             ch_rot_energy_r,
             rocof_threshold_Hz_s,
@@ -466,7 +469,7 @@ def run_specific_co2lvl_n_size(
     nn_nodes: int = 400,
     delta_rot_energy: float = 10,
     max_iter: int = 10000,
-    rocof_threshold_Hz_s: float = -1.0,
+    rocof_threshold_Hz_s: float = 1.0,
     lshare_threshold: float = 0.0,
     resolve_equality_method: str = "random",
     save_it: bool = True,
@@ -498,17 +501,13 @@ def run_specific_co2lvl_n_size(
         res_tuple: see output of run_greedy_inertia_placement
     """
 
-    assert rocof_threshold_Hz_s < 0
-
     # Load files for DataFrame collecting component properties, indicator vectors and PyPSA network.
     if use_sclopf:
         path_to_evaluation_results = path_to_evaluation_results_sclopf
         path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_sclopf
-        path_to_pypsa_network = path_to_pypsa_network_sclopf
     else:
         path_to_evaluation_results = path_to_evaluation_results_lopf
         path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_lopf
-        path_to_pypsa_network = path_to_pypsa_network_lopf
 
     fpath_component_in = (
         path_to_evaluation_results
@@ -523,10 +522,6 @@ def run_specific_co2lvl_n_size(
     with gzip.open(fpath_indicator_vec_in, "rb") as fh_in:
         indicator_vec_arr = pickle.load(fh_in)
 
-    fpath_pypsa_network = (
-        path_to_pypsa_network
-        + f"sclopf-elec_s_{nn_nodes}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc"
-    )
     pypsa_net = load_pypsa_network(co2_lvl, nn_nodes, use_sclopf=use_sclopf)
     snapshot_weightings_generators = pypsa_net.snapshot_weightings.generators
 
@@ -557,13 +552,14 @@ def run_specific_co2lvl_n_size(
         with gzip.open(fpath_out + ".pklz", "wb") as fh_out:
             pickle.dump(res_tuple, fh_out)
 
+        message_text = (
+            "Finished synthetic inertia placement for  "
+            + f"N={nn_nodes}, C02_lvl={co2_lvl} and saved results in '"
+            + fpath_out
+            + "'."
+        )
+        print(message_text)
         if cfg.mattermost_url is not None:
-            message_text = (
-                "Finished synthetic inertia placement for  "
-                + f"N={nn_nodes}, C02_lvl={co2_lvl} and saved results in '"
-                + fpath_out
-                + "'."
-            )
             send_mattermost_messages.post_message(message_text, cfg.mattermost_url)
 
     return res_tuple
