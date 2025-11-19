@@ -369,7 +369,7 @@ def remove_line_from_Bd(
         num_parallel_new = remove_highest_volt_lvl_circuit(
             num_parallel, use_sclopf=use_sclopf
         )
-    if num_parallel_new < 1e-6:
+    if np.isclose(num_parallel_new, 0, atol=1e-5):
         num_parallel_new = 0
 
     # Adapt network parameters accordingly
@@ -470,7 +470,7 @@ def simulate_cascade(
     cascade_length = 0
 
     # Only add initial failure that fully removed a line
-    failure_cascade = list(np.argwhere(np.isclose(num_parallel_ls, 0))[:, 0])
+    failure_cascade = list(np.argwhere(np.isclose(num_parallel_ls, 0), atol=1e-4)[:, 0])
 
     while still_going:
 

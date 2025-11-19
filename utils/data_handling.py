@@ -361,7 +361,6 @@ def load_pypsa_network(
         path_to_pypsa_network_sclopf if use_sclopf else path_to_pypsa_network_lopf
     )
     files = os.listdir(data_path)
-    print("Available files:", files)
 
     files = [
         f
@@ -400,8 +399,6 @@ def load_pypsa_network_from_path(path_to_pypsa_network: str, use_sclopf: bool):
     # For our data set, "0" indicates the Continental European AC grid. -> snet doc
 
     # Load PyPSA network
-    print(path_to_pypsa_network)
-
     assert (
         os.path.isfile(path_to_pypsa_network) == True
     ), f'File "{path_to_pypsa_network}" does not exist'
