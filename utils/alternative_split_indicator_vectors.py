@@ -26,6 +26,7 @@ from utils.config import (  # path_to_cascade_results_lopf,
     path_to_indicator_vectors_sclopf,
     path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
+    path_to_vis_results_sclopf,
 )
 from utils.data_handling import (  # nx_edges_to_matrix_indices,
     build_networkx_graph,
@@ -95,7 +96,7 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
     if save_res:
         fpath_indi_vec_rocof_out = (
             path_to_evaluation_results
-            + "/indicator_vector_rocof_Co2L"
+            + "/indicator_vector_rocof_Co2L_old"
             + f"{co2_lvl}_n{n_nodes}.pklz"
         )
         fpath_indi_vec_lshare_out = (
@@ -159,10 +160,16 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
 
     # Add list of tuples of initial failures
     if use_sclopf:
+        df_comp_props["weight"] = (
+            df_comp_props.trigger_weighting * df_comp_props.snapshot_weighting
+        )
         df_comp_props["init_failure_tuples"] = list(
             zip(
                 df_comp_props.init_failure_0.astype(int),
+                df_comp_props.num_par_failure_0,
                 df_comp_props.init_failure_1.astype(int),
+                df_comp_props.num_par_failure_1,
+                df_comp_props.weight.astype(int),
             )
         )
 
@@ -202,7 +209,14 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
             indicator_vector_view = indicator_vector_arr[df_event_r.index]
             assert (np.sum(indicator_vector_view, axis=0) == 1).all()
 
-            index_tuple_time_split.append((time_stamp_r, init_tuple_r, idx_split))
+            index_tuple_time_split.append(
+                (
+                    time_stamp_r,
+                    init_tuple_r[:-1],  # initial failures
+                    init_tuple_r[-1],  # weight
+                    idx_split,
+                )
+            )
             for idx_in_split_r, row_r in df_event_r.iterrows():
 
                 idx_vec_in_split = np.argwhere(
@@ -236,18 +250,19 @@ def add_indices_to_indicator_vectors(
     overwrite: bool = False,
     use_sclopf: bool = True,
 ):
-    """Use the results from the old indicator vectors to arrive at the
-    vectors that give the RoCoF for every node's component"""
+    """Adds indices to the indicator vectors from eval_cascades."""
 
     # Check before if the results already exists
     if use_sclopf:
         path_to_evaluation_results = path_to_evaluation_results_sclopf
+        path_to_indicator_vectors = path_to_indicator_vectors_sclopf
     else:
         path_to_evaluation_results = path_to_evaluation_results_lopf
+        path_to_indicator_vectors = path_to_indicator_vectors_lopf
 
     if save_res:
         fpath_indi_vec_rocof_out = (
-            path_to_evaluation_results
+            path_to_indicator_vectors
             + "/indicator_vector_rocof_Co2L"
             + f"{co2_lvl}_n{n_nodes}.pklz"
         )
@@ -278,6 +293,7 @@ def add_indices_to_indicator_vectors(
         + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
         key="df",
     )
+
     if verbose:
         print("Finished loading data.\n")
 
@@ -292,9 +308,9 @@ def add_indices_to_indicator_vectors(
         df_comp_props["init_failure_tuples"] = list(
             zip(
                 df_comp_props.init_failure_0.astype(int),
-                df_comp_props.num_par_failure_0.astype(int),
+                df_comp_props.num_par_failure_0.astype(float),
                 df_comp_props.init_failure_1.astype(int),
-                df_comp_props.num_par_failure_1.astype(int),
+                df_comp_props.num_par_failure_1.astype(float),
                 df_comp_props.weight.astype(int),
             )
         )
@@ -323,6 +339,31 @@ def add_indices_to_indicator_vectors(
             unique_init_tuples = pd.unique(df_time_r["init_failure"])
 
         for idx_split, init_tuple_r in enumerate(unique_init_tuples):
+            rocofs_components = df_time_r[
+                df_time_r["init_failure_tuples"] == init_tuple_r
+            ].rocof.values
+            rocofs_vec = np.unique(
+                indicator_vector_rocof[len(index_tuple_time_split), :]
+            )
+
+            # Remove NaN values and sort both arrays for comparison
+            rocofs_components_clean = np.sort(rocofs_components)
+            rocofs_vec_clean = np.sort(rocofs_vec)
+
+            # Assert that the arrays contain the same values within numerical tolerance
+            assert np.allclose(
+                rocofs_components_clean, rocofs_vec_clean, rtol=1e-12, atol=1e-15
+            ), (
+                f"RoCoF values from component properties {rocofs_components_clean} "
+                + f"and from indicator vector {rocofs_vec_clean} do not match within tolerance!"
+            )
+
+            n_components = len(rocofs_components_clean)
+            n_components_vec = len(rocofs_vec_clean)
+            assert n_components == n_components_vec, (
+                f"Number of components from component properties {n_components} "
+                + f"and from indicator vector {n_components_vec} do not match!"
+            )
 
             index_tuple_time_split.append(
                 (
@@ -333,11 +374,89 @@ def add_indices_to_indicator_vectors(
                 )
             )
 
+    df_comp_props_sorted = df_comp_props.sort_values(by=["time_stamp", "split_number"])
+    if not df_comp_props_sorted.reset_index(drop=True).equals(
+        df_comp_props.reset_index(drop=True)
+    ):
+        print(
+            "Warning! component props not sorted correctly, sorting now indicator vectors now."
+        )
+        df_comp_props_sorted = df_comp_props.drop_duplicates(
+            subset=["time_stamp", "split_number"], inplace=False
+        )
+        df_comp_props_sorted.reset_index(drop=True, inplace=True)
+        assert df_comp_props_sorted.shape[0] == indicator_vector_rocof.shape[0]
+
+        df_comp_props_sorted.sort_values(
+            by=["time_stamp", "split_number"], inplace=True
+        )
+        idx_sorted = df_comp_props_sorted.index
+        indicator_vector_rocof = indicator_vector_rocof[idx_sorted]
+        index_tuple_time_split = [index_tuple_time_split[i] for i in idx_sorted]
+
     if save_res:
         with gzip.open(fpath_indi_vec_rocof_out, "wb") as fh_rocof_out:
             pickle.dump((index_tuple_time_split, indicator_vector_rocof), fh_rocof_out)
 
     return index_tuple_time_split, indicator_vector_rocof
+
+
+def validate_rocofVec_splitProps_match(n_nodes, co2_lvl, test_mode=False):
+    """Validate that the rocof indicator vectors match the split properties time stamps and initial failures."""
+    with gzip.open(
+        path_to_indicator_vectors_sclopf
+        + f"indicator_vector_rocof_Co2L{co2_lvl}_n{n_nodes}.pklz",
+        "rb",
+    ) as fh_in:
+        rocof_vecs = pickle.load(fh_in)
+    split_props = pd.read_csv(
+        path_to_vis_results_sclopf + f"split_props_Co2L{co2_lvl}_n{n_nodes}.csv"
+    )
+
+    assert len(rocof_vecs[0]) == len(
+        split_props
+    ), f"Length of rocof vectors {len(rocof_vecs[0])} and split properties {len(split_props)} do not match!"
+
+    for i in tqdm(range(split_props.shape[0])):
+        if test_mode and i > 100:
+            break
+        time_stamp_vec = rocof_vecs[0][i][0]
+        time_stamp_vec = pd.Timestamp(time_stamp_vec).strftime("%Y-%m-%d %H:%M:%S")
+        time_stamp_props = split_props.iloc[i]["time_stamp"]
+        assert (
+            time_stamp_vec == time_stamp_props
+        ), f"Time stamp of rocof vector {time_stamp_vec} and split properties {time_stamp_props} do not match!"
+
+        init_fail0_vec = rocof_vecs[0][i][1][0]
+        init_fail0_props = split_props.iloc[i]["init_failure_0"]
+        assert (
+            init_fail0_vec == init_fail0_props
+        ), f"Init failure 0 of rocof vector {init_fail0_vec} and split properties {init_fail0_props} do not match!"
+        init_fail1_vec = rocof_vecs[0][i][1][2]
+        init_fail1_props = split_props.iloc[i]["init_failure_1"]
+        assert (
+            init_fail1_vec == init_fail1_props
+        ), f"Init failure 1 of rocof vector {init_fail1_vec} and split properties {init_fail1_props} do not match!"
+
+        num_par_fail0_vec = rocof_vecs[0][i][1][1]
+        num_par_fail0_props = split_props.iloc[i]["num_par_failure_0"]
+        assert (
+            num_par_fail0_vec == num_par_fail0_props
+        ), f"Num par failure 0 of rocof vector {num_par_fail0_vec} and split properties {num_par_fail0_props} do not match!"
+        num_par_fail1_vec = rocof_vecs[0][i][1][3]
+        num_par_fail1_props = split_props.iloc[i]["num_par_failure_1"]
+        assert (
+            num_par_fail1_vec == num_par_fail1_props
+        ), f"Num par failure 1 of rocof vector {num_par_fail1_vec} and split properties {num_par_fail1_props} do not match!"
+
+        total_weight_vec = rocof_vecs[0][i][2]
+        total_weight_props = (
+            split_props.iloc[i]["trigger_weighting"]
+            * split_props.iloc[i]["snapshot_weighting"]
+        )
+        assert (
+            total_weight_vec == total_weight_props
+        ), f"Total weighting of rocof vector {total_weight_vec} and split properties {total_weight_props} do not match!"
 
 
 def find_failed_edge_indicator_vector_for_cascade_results(
