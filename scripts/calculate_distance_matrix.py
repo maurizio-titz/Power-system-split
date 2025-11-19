@@ -29,8 +29,9 @@ from utils.clustering import (
     calc_distance_matrix,
     calc_distance_matrix_joblib,
     get_unique_vectors_with_weights,
+    multiclass_accuracy_distance_weighted,
     multiclass_balanced_distance_weighted,
-    neighborhood_impurity_batch,
+    neighborhood_homo_batch,
     prepare_clusters_for_analysis,
     typed_katz_centrality_batch,
     weighted_distance_wrapper,
@@ -61,6 +62,7 @@ from utils.config import (
     path_to_pypsa_network_sclopf,
     path_to_vis_results_lopf,
     path_to_vis_results_sclopf,
+    path_to_indicator_vectors_sclopf,
 )
 
 decay_factor_clustering = 1
@@ -93,7 +95,7 @@ def get_str_from_params(params):
 
 def filter_splits_events(
     use_sclopf,
-    path_to_evaluation_results,
+    path_to_indicator_vectors,
     path_to_vis_results,
     n_nodes,
     min_lost_load_share,
@@ -158,7 +160,7 @@ def filter_splits_events(
             n_nodes,
             indicator_type,
             transformation,
-            path_to_indicator_vectors=path_to_evaluation_results,
+            path_to_indicator_vectors=path_to_indicator_vectors,
             mask=masks_dict,
             split_props=split_props,
             co2_list=co2l_list,
@@ -303,7 +305,7 @@ def calc_neighborhood_impurity(
             adjacency_matrix = data_handling.get_adjacency_matrix_from_nx_graph(
                 nx_graph
             )
-        neighbourhood_impurities = neighborhood_impurity_batch(
+        neighbourhood_impurities = neighborhood_homo_batch(
             adjacency_matrix=adjacency_matrix,
             node_class_vectors=unique_vecs,
             decay_factor=decay_factor,
@@ -335,9 +337,10 @@ def plot_blackout_and_nodeWeights(
 
     for plot_count in tqdm(range(n_outages_to_plots), desc="Generating plots"):
         fig_path = save_dir + f"/blackout_vec_{plot_count}.png"
-        # if os.path.exists(fig_path):
-        #     plots_skipped += 1
-        #     continue
+
+        if os.path.exists(fig_path):
+            print(f"Plot already exists, skipping plots altogether.")
+            return
 
         random_idx = np.random.randint(0, blackout_katz_centralities.shape[0])
 
@@ -377,7 +380,7 @@ def plot_blackout_and_nodeWeights(
                 # axs[0].set_title(f"blackout vector")
                 ax.set_title(f"decay {decay_factor}, max dist {max_distance}")
 
-            katz_plot_path = save_dir + f"/katz_centrality_{plot_count}.png"
+            katz_plot_path = save_dir + f"/node_weights_{plot_count}.png"
             fig.savefig(katz_plot_path)
             plt.close(fig)
 
@@ -389,8 +392,8 @@ def plot_blackout_and_nodeWeights(
             # ax=ax,
             save_dir=None,
             cmap="coolwarm",  # Use string colormap name instead
-            # vmax=vmax,
-            # vmin=vmin,
+            vmax=blackout_vec.max(),
+            vmin=blackout_vec.min(),
         )
         f.savefig(fig_path)
         plt.close(f)
@@ -399,6 +402,12 @@ def plot_blackout_and_nodeWeights(
 
 if __name__ == "__main__":
     start_time = datetime.now()
+
+    fresh_start = False
+    if fresh_start:
+        print(
+            "WARNING: running fresh start, previous results in the directory will be deleted!"
+        )
 
     n_nodes = 600
 
@@ -409,6 +418,7 @@ if __name__ == "__main__":
     # co2l_list = [0.6]
 
     indicator_type, transformation = "rocof", "overUnder"
+    # indicator_type, transformation = "rocof", "blackout"
 
     if transformation is None:
         transformation_string = "_" + transformation
@@ -424,13 +434,16 @@ if __name__ == "__main__":
         lost_load_share=min_lost_load_share,
         use_sclopf=use_sclopf,
     )
-    # for params in clustering_params.values():
-    #     rename_old_files(params, save_dir)
+    # if fresh_start:
+    #     if os.path.exists(save_dir):
+    #         import shutil
+
+    #         shutil.rmtree(save_dir)
 
     logger.info("Starting data preprocessing...")
     unique_vecs, split_props = filter_splits_events(
         use_sclopf,
-        path_to_evaluation_results,
+        path_to_indicator_vectors_sclopf,
         path_to_vis_results,
         n_nodes,
         min_lost_load_share,
@@ -489,11 +502,10 @@ if __name__ == "__main__":
         pos,
         blackout_neighbourhood_impurities,
     )
-    exit()
 
     distance_metrics = {
-        "bACC": balanced_overlap_distance_weighted,
-        "ACC": multiclass_balanced_distance_weighted,
+        "ACC": multiclass_accuracy_distance_weighted,
+        # "bACC": multiclass_balanced_distance_weighted,
     }
     for dist_metric_str, dist_metric in distance_metrics.items():
         weighting_str = f"_impurity_maxD{max_distance}_decay{decay_factor}"
@@ -502,24 +514,25 @@ if __name__ == "__main__":
             save_dir + f"/distance_matrix_n{n_nodes}_{dist_metric_str}{weighting_str}"
         )
 
-        if os.path.exists(save_path_distance_matrix + ".npy"):
-            raise FileNotFoundError(
-                "Distance matrix with neighbourhood impurities already exists."
-            )
+        # if os.path.exists(save_path_distance_matrix + ".npy"):
+        #     continue
+        #     raise FileNotFoundError(
+        #         "Distance matrix with neighbourhood impurities already exists."
+        #     )
         logger.info(
             f"Computing weighted distance matrix for metric {dist_metric_str}..."
         )
         # distance_matrix = calc_distance_matrix_joblib(
         distance_matrix = calc_distance_matrix(
             blackout_neighbourhood_impurities,
-            parallel=False,
-            test_mode=True,
+            mode="sequential",
+            test_mode=False,
             metric=partial(
                 weighted_distance_wrapper,
                 weighted_distance_metric=dist_metric,
             ),
+            n_jobs=16,
         )
-        exit()
         np.save(save_path_distance_matrix, distance_matrix)
 
         # elif node_weights == "":
