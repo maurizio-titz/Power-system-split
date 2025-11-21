@@ -51,7 +51,10 @@ setup_matplotlib_style()
 
 
 def load_clustering_data(
-    n_nodes=600, indicator_type="rocof", transformation="blackout"
+    n_nodes=600,
+    indicator_type="rocof",
+    transformation="overUnder",
+    min_lost_load_share=0.05,
 ):
     """Load clustering data and network setup."""
     # Load network graph and node positions
@@ -70,8 +73,16 @@ def load_clustering_data(
     double_line_failures = cascade_simulation.calc_possible_double_line_failures(
         num_parallels, ignored_idxs=bridge_idxs
     )
-    num_snapshots_weighted = network.snapshot_weightings.objective.sum()
-    num_failures_weighted = len(double_line_failures) * num_snapshots_weighted
+    n_2_failures = cascade_simulation.calc_possible_double_line_failures(
+        num_parallels, ignored_idxs=bridge_idxs
+    )
+    weighted_trigger_count = sum(
+        [initial_failure["weight"] for initial_failure in n_2_failures]
+    )
+    # incorporating the weighting of the snapshots
+    num_failures_weighted = (
+        weighted_trigger_count * network.snapshot_weightings.generators
+    ).sum()
 
     # Get CO2 levels and setup paths
     co2l_list = get_co2_levels(n_nodes=n_nodes)
@@ -81,7 +92,7 @@ def load_clustering_data(
         indicator_type=indicator_type,
         transformation=transformation,
         n_nodes_split=None,
-        lost_load_share=0.05,
+        lost_load_share=min_lost_load_share,
     )
 
     return {
@@ -175,12 +186,18 @@ def find_best_clustering_file(save_dir, alg_filter=None):
     return clustering_files[0]
 
 
-def create_clustering_analysis_plot(fname="", n_subplots=12, alg_filter=None):
+def create_clustering_analysis_plot(
+    fname="",
+    n_subplots=12,
+    alg_filter=None,
+    average_over_classes=True,
+    min_lost_load_share=0.05,
+):
     """Create the main clustering analysis plot."""
 
     # Load data
     print("Loading clustering data...")
-    data = load_clustering_data()
+    data = load_clustering_data(min_lost_load_share=min_lost_load_share)
     nx_graph = data["nx_graph"]
     pos = data["pos"]
     co2l_list = data["co2l_list"]
@@ -198,6 +215,7 @@ def create_clustering_analysis_plot(fname="", n_subplots=12, alg_filter=None):
     print("Loading processed data...")
     processed_data = load_processed_data(save_dir, n_nodes)
     split_properties_filtered = processed_data["split_properties_filtered"]
+    weights_filtered = split_properties_filtered.total_weighting
     masks_dict = processed_data["masks_dict"]
     weights_dict = processed_data["weights_dict"]
     blackout_vectors_filtered_dict = processed_data["blackout_vectors_filtered_dict"]
@@ -210,7 +228,7 @@ def create_clustering_analysis_plot(fname="", n_subplots=12, alg_filter=None):
     node_cmap, edge_cmap = setup_colormaps()
 
     # Prepare data arrays
-    weights = np.concatenate([weights_dict[co2l] for co2l in co2l_list])
+    weights = weights_filtered.values
     print("total weighted number of events:", weights.sum())
     blackout_vectors_filtered = np.concatenate(
         list(blackout_vectors_filtered_dict.values())
@@ -256,17 +274,57 @@ def create_clustering_analysis_plot(fname="", n_subplots=12, alg_filter=None):
     )
 
     # Calculate centroids
-    centroids = {
-        label: blackout_vectors_filtered[group_masks[label]].T
-        @ weights[group_masks[label]]
-        / weights[group_masks[label]].sum()
-        for label in labels
-    }
+    classes = np.unique(blackout_vectors_filtered)
+    n_classes = len(classes)
+    if average_over_classes:
+        centroids = {
+            label: blackout_vectors_filtered[group_masks[label]].T
+            @ weights[group_masks[label]]
+            / weights[group_masks[label]].sum()
+            for label in labels
+        }
+    else:
+        # map classes to non-negative
+        def classes_to_nonNeg(class_vecs):
+            if np.min(class_vecs) < 0:
+                classes = np.unique(class_vecs)
+                classes = np.sort(classes)
+                old_class_to_new = {old_class: i for i, old_class in enumerate(classes)}
+                for i, class_val in enumerate(classes):
+                    class_vecs[class_vecs == class_val] = i
+                return class_vecs, old_class_to_new
+            else:
+                return class_vecs, None
+
+        centroids = {}
+        for label in labels:
+            blackout_vectors_filtered_nonNeg, old_class_to_new = classes_to_nonNeg(
+                blackout_vectors_filtered
+            )
+            weighted_node_class_probs = (
+                np.array(
+                    [
+                        np.bincount(
+                            outcomes_node,
+                            minlength=n_classes,
+                            weights=weights[group_masks[label]],
+                        )
+                        for outcomes_node in blackout_vectors_filtered_nonNeg[
+                            group_masks[label]
+                        ].T
+                    ],
+                )
+                / weights[group_masks[label]].sum()
+            )  # n_nodes x n_classes
+            centroids[label] = weighted_node_class_probs
 
     edge_centroids = {
         label: failed_edges_indicator_vectors_filtered[group_masks[label]].T
         @ weights[group_masks[label]]
-        / group_masks[label].sum()
+        / weights[
+            group_masks[label]
+        ].sum()  #! chech if replacing below line with this is correct!
+        # / group_masks[label].sum()
         for label in labels
     }
 
@@ -349,7 +407,6 @@ def create_clustering_analysis_plot(fname="", n_subplots=12, alg_filter=None):
             plot_centroid_with_failures(
                 nx_graph,
                 pos,
-                edge_centroids,
                 node_cmap,
                 edge_cmap,
                 vmax,
@@ -359,6 +416,8 @@ def create_clustering_analysis_plot(fname="", n_subplots=12, alg_filter=None):
                 centroid,
                 failed_edges_prob,
                 ax,
+                colors_classes=["blue", "lightgray", "red"],
+                radius=0.4,
             )
 
             ax.axis("off")
@@ -923,16 +982,19 @@ def analyse_clusters_temporal_occurence_patterns(
 
 
 if __name__ == "__main__":
-    # for n_subplots in [9, 12]:
-    #     create_clustering_analysis_plot(
-    #         n_subplots=n_subplots,
-    #         fname="agglomerative_clustering_n600_bACC_katz_maxD4_decay1_linkageAverage_n_clusters1.3e+02_fitted.pklz",
-    #     )
+
+    for n_subplots in [12]:
+        create_clustering_analysis_plot(
+            n_subplots=n_subplots,
+            fname="agglomerative_clustering_n600_ACC_impurity_maxD1_decay1_linkageComplete_n_clusters1.3e+02_fitted.pklz",
+            min_lost_load_share=0.5,
+            average_over_classes=False,
+        )
 
     # Run temporal analysis
-    analyse_clusters_temporal_occurence_patterns(
-        fname="agglomerative_clustering_n600_bACC_katz_maxD4_decay1_linkageAverage_n_clusters1.3e+02_fitted.pklz",
-        n_clusters_to_analyze=6,
-    )
+    # analyse_clusters_temporal_occurence_patterns(
+    #     fname="agglomerative_clustering_n600_bACC_katz_maxD4_decay1_linkageAverage_n_clusters1.3e+02_fitted.pklz",
+    #     n_clusters_to_analyze=6,
+    # )
 
     print("Clustering analysis plot generated successfully!")
