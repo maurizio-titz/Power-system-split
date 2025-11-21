@@ -1,34 +1,33 @@
 """calculated the distance matrix for the indicator vectors and saves the results to disk"""
 
+import argparse
 from datetime import datetime
 from functools import partial
-import gzip
 import os
-import pickle
+import random
 import sys
 
 from scipy import sparse
 
+
 sys.path.append("./")
 
+from utils.clustering import filter_splits_events
 from matplotlib import pyplot as plt
 import matplotlib
 import matplotlib.colors
 import networkx as nx
 import numpy as np
-import pandas as pd
 from sklearn.cluster import DBSCAN, OPTICS, AgglomerativeClustering
 from sklearn.metrics import pairwise_distances
 from sklearn.model_selection import ParameterGrid
 from sklearn_extra.cluster import KMedoids
 from tqdm import tqdm
-from filter_splits import split_mask
 from utils.clustering import (
     balanced_overlap_distance,
     balanced_overlap_distance_weighted,
     calc_distance_matrix,
     calc_distance_matrix_joblib,
-    get_unique_vectors_with_weights,
     multiclass_accuracy_distance_weighted,
     multiclass_balanced_distance_weighted,
     neighborhood_homo_batch,
@@ -36,7 +35,6 @@ from utils.clustering import (
     typed_katz_centrality_batch,
     weighted_distance_wrapper,
 )
-from utils.indicator_utils import load_indicator_vectors
 from utils.data_handling import (
     get_co2_levels,
     load_networkx_graph,
@@ -67,6 +65,9 @@ from utils.config import (
 
 decay_factor_clustering = 1
 max_distance_clustering = 1
+# raise NotImplementedError(
+#     "Remove this raise statement after setting decay_factor_clustering"
+# )
 use_sclopf = True
 
 if use_sclopf:
@@ -91,111 +92,6 @@ def get_str_from_params(params):
             for k in sorted_keys
         ]
     )
-
-
-def filter_splits_events(
-    use_sclopf,
-    path_to_indicator_vectors,
-    path_to_vis_results,
-    n_nodes,
-    min_lost_load_share,
-    co2l_list,
-    indicator_type,
-    transformation,
-    save_dir,
-    split_props=None,
-):
-    os.makedirs(save_dir, exist_ok=True)
-    logger_num = logger.add(f"{save_dir}/log.txt")
-
-    # get masks
-    masks_dict_path = save_dir + "/masks_dict.pklz"
-    if os.path.exists(masks_dict_path):
-        with gzip.open(masks_dict_path, "rb") as fh_in:
-            masks_dict = pickle.load(fh_in)
-    else:
-        logger.info("Computing masks for CO2 levels...")
-
-        if split_props is None:
-            split_props = pd.read_hdf(
-                path_to_vis_results + f"split_properties_all_n{n_nodes}.h5"
-            )
-        split_props.lost_load_share_blackout = (
-            split_props.lost_load_share_blackout.astype(float)
-        )
-        split_props = split_props[split_props.co2l.isin(co2l_list)]
-
-        masks_dict = {
-            co2l: split_mask(
-                split_props[split_props.index.get_level_values("co2l") == co2l],
-                min_lost_load_share,
-                ignore_shedding=True,
-            )
-            for co2l in co2l_list
-        }
-
-        with gzip.open(masks_dict_path, "wb") as fh_out:
-            pickle.dump(masks_dict, fh_out)
-
-    save_path_unique_vecs = save_dir + f"/unique_blackout_vecs_n{n_nodes}.pklz"
-    if os.path.exists(save_path_unique_vecs):
-        with gzip.open(save_path_unique_vecs, "rb") as fh_in:
-            unique_vecs_dict = pickle.load(fh_in)
-        split_props_filtered = pd.read_hdf(
-            f"{save_dir}/data_filtered_{n_nodes}.h5", key="split_props"
-        )
-    else:
-        logger.info("Loading indicator vectors and computing unique vectors...")
-
-        if split_props is None:
-            split_props = pd.read_hdf(
-                path_to_vis_results + f"split_properties_all_n{n_nodes}.h5"
-            )
-
-        (
-            blackout_vectors_filtered_dict,
-            weights_filtered_dict,
-            split_props_filtered,
-        ) = load_indicator_vectors(
-            n_nodes,
-            indicator_type,
-            transformation,
-            path_to_indicator_vectors=path_to_indicator_vectors,
-            mask=masks_dict,
-            split_props=split_props,
-            co2_list=co2l_list,
-        )
-
-        # Save intermediate results
-        with gzip.open(f"{save_dir}/weights_filtered_dict.pklz", "wb") as fh_out:
-            pickle.dump(weights_filtered_dict, fh_out)
-        split_props_filtered.to_hdf(
-            f"{save_dir}/data_filtered_{n_nodes}.h5", key="split_props"
-        )
-        with gzip.open(
-            f"{save_dir}/blackout_vectors_filtered_dict_{n_nodes}.pklz", "wb"
-        ) as fh_out:
-            pickle.dump(blackout_vectors_filtered_dict, fh_out)
-        with gzip.open(
-            f"{save_dir}/weights_filtered_dict_{n_nodes}.pklz", "wb"
-        ) as fh_out:
-            pickle.dump(weights_filtered_dict, fh_out)
-
-        blackout_vectors_filtered = np.concatenate(
-            list(blackout_vectors_filtered_dict.values())
-        )
-        weights_filtered = np.concatenate(list(weights_filtered_dict.values()))
-
-        unique_vecs_dict = get_unique_vectors_with_weights(
-            blackout_vectors_filtered, weights_filtered
-        )
-
-        with gzip.open(save_path_unique_vecs, "wb") as fh_out:
-            pickle.dump(unique_vecs_dict, fh_out)
-
-    unique_vecs = np.array(list(unique_vecs_dict.keys()))
-    weights_filtered = [d["weight"] for d in unique_vecs_dict.values()]
-    return unique_vecs, split_props_filtered
 
 
 def calc_katz_centralities(
@@ -286,6 +182,7 @@ def calc_neighborhood_impurity(
     decay_factor,
     max_distance,
     adjacency_matrix=None,
+    err_on_missing=False,
 ):
     save_path_centralities = (
         save_dir + f"indicator_vector_impurity_maxD{max_distance}_decay{decay_factor}"
@@ -295,6 +192,10 @@ def calc_neighborhood_impurity(
         neighbourhood_impurities = np.load(save_path_centralities + ".npy")
 
     except FileNotFoundError:
+        if err_on_missing:
+            raise FileNotFoundError(
+                f"neighborhood impurity file {save_path_centralities}.npy not found and err_on_missing is True."
+            )
         logger.info(
             f"Computing neighbourhood impurities (decay={decay_factor}, max_dist={max_distance})..."
         )
@@ -321,45 +222,52 @@ def plot_blackout_and_nodeWeights(
     save_dir,
     unique_vecs,
     typed_katz_centralities_dict,
-    katz_param_grid,
+    node_weight_params,
     nx_graph,
     pos,
-    blackout_katz_centralities,
+    n_outages_to_plots=8,
+    plot_idxs=None,
+    overWrite_plots=False,
 ):
-    # set seed for reproducibility
-    n_outages_to_plots = 8
 
-    n_rows = len(katz_param_grid.param_grid[0]["decay_factor"])
-    n_cols = len(katz_param_grid.param_grid[0]["max_distance"])
+    if isinstance(node_weight_params, dict):
+        node_weight_params = ParameterGrid([node_weight_params])
+
+    n_rows = len(node_weight_params.param_grid[0]["decay_factor"])
+    n_cols = len(node_weight_params.param_grid[0]["max_distance"])
 
     plots_created = 0
     plots_skipped = 0
 
-    for plot_count in tqdm(range(n_outages_to_plots), desc="Generating plots"):
-        fig_path = save_dir + f"/blackout_vec_{plot_count}.png"
+    if plot_idxs is None:
+        plot_idxs = random.sample(range(unique_vecs.shape[0]), n_outages_to_plots)
 
-        if os.path.exists(fig_path):
+    for plot_count, random_idx in tqdm(enumerate(plot_idxs), desc="Generating plots"):
+        fig_path = save_dir + f"/blackout_vec_{random_idx}.png"
+
+        if os.path.exists(fig_path) and overWrite_plots is False:
             print(f"Plot already exists, skipping plots altogether.")
             return
-
-        random_idx = np.random.randint(0, blackout_katz_centralities.shape[0])
 
         fig, axs = plt.subplots(
             nrows=n_rows,
             ncols=n_cols,
             figsize=(n_rows * 8, n_cols * 8),
         )
+        if n_rows == 1 and n_cols == 1:
+            axs = np.array([[axs]])
 
         for i_decay_factor in range(n_rows):
             for i_max_distance in range(n_cols):
-                decay_factor = katz_param_grid.param_grid[0]["decay_factor"][
+                decay_factor = node_weight_params.param_grid[0]["decay_factor"][
                     i_decay_factor
                 ]
-                max_distance = katz_param_grid.param_grid[0]["max_distance"][
+                max_distance = node_weight_params.param_grid[0]["max_distance"][
                     i_max_distance
                 ]
                 ax = axs[i_decay_factor, i_max_distance]
 
+                # if len(n_rows.shape) == 1:
                 katz_centrality = typed_katz_centralities_dict[
                     (decay_factor, max_distance)
                 ][random_idx, :]
@@ -375,13 +283,14 @@ def plot_blackout_and_nodeWeights(
                     cmap="cividis",
                     vmax=vmax,
                     vmin=vmin,
-                    node_size=100,
+                    node_size=50,
                 )
                 # axs[0].set_title(f"blackout vector")
                 ax.set_title(f"decay {decay_factor}, max dist {max_distance}")
 
-            katz_plot_path = save_dir + f"/node_weights_{plot_count}.png"
-            fig.savefig(katz_plot_path)
+            katz_plot_path = save_dir + f"/node_weights_{random_idx}.png"
+            if save_dir is not None:
+                fig.savefig(katz_plot_path)
             plt.close(fig)
 
         blackout_vec = unique_vecs[random_idx, :]
@@ -394,28 +303,51 @@ def plot_blackout_and_nodeWeights(
             cmap="coolwarm",  # Use string colormap name instead
             vmax=blackout_vec.max(),
             vmin=blackout_vec.min(),
+            node_size=50,
         )
-        f.savefig(fig_path)
+        if save_dir is not None:
+            f.savefig(fig_path)
         plt.close(f)
         plots_created += 1
 
 
 if __name__ == "__main__":
-    start_time = datetime.now()
+    # add arg parser
 
-    fresh_start = False
-    if fresh_start:
-        print(
-            "WARNING: running fresh start, previous results in the directory will be deleted!"
-        )
+    parser = argparse.ArgumentParser(
+        description="Calculate distance matrix for blackout events."
+    )
+    parser.add_argument(
+        "--min_loss",
+        type=float,
+        default=0.05,
+        help="Minimum lost load share below which blackouts are filtered out. Lower values increase computation time.",
+    )
+    parser.add_argument(
+        "--comp_mode",
+        type=str,
+        default="sequential",
+        help="Computation mode for distance matrix calculation. Options are 'seq'(sequential), 'joblib' or 'vec'(vectorized).",
+    )
+    args = parser.parse_args()
+    if args.comp_mode == "seq":
+        comp_mode = "sequential"
+    elif args.comp_mode == "joblib":
+        comp_mode = "joblib"
+    elif args.comp_mode == "vec":
+        comp_mode = "vectorized"
+    else:
+        raise ValueError("comp_mode must be one of 'seq', 'joblib' or 'vec'")
+
+    start_time = datetime.now()
 
     n_nodes = 600
 
     # ignore splits with less than 5% lost load share
-    min_n_nodes_split, min_lost_load_share = None, 0.05
+    min_lost_load_share = args.min_loss
+    print(f"Using min lost load share of {min_lost_load_share}")
 
     co2l_list = get_co2_levels(n_nodes)
-    # co2l_list = [0.6]
 
     indicator_type, transformation = "rocof", "overUnder"
     # indicator_type, transformation = "rocof", "blackout"
@@ -430,15 +362,10 @@ if __name__ == "__main__":
         co2l=co2l_list,
         indicator_type=indicator_type,
         transformation=transformation,
-        n_nodes_split=min_n_nodes_split,
+        n_nodes_split=None,
         lost_load_share=min_lost_load_share,
         use_sclopf=use_sclopf,
     )
-    # if fresh_start:
-    #     if os.path.exists(save_dir):
-    #         import shutil
-
-    #         shutil.rmtree(save_dir)
 
     logger.info("Starting data preprocessing...")
     unique_vecs, split_props = filter_splits_events(
@@ -500,12 +427,11 @@ if __name__ == "__main__":
         node_weights_params,
         nx_graph,
         pos,
-        blackout_neighbourhood_impurities,
     )
 
     distance_metrics = {
         "ACC": multiclass_accuracy_distance_weighted,
-        # "bACC": multiclass_balanced_distance_weighted,
+        "bACC": multiclass_balanced_distance_weighted,
     }
     for dist_metric_str, dist_metric in distance_metrics.items():
         weighting_str = f"_impurity_maxD{max_distance}_decay{decay_factor}"
@@ -525,7 +451,7 @@ if __name__ == "__main__":
         # distance_matrix = calc_distance_matrix_joblib(
         distance_matrix = calc_distance_matrix(
             blackout_neighbourhood_impurities,
-            mode="sequential",
+            mode=comp_mode,
             test_mode=False,
             metric=partial(
                 weighted_distance_wrapper,
@@ -533,7 +459,7 @@ if __name__ == "__main__":
             ),
             n_jobs=16,
         )
-        np.save(save_path_distance_matrix, distance_matrix)
+        np.save(save_path_distance_matrix + comp_mode, distance_matrix)
 
         # elif node_weights == "":
 

@@ -8,7 +8,9 @@ from joblib import Parallel, delayed
 import joblib
 import time
 
+from loguru import logger
 import numpy as np
+import pandas as pd
 import scipy
 from scipy import sparse
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
@@ -17,10 +19,12 @@ from tqdm import tqdm
 from collections import OrderedDict
 from datetime import datetime, timedelta
 
+from scripts.filter_splits import split_mask
 from utils.config import (
     path_to_clustering_results_lopf,
     path_to_clustering_results_sclopf,
 )
+from utils.indicator_utils import load_indicator_vectors
 
 
 sys.path.append("./")
@@ -592,8 +596,8 @@ def calc_distance_matrix(
     test_mode=True,
 ):
     """Calculate the distance matrix."""
-    if mode == "parallel":
-        return calc_distance_matrix_joblib_chunked(
+    if mode == "joblib":
+        return calc_distance_matrix_memory_efficient(
             data,
             metric=metric,
             n_jobs=n_jobs,
@@ -614,6 +618,8 @@ def calc_distance_matrix(
             chunk_size=500,
             test_mode=test_mode,
         )
+    else:
+        raise ValueError(f"Unknown distance matrix calculation mode: {mode}")
 
 
 def calc_distance_matrix_sequential(
@@ -752,14 +758,10 @@ def calc_distance_matrix_joblib_chunked(
     n_jobs=-1,
     show_progress=True,
     test_mode=True,
-    chunk_size=1000,  # Tune this based on your data size
 ):
     """
     Calculate distance matrix with chunked processing - reduces process overhead.
     """
-    raise NotImplementedError(
-        "This implementation does not work yet, maybe the chunk size is too small? Massive overhead."
-    )
     n_samples = data.shape[0]
 
     # measure total passed time
@@ -777,6 +779,8 @@ def calc_distance_matrix_joblib_chunked(
             f"Test mode: limiting to {n_test_size/(n_samples*(n_samples-1)//2)*100:.1f}% of all pairs"
         )
         pairs = pairs[:n_test_size]
+
+    chunk_size = len(pairs) // (n_jobs * 4) + 1
 
     # Split pairs into chunks - this is the key optimization
     chunks = [pairs[i : i + chunk_size] for i in range(0, len(pairs), chunk_size)]
@@ -853,7 +857,7 @@ def calc_distance_matrix_memory_efficient(
 
     if n_chunks is None:
         n_cores = n_jobs if n_jobs > 0 else os.cpu_count()
-        n_chunks = n_cores * 3
+        n_chunks = n_cores * 5
 
     total_pairs = n_samples * (n_samples - 1) // 2
     if test_mode:
@@ -1124,6 +1128,120 @@ def load_clustering(
         inertia,
         silhouette_avg,
     )
+
+
+def filter_splits_events(
+    use_sclopf,
+    path_to_indicator_vectors,
+    path_to_vis_results,
+    n_nodes,
+    min_lost_load_share,
+    co2l_list,
+    indicator_type,
+    transformation,
+    save_dir,
+    split_props=None,
+    err_on_missing=False,
+):
+    os.makedirs(save_dir, exist_ok=True)
+    logger_num = logger.add(f"{save_dir}/log.txt")
+
+    # get masks
+    masks_dict_path = save_dir + "/masks_dict.pklz"
+    if os.path.exists(masks_dict_path):
+        with gzip.open(masks_dict_path, "rb") as fh_in:
+            masks_dict = pickle.load(fh_in)
+    else:
+        if err_on_missing:
+            raise FileNotFoundError(
+                f"masks_dict_path {masks_dict_path} not found and err_on_missing is True."
+            )
+        logger.info("Computing masks for CO2 levels...")
+
+        if split_props is None:
+            split_props = pd.read_hdf(
+                path_to_vis_results + f"split_properties_all_n{n_nodes}.h5"
+            )
+        split_props.lost_load_share_blackout = (
+            split_props.lost_load_share_blackout.astype(float)
+        )
+        split_props = split_props[split_props.co2l.isin(co2l_list)]
+
+        masks_dict = {
+            co2l: split_mask(
+                split_props[split_props.index.get_level_values("co2l") == co2l],
+                min_lost_load_share,
+                ignore_shedding=True,
+            )
+            for co2l in co2l_list
+        }
+
+        with gzip.open(masks_dict_path, "wb") as fh_out:
+            pickle.dump(masks_dict, fh_out)
+
+    save_path_unique_vecs = save_dir + f"/unique_blackout_vecs_n{n_nodes}.pklz"
+    if os.path.exists(save_path_unique_vecs):
+        with gzip.open(save_path_unique_vecs, "rb") as fh_in:
+            unique_vecs_dict = pickle.load(fh_in)
+        split_props_filtered = pd.read_hdf(
+            f"{save_dir}/data_filtered_{n_nodes}.h5", key="split_props"
+        )
+    else:
+        if err_on_missing:
+            raise FileNotFoundError(
+                f"save_path_unique_vecs {save_path_unique_vecs} not found and err_on_missing is True."
+            )
+        logger.info("Loading indicator vectors and computing unique vectors...")
+
+        if split_props is None:
+            split_props = pd.read_hdf(
+                path_to_vis_results + f"split_properties_all_n{n_nodes}.h5"
+            )
+
+        (
+            blackout_vectors_filtered_dict,
+            weights_filtered_dict,
+            split_props_filtered,
+        ) = load_indicator_vectors(
+            n_nodes,
+            indicator_type,
+            transformation,
+            path_to_indicator_vectors=path_to_indicator_vectors,
+            mask=masks_dict,
+            split_props=split_props,
+            co2_list=co2l_list,
+        )
+
+        # Save intermediate results
+        with gzip.open(f"{save_dir}/weights_filtered_dict.pklz", "wb") as fh_out:
+            pickle.dump(weights_filtered_dict, fh_out)
+        split_props_filtered.to_hdf(
+            f"{save_dir}/data_filtered_{n_nodes}.h5", key="split_props"
+        )
+        with gzip.open(
+            f"{save_dir}/blackout_vectors_filtered_dict_{n_nodes}.pklz", "wb"
+        ) as fh_out:
+            pickle.dump(blackout_vectors_filtered_dict, fh_out)
+        with gzip.open(
+            f"{save_dir}/weights_filtered_dict_{n_nodes}.pklz", "wb"
+        ) as fh_out:
+            pickle.dump(weights_filtered_dict, fh_out)
+
+        blackout_vectors_filtered = np.concatenate(
+            list(blackout_vectors_filtered_dict.values())
+        )
+        weights_filtered = np.concatenate(list(weights_filtered_dict.values()))
+
+        unique_vecs_dict = get_unique_vectors_with_weights(
+            blackout_vectors_filtered, weights_filtered
+        )
+
+        with gzip.open(save_path_unique_vecs, "wb") as fh_out:
+            pickle.dump(unique_vecs_dict, fh_out)
+
+    unique_vecs = np.array(list(unique_vecs_dict.keys()))
+    weights_filtered = [d["weight"] for d in unique_vecs_dict.values()]
+    return unique_vecs, split_props_filtered
 
     # with open(path_group_means, "wb") as out:
     # np.save(out, group_means)

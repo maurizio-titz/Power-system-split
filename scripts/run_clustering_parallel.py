@@ -1,5 +1,6 @@
 """clusters the filtered indicator vectors using kmeans and saves the results to disk"""
 
+import argparse
 from datetime import datetime
 import gc
 import gzip
@@ -60,6 +61,7 @@ from scripts.calculate_distance_matrix import (
 )
 
 use_sclopf = True
+test = False
 
 if use_sclopf:
     path_to_evaluation_results = path_to_evaluation_results_sclopf
@@ -71,6 +73,9 @@ else:
     path_to_vis_results = path_to_vis_results_lopf
 
 n_clusters_list = [32, 64, 80, 128, 150, 256]
+if test:
+    n_clusters_list = n_clusters_list[:2]
+
 clustering_params = {
     # "optics": {
     #     "clustering_algorithm": OPTICS,
@@ -105,6 +110,10 @@ clustering_params = {
         "method": ["pam"],
     },
 }
+if test:
+    for alg in clustering_params.keys():
+        if not "agglomerative" in alg:
+            clustering_params.pop(alg)
 
 
 def get_str_from_params(params):
@@ -193,7 +202,7 @@ def run_clustering(
         del distance_matrix
         gc.collect()  # Force garbage collection
 
-        print("opt.labels_shape: " + str(opt.labels_.shape))
+        # print("opt.labels_shape: " + str(opt.labels_.shape))
         # save clustering results
         with gzip.open(
             save_path,
@@ -210,17 +219,27 @@ def run_clustering(
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Calculate distance matrix for blackout events."
+    )
+    parser.add_argument(
+        "--min_loss",
+        type=float,
+        default=0.05,
+        help="Minimum lost load share below which blackouts are filtered out. Lower values increase computation time.",
+    )
+    args = parser.parse_args()
+    min_lost_load_share = args.min_loss
 
     indicator_type_transformation = [
-        ("rocof", "blackout"),
+        ("rocof", "overUnder"),
     ]
 
     n_nodes = 600
     n_parallel_iter = 16  # Reduced from 25 to reduce memory pressure
     n_iter = 32
 
-    # ignore splits with less than 5% lost load share
-    min_n_nodes_split, min_lost_load_share = None, 0.05
+    min_n_nodes_split = None
 
     co2l_list = get_co2_levels(n_nodes)
     # co2l_list = 0.6
@@ -260,38 +279,26 @@ if __name__ == "__main__":
         # Define the distance matrices that were calculated in calculate_distance_matrix.py
         # Use the same construction logic as in calculate_distance_matrix.py
 
-        # Standard distance matrix (no Katz weighting)
-        standard_dist_metric_str = "bACC"
-        standard_weighting_str = ""
-        standard_save_path = (
-            save_dir
-            + f"/distance_matrix_n{n_nodes}_{standard_dist_metric_str}{standard_weighting_str}"
-        )
-        logger.info(f"Standard distance matrix path: {standard_save_path}")
-
         # Katz-weighted distance matrix (using the same parameters as in calculate_distance_matrix.py)
         decay_factor = decay_factor_clustering
         max_distance = max_distance_clustering
-        katz_dist_metric_str = "bACC"
-        katz_weighting_str = f"_katz_maxD{max_distance}_decay{decay_factor}"
-        katz_save_path = (
-            save_dir
-            + f"/distance_matrix_n{n_nodes}_{katz_dist_metric_str}{katz_weighting_str}"
-        )
-        logger.info(f"Katz-weighted distance matrix path: {katz_save_path}")
 
-        distance_matrices = [
-            {
-                "name": "katz_weighted",
-                "dist_metric_str": f"{katz_dist_metric_str}{katz_weighting_str}",
-                "save_path": katz_save_path,
-            },
-            # {
-            #     "name": "standard",
-            #     "dist_metric_str": f"{standard_dist_metric_str}{standard_weighting_str}",
-            #     "save_path": standard_save_path,
-            # },
-        ]
+        distance_matrices = []
+        metric_strs = ["ACC", "bACC"]
+        for i, metric in enumerate(metric_strs):
+            node_weighting_str = f"_impurity_maxD{max_distance}_decay{decay_factor}"
+            dist_matrix_path = (
+                save_dir + f"/distance_matrix_n{n_nodes}_{metric}{node_weighting_str}"
+            )
+            logger.info(f"Katz-weighted distance matrix path: {dist_matrix_path}")
+
+            distance_matrices.append(
+                {
+                    "name": "bACC",
+                    "dist_metric_str": f"{metric}{node_weighting_str}",
+                    "save_path": dist_matrix_path,
+                },
+            )
 
         for distance_config in distance_matrices:
             distance_name = distance_config["name"]
