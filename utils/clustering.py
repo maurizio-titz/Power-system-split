@@ -234,8 +234,8 @@ def weighted_distance_wrapper(
     assert (
         blackout_centrality_tuple_0.shape == blackout_centrality_tuple_1.shape
     ), "blackout_centrality_tuple_0 and blackout_centrality_tuple_1 must have the same shape"
+    assert blackout_centrality_tuple_0.shape[0] % 2 == 0
     n_nodes = int(blackout_centrality_tuple_0.shape[0] / 2)
-    assert n_nodes % 2 == 0
 
     node_classes0 = blackout_centrality_tuple_0[:n_nodes]
     node_weights0 = blackout_centrality_tuple_0[n_nodes:]
@@ -850,7 +850,7 @@ def calc_distance_matrix_memory_efficient(
     n_jobs=-1,
     show_progress=True,
     test_mode=True,
-    n_chunks=None,
+    n_chunks=8,
 ):
     """Ultra memory-efficient version"""
     n_samples = data.shape[0]
