@@ -1,4 +1,5 @@
 import contextlib
+from functools import partial
 import gzip
 import os
 import pickle
@@ -272,6 +273,8 @@ def balanced_overlap_distance_weighted(
     assert all(node_weights0 >= 0), "node_weights0 must be non-negative"
     assert all(node_weights1 >= 0), "node_weights1 must be non-negative"
 
+    if len(np.unique(np.concatenate([node_classes0, node_classes1]))) == 1:
+        return 0
     node_classes0 = node_classes0.astype(bool)
     node_classes1 = node_classes1.astype(bool)
 
@@ -436,7 +439,7 @@ def balanced_overlap_distance_weighted_pairwise(
     return distance
 
 
-def multiclass_balanced_distance_weighted_pairwise(
+def bACC_weighted_pairwise(
     node_classes_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
     node_classes_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
     node_weights_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
@@ -473,29 +476,54 @@ def multiclass_balanced_distance_weighted_pairwise(
         weights2_exp = node_weights_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
 
         # Calculate weighted true positives, false positives, etc.
-        tp = (
-            ((binary1_exp == 1) & (binary2_exp == 1)) * weights1_exp * weights2_exp
+        agree = (
+            ((binary1_exp == 1) & (binary2_exp == 1)) * (weights1_exp + weights2_exp)
         ).sum(axis=2)
-        tn = (
-            ((binary1_exp == 0) & (binary2_exp == 0)) * weights1_exp * weights2_exp
-        ).sum(axis=2)
-        fp = (
-            ((binary1_exp == 0) & (binary2_exp == 1)) * weights1_exp * weights2_exp
-        ).sum(axis=2)
-        fn = (
-            ((binary1_exp == 1) & (binary2_exp == 0)) * weights1_exp * weights2_exp
+        total_weight = (
+            ((binary1_exp == 1) * weights1_exp + (binary2_exp == 1) * weights2_exp)
         ).sum(axis=2)
 
         # Calculate balanced accuracy
-        sensitivity = tp / (tp + fn + 1e-10)
-        specificity = tn / (tn + fp + 1e-10)
-        balanced_acc = (sensitivity + specificity) / 2
+        balanced_acc = np.round((agree + 1e-10) / (total_weight + 1e-10), decimals=6)
 
         # Convert to distance (1 - accuracy)
         distances += 1 - balanced_acc
 
     # Average across classes
     distances /= n_classes
+
+    return distances
+
+
+def ACC_weighted_pairwise(
+    node_classes_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
+    node_classes_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+    node_weights_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
+    node_weights_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+    dtype=np.float32,
+) -> np.ndarray:
+    """
+    Calculate pairwise multiclass balanced distances.
+
+    Returns:
+        np.ndarray: Distance matrix of shape (n1, n2)
+    """
+
+    # Use broadcasting for pairwise calculation
+    classes1_exp = node_classes_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    classes2_exp = node_classes_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
+    weights1_exp = node_weights_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    weights2_exp = node_weights_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
+    agree = (((classes1_exp == classes2_exp)) * (weights1_exp * weights2_exp)).sum(
+        axis=2
+    )
+    total_weight = (weights1_exp * weights2_exp).sum(axis=2)
+
+    # Calculate balanced accuracy
+    acc = np.round((agree + 1e-10) / (total_weight + 1e-10), decimals=6)
+
+    # Convert to distance (1 - accuracy)
+    distances = 1 - acc
 
     return distances
 
@@ -549,6 +577,98 @@ def compute_distance_matrix_vectorized(
     return distance_matrix
 
 
+def generate_chunk_coordinates(n_samples, chunk_size):
+    """Memory-efficient generator for chunk coordinates"""
+    for i in range(0, n_samples, chunk_size):
+        for j in range(i, n_samples, chunk_size):
+            i_end = min(i + chunk_size, n_samples)
+            j_end = min(j + chunk_size, n_samples)
+            yield (i, i_end, j, j_end)
+
+
+def compute_chunk_distances(
+    data_matrix, weights_matrix, metric_func, chunk_coords, dtype=np.float32
+):
+    """Compute distances for a single chunk"""
+    i, i_end, j, j_end = chunk_coords
+
+    # Extract chunks
+    chunk1_data = data_matrix[i:i_end]
+    chunk1_weights = weights_matrix[i:i_end]
+    chunk2_data = data_matrix[j:j_end]
+    chunk2_weights = weights_matrix[j:j_end]
+
+    # Calculate pairwise distances for this chunk
+    chunk_distances = metric_func(
+        chunk1_data, chunk2_data, chunk1_weights, chunk2_weights
+    ).astype(dtype)
+
+    return chunk_coords, chunk_distances
+
+
+def compute_distance_matrix_vectorized_joblib(
+    data_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
+    weights_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
+    metric_name: str,
+    chunk_size: int = 1000,
+    test_mode: bool = False,
+    n_jobs: int = -1,
+    dtype=np.float32,
+) -> np.ndarray:
+    """
+    Compute distance matrix using vectorized operations with parallel chunking.
+
+    Returns:
+        np.ndarray: Distance matrix of shape (n_samples, n_samples)
+    """
+    if test_mode:
+        data_matrix = data_matrix[:10000, :]
+        weights_matrix = weights_matrix[:10000, :]
+    n_samples = data_matrix.shape[0]
+
+    if metric_name == "bACC":
+        metric = bACC_weighted_pairwise
+    elif metric_name == "ACC":
+        metric = ACC_weighted_pairwise
+    else:
+        raise ValueError(f"Unknown metric: {metric_name}")
+    # Generate chunk coordinates - lightweight memory usage
+    chunk_coords_gen = generate_chunk_coordinates(n_samples, chunk_size)
+
+    # Convert to list for joblib (still memory efficient for coordinates only)
+    chunk_coords_list = list(chunk_coords_gen)
+    n_chunks = len(chunk_coords_list)
+
+    print(
+        f"Processing {n_samples}x{n_samples} matrix in {n_chunks} chunks of size ~{chunk_size}x{chunk_size}"
+    )
+
+    # Parallel processing of chunks
+    with tqdm_joblib(tqdm(desc="Distance Calculation", total=n_chunks)) as progress_bar:
+        chunk_results = Parallel(n_jobs=n_jobs, prefer="threads")(
+            delayed(compute_chunk_distances)(
+                data_matrix, weights_matrix, metric, coords
+            )
+            for coords in chunk_coords_list
+        )
+
+    # Initialize distance matrix
+    distance_matrix = np.zeros((n_samples, n_samples), dtype=dtype)
+
+    # Fill distance matrix with results
+    for chunk_coords, chunk_distances in chunk_results:
+        i, i_end, j, j_end = chunk_coords
+
+        # Fill the distance matrix
+        distance_matrix[i:i_end, j:j_end] = chunk_distances
+
+        # Fill symmetric part (unless it's the diagonal chunk)
+        if i != j:
+            distance_matrix[j:j_end, i:i_end] = chunk_distances.T
+
+    return distance_matrix
+
+
 def balanced_overlap_distance(
     node_classes0: np.ndarray,
     node_classes1: np.ndarray,
@@ -590,23 +710,30 @@ def get_order_by_blackout_size(indicator_vectors: np.ndarray):
 def calc_distance_matrix(
     data,
     mode: str = "sequential",
-    metric=balanced_overlap_distance_weighted,
+    metric="bACC",
     n_jobs=-1,
-    show_progress=True,
     test_mode=True,
+    # show_progress=True,
 ):
     """Calculate the distance matrix."""
     if mode == "joblib":
-        return calc_distance_matrix_memory_efficient(
-            data,
-            metric=metric,
-            n_jobs=n_jobs,
-            show_progress=show_progress,
-            test_mode=test_mode,
+
+        raise NotImplementedError(
+            "joblib mode is deprecated, use vectorized_joblib mode instead"
         )
-    elif mode == "sequential":
+    elif mode == "seq":
+        if metric == "bACC":
+            metric = balanced_overlap_distance_weighted
+        elif metric == "ACC":
+            metric = multiclass_accuracy_distance_weighted
+        else:
+            raise ValueError(f"Unknown metric: {metric}")
+        metric = partial(
+            weighted_distance_wrapper,
+            weighted_distance_metric=metric,
+        )
         return calc_distance_matrix_sequential(data, metric=metric, test_mode=test_mode)
-    elif mode == "vectorized":
+    elif mode == "vec":
         # split data into classes and weights
         n_nodes = int(data.shape[1] / 2)
         node_classes_matrix = data[:, :n_nodes]
@@ -614,9 +741,22 @@ def calc_distance_matrix(
         return compute_distance_matrix_vectorized(
             node_classes_matrix,
             node_weights_matrix,
-            multiclass_balanced_distance_weighted_pairwise,
+            bACC_weighted_pairwise,
             chunk_size=500,
             test_mode=test_mode,
+        )
+    elif mode == "vec_joblib":
+        # split data into classes and weights
+        n_nodes = int(data.shape[1] / 2)
+        node_classes_matrix = data[:, :n_nodes]
+        node_weights_matrix = data[:, n_nodes:]
+        return compute_distance_matrix_vectorized_joblib(
+            node_classes_matrix,
+            node_weights_matrix,
+            metric,
+            chunk_size=500,
+            test_mode=test_mode,
+            n_jobs=n_jobs,
         )
     else:
         raise ValueError(f"Unknown distance matrix calculation mode: {mode}")
@@ -626,6 +766,7 @@ def calc_distance_matrix_sequential(
     data,
     metric=balanced_overlap_distance_weighted,
     test_mode=False,
+    dtype=np.float32,
 ):
     """
     Calculate the distance matrix for the given data using the specified metric.
@@ -653,6 +794,8 @@ def calc_distance_matrix_sequential(
                 pbar.update(1)
 
     np.fill_diagonal(d, 0)  # Set diagonal to zero
+    if dtype is not None:
+        d = d.astype(dtype)
     return d
 
 
