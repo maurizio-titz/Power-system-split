@@ -195,6 +195,15 @@ def plot_map_inertia_placement_final(
         + f"_N{nn}_deltarotE{delta_Erot:g}_rocofthres{rocof_thres:g}"
         + f"_lshare{l_share:g}_maxiter{max_iter}_{resolve_strategy}.pklz"
     )
+    if not os.path.exists(fpath_in):
+        fnames = os.listdir(path_to_inertia_mitigation_results)
+        fnames_lvl = [f for f in fnames if f"Co2{co2_lvl:g}_" in f]
+        if len(fnames_lvl) == 1:
+            fpath_in = path_to_inertia_mitigation_results + fnames_lvl[0]
+        else:
+            raise FileNotFoundError(
+                f"No unique inertia placement results for CO2 level {co2_lvl} found. {len(fnames_lvl)} files found. Skipping."
+            )
     with gzip.open(fpath_in) as fh_in:
         (
             modified_comp_idx,
@@ -203,6 +212,12 @@ def plot_map_inertia_placement_final(
             resolve_counter,
             still_random_counter,
         ) = pickle.load(fh_in)
+
+    # correcting delta_Erot factor if saved with different one
+    delta_Erot_saved = int(fpath_in.split("deltarotE")[1].split("_rocofthres")[0])
+    if delta_Erot_saved != delta_Erot:
+        print("Correcting delta_Erot factor from", delta_Erot, "to", delta_Erot_saved)
+        delta_Erot = delta_Erot_saved
 
     inertia_placed_res_arr = np.array(inertia_placed_ls)
     # for each opitimization step holds: [idx_step, idx_node, delta_rot_energy_factor, max_change, count_beyond_threshold]
@@ -218,11 +233,11 @@ def plot_map_inertia_placement_final(
         split_properties = split_properties[split_properties.co2l == co2_lvl]
 
     total_loss_share_rocof_lvl = (
-        split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
+        split_properties.lost_load_share_blackout * split_properties.total_weighting
     ).sum()
     split_properties = data_handling.load_split_props(nn, co2_lvl_ref, use_sclopf)
     total_loss_share_rocof_ref = (
-        split_properties.lost_load_share_blackout * split_properties.snapshot_weighting
+        split_properties.lost_load_share_blackout * split_properties.total_weighting
     ).sum()
 
     total_loss_share_rocof_ref_multiple = total_loss_share_rocof_ref * ref_loss_factor
@@ -754,7 +769,7 @@ def calc_inertia_placement_ref_loss(
 
     total_loss_share_rocof_ref = (
         split_properties_ref.lost_load_share_blackout
-        * split_properties_ref.snapshot_weighting
+        * split_properties_ref.total_weighting
     ).sum() * ref_loss_factor
 
     inertia_at_ref_loss_by_lvl = {}
@@ -773,6 +788,17 @@ def calc_inertia_placement_ref_loss(
             + f"_N{n_nodes}_deltarotE{delta_Erot:g}_rocofthres{rocof_thres:g}"
             + f"_lshare{l_share:g}_maxiter{max_iter}_{resolve_strategy}.pklz"
         )
+        if not os.path.exists(fpath_in):
+            fnames = os.listdir(path_to_inertia_mitigation_results)
+            fnames_lvl = [f for f in fnames if f"Co2{co2_lvl:g}_" in f]
+            if len(fnames_lvl) == 1:
+                fpath_in = path_to_inertia_mitigation_results + fnames_lvl[0]
+
+            else:
+                raise FileNotFoundError(
+                    f"No unique inertia placement results for CO2 level {co2_lvl} found. Skipping."
+                )
+
         with gzip.open(fpath_in) as fh_in:
             (
                 modified_comp_idx,
@@ -782,12 +808,20 @@ def calc_inertia_placement_ref_loss(
                 still_random_counter,
             ) = pickle.load(fh_in)
 
+        # correcting delta_Erot factor if saved with different one
+        delta_Erot_saved = int(fpath_in.split("deltarotE")[1].split("_rocofthres")[0])
+        if delta_Erot_saved != delta_Erot:
+            print(
+                "Correcting delta_Erot factor from", delta_Erot, "to", delta_Erot_saved
+            )
+            delta_Erot = delta_Erot_saved
+
         inertia_placed_res_arr = np.array(inertia_placed_ls)
 
         split_properties_lvl = split_properties[split_properties.co2l == co2_lvl]
         total_loss_share_rocof_lvl = (
             split_properties_lvl.lost_load_share_blackout
-            * split_properties_lvl.snapshot_weighting
+            * split_properties_lvl.total_weighting
         ).sum()
 
         idx_reached_ref_loss = np.where(

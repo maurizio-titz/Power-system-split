@@ -378,7 +378,7 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
             max_node_size=100,
             edge_width=0.2,
             delta_Erot=1000,
-            rocof_thres=-1,
+            rocof_thres=1,
             l_share=0.0,
             resolve_strategy="random",
             show_step_number=False,
