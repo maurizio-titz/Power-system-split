@@ -4,7 +4,7 @@ import gzip
 import os
 import pickle
 import sys
-from typing import Callable, Union
+from typing import Callable, Optional, Union
 from joblib import Parallel, delayed
 import joblib
 import time
@@ -1476,3 +1476,76 @@ def filter_splits_events(
 
     # with open(path_group_means, "wb") as out:
     # np.save(out, group_means)
+
+
+class Clustering(object):
+    """Base class for preprocessing, clustering and visualization."""
+
+    clustering_results_dir: str
+    distance_matrix_path: list(str)
+    distance_metric: Callable
+    distance_metric_kwargs: dict
+    clustering_algorithm: Callable
+    distance_matrix_post_processing: Optional[Callable]
+    clustering_params: dict
+
+    def __init__(self, params: dict):
+        self.params = params
+        self.distance_matrix_path = self.get_distance_matrix_path()
+
+    def load_data(self):
+        pass
+
+    def filter_data(self):
+        pass
+
+    def preprocess_data(self):
+        pass
+
+    def get_distance_matrix_path(self) -> str:
+        self
+
+    def get_distance_metric_func(self) -> Callable:
+        if self.params.get("distance_metric") == "bACC":
+            return bACC_weighted_pairwise
+        elif self.params.get("distance_metric") == "ACC":
+            return ACC_weighted_pairwise
+        elif self.params.get("distance_metric") == "boundary_field_ACC":
+            return boundary_field_ACC_weighted_pairwise
+        else:
+            raise ValueError(
+                f"Unknown distance metric: {self.params.get('distance_metric')}"
+            )
+
+    def get_distance_matrix(self):
+        try:
+            distance_matrix = self.load_distance_matrix()
+            print("Distance matrix loaded from file.")
+        except FileNotFoundError:
+            print("Calculating distance matrix...")
+            distance_matrix = calc_distance_matrix(
+                self.params["data"],
+                **self.params.distance_metric_kwargs,
+            )
+            with gzip.open(self.distance_matrix_path, "wb") as fh_out:
+                pickle.dump(distance_matrix, fh_out)
+            print(f"Distance matrix saved to {self.distance_matrix_path}.")
+
+    def post_process_distance_matrix(self, distance_matrix: np.ndarray) -> np.ndarray:
+        if self.distance_matrix_post_processing is not None:
+            distance_matrix = self.distance_matrix_post_processing(distance_matrix)
+        return distance_matrix
+
+    def load_distance_matrix(self):
+        with gzip.open(self.distance_matrix_path, "rb") as fh_in:
+            distance_matrix = pickle.load(fh_in)
+        return distance_matrix
+
+    def fit_clusters(self):
+        pass
+
+    def prepare_visualize_clusters(self):
+        pass
+
+    def plot_clusters(self):
+        pass
