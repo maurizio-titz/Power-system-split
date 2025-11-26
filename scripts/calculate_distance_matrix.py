@@ -12,7 +12,7 @@ from scipy import sparse
 
 sys.path.append("./")
 
-from utils.clustering import filter_splits_events
+from utils.clustering import boundary_field, filter_splits_events
 from matplotlib import pyplot as plt
 import matplotlib
 import matplotlib.colors
@@ -65,6 +65,8 @@ from utils.config import (
 
 decay_factor_clustering = 1
 max_distance_clustering = 1
+tau_clustering = 2.5
+alpha_clustering = 0.5
 # raise NotImplementedError(
 #     "Remove this raise statement after setting decay_factor_clustering"
 # )
@@ -179,17 +181,32 @@ def calc_katz_centralities(
 def calc_neighborhood_impurity(
     save_dir,
     unique_vecs,
-    decay_factor,
-    max_distance,
+    decay_factor=None,
+    max_distance=None,
+    method="impurity",
+    tau=None,
     adjacency_matrix=None,
     err_on_missing=False,
 ):
-    save_path_centralities = (
-        save_dir + f"indicator_vector_impurity_maxD{max_distance}_decay{decay_factor}"
-    )
-
+    if save_dir is not None:
+        if method == "impurity":
+            if decay_factor is None or max_distance is None:
+                raise ValueError(
+                    "decay_factor and max_distance must be provided for method 'impurity'"
+                )
+            save_path_centralities = (
+                save_dir
+                + f"indicator_vector_impurity_maxD{max_distance}_decay{decay_factor}"
+            )
+        if method == "boundary":
+            if tau is None:
+                raise ValueError("tau must be provided for method 'boundary'")
+            save_path_centralities = save_dir + f"indicator_vector_boundary_tau{tau}"
     try:
-        neighbourhood_impurities = np.load(save_path_centralities + ".npy")
+        if save_dir is not None:
+            neighbourhood_impurities = np.load(save_path_centralities + ".npy")
+        else:
+            raise FileNotFoundError
 
     except FileNotFoundError:
         if err_on_missing:
@@ -206,14 +223,24 @@ def calc_neighborhood_impurity(
             adjacency_matrix = data_handling.get_adjacency_matrix_from_nx_graph(
                 nx_graph
             )
-        neighbourhood_impurities = neighborhood_homo_batch(
-            adjacency_matrix=adjacency_matrix,
-            node_class_vectors=unique_vecs,
-            decay_factor=decay_factor,
-            max_distance=max_distance,
-        )
-
-        np.save(save_path_centralities, neighbourhood_impurities)
+        if method == "impurity":
+            neighbourhood_impurities = neighborhood_homo_batch(
+                adjacency_matrix=adjacency_matrix,
+                node_class_vectors=unique_vecs,
+                decay_factor=decay_factor,
+                max_distance=max_distance,
+            )
+        elif method == "boundary":
+            I, B, _, _ = data_handling.load_grid_matrices(snet_index=0, co2lvl=0.0)
+            L = I.dot(B).dot(I.T)
+            neighbourhood_impurities = 1 - boundary_field(
+                labels=unique_vecs,
+                incidence_matrix=I,
+                L=L,
+                tau=tau,
+            )
+        if save_dir is not None:
+            np.save(save_path_centralities, neighbourhood_impurities)
 
     return neighbourhood_impurities
 
@@ -331,13 +358,13 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     if args.comp_mode == "seq":
-        comp_mode = "sequential"
-    elif args.comp_mode == "joblib":
-        comp_mode = "joblib"
+        comp_mode = "seq"
+    elif args.comp_mode == "vec_joblib":
+        comp_mode = "vec_joblib"
     elif args.comp_mode == "vec":
-        comp_mode = "vectorized"
+        comp_mode = "vec"
     else:
-        raise ValueError("comp_mode must be one of 'seq', 'joblib' or 'vec'")
+        raise ValueError("comp_mode must be one of 'seq', 'vec' or 'vec_joblib'")
 
     start_time = datetime.now()
 
@@ -389,77 +416,72 @@ if __name__ == "__main__":
     logger.info("Computing neighbourhood impurities ")
     node_weights_params = ParameterGrid(
         {
-            "decay_factor": [1, 1.2, 1.5, 2],
-            "max_distance": [1, 2, 3],
+            # "decay_factor": [1, 1.2, 1.5, 2],
+            # "max_distance": [1, 2, 3],
+            "tau": [1, 2, 2.5, 3, 4],
+            "alpha": [alpha_clustering]
         }
     )
 
     for i, katz_params in enumerate(node_weights_params):
-        decay_factor = katz_params["decay_factor"]
-        max_distance = katz_params["max_distance"]
+        tau = katz_params["tau"]
 
         neighborhood_impurities = calc_neighborhood_impurity(
             save_dir,
             unique_vecs,
-            decay_factor,
-            max_distance,
-            adjacency_matrix,
+            tau=tau,
+            decay_factor=None,
+            max_distance=None,
+            adjacency_matrix=adjacency_matrix,
+            method="boundary",
         )
-        neighbourhood_impurities_dict[(decay_factor, max_distance)] = (
-            neighborhood_impurities
-        )
+        neighbourhood_impurities_dict[tau] = neighborhood_impurities
 
     # # calculate distance matrix
     decay_factor = decay_factor_clustering
     max_distance = max_distance_clustering
+    tau = tau_clustering
+    alpha = alpha_clustering
 
-    neighborhood_impurities = neighbourhood_impurities_dict[
-        (decay_factor, max_distance)
-    ]
+    neighborhood_impurities = neighbourhood_impurities_dict[tau]
     blackout_neighbourhood_impurities = np.concatenate(
         (unique_vecs, neighborhood_impurities), axis=1
     )
     print("plotting blackout and node weights...")
-    plot_blackout_and_nodeWeights(
-        save_dir,
-        unique_vecs,
-        neighbourhood_impurities_dict,
-        node_weights_params,
-        nx_graph,
-        pos,
-    )
+    # plot_blackout_and_nodeWeights(
+    #     save_dir,
+    #     unique_vecs,
+    #     neighbourhood_impurities_dict,
+    #     node_weights_params,
+    #     nx_graph,
+    #     pos,
+    # )
 
-    distance_metrics = {
-        "ACC": multiclass_accuracy_distance_weighted,
-        "bACC": multiclass_balanced_distance_weighted,
-    }
-    for dist_metric_str, dist_metric in distance_metrics.items():
-        weighting_str = f"_impurity_maxD{max_distance}_decay{decay_factor}"
+    distance_metrics = ["boundary_field_ACC"]
+    for dist_metric in distance_metrics:
+        # weighting_str = f"_impurity_maxD{max_distance}_decay{decay_factor}"
+        weighting_str = f"_boundary_tau{tau}_alpha{alpha}"
 
         save_path_distance_matrix = (
-            save_dir + f"/distance_matrix_n{n_nodes}_{dist_metric_str}{weighting_str}"
+            save_dir + f"/distance_matrix_n{n_nodes}_{dist_metric}{weighting_str}"
         )
 
-        # if os.path.exists(save_path_distance_matrix + ".npy"):
-        #     continue
-        #     raise FileNotFoundError(
-        #         "Distance matrix with neighbourhood impurities already exists."
-        #     )
-        logger.info(
-            f"Computing weighted distance matrix for metric {dist_metric_str}..."
-        )
+        if os.path.exists(save_path_distance_matrix + ".npy"):
+            continue
+            raise FileNotFoundError(
+                "Distance matrix with neighbourhood impurities already exists."
+            )
+        logger.info(f"Computing weighted distance matrix for metric {dist_metric}...")
         # distance_matrix = calc_distance_matrix_joblib(
         distance_matrix = calc_distance_matrix(
             blackout_neighbourhood_impurities,
             mode=comp_mode,
             test_mode=False,
-            metric=partial(
-                weighted_distance_wrapper,
-                weighted_distance_metric=dist_metric,
-            ),
-            n_jobs=16,
+            metric=dist_metric,
+            n_jobs=4,
         )
-        np.save(save_path_distance_matrix + comp_mode, distance_matrix)
+        # np.save(save_path_distance_matrix + "_" + comp_mode, distance_matrix)
+        np.save(save_path_distance_matrix, distance_matrix)
 
         # elif node_weights == "":
 

@@ -15,6 +15,7 @@ import pandas as pd
 import scipy
 from scipy import sparse
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
 from tqdm import tqdm
 from collections import OrderedDict
@@ -528,6 +529,91 @@ def ACC_weighted_pairwise(
     return distances
 
 
+def boundary_field(labels, incidence_matrix, L, tau=1.0):
+    from scipy.sparse import diags
+
+    # labels: (N, n_nodes)
+    # B: incidence (n_edges, n_nodes)    # corrected orientation
+    # L: Laplacian (n_nodes, n_nodes)
+
+    # 1) edge cut
+    diff = labels @ incidence_matrix  # (N, n_nodes) @ (n_nodes, n_edges)
+    c = (diff != 0).astype(float)  # (N, n_edges)
+
+    # 2) map back to nodes
+    b = (c @ incidence_matrix.T != 0).astype(float)  # (N, n_nodes)
+    # 3) build normalized Laplacian correctly
+    D = diags(L.diagonal())
+    A = D - L
+    deg = np.array(D.diagonal())
+    Dinv_sqrt = diags(1.0 / np.sqrt(np.maximum(deg, 1e-12)))
+    Lsym = Dinv_sqrt @ L @ Dinv_sqrt
+    # eigvals = np.linalg.eigvals(Lsym.toarray())
+    # assert np.isclose(
+    #     eigvals, 1, atol=1e-3
+    # ).all(), f"normalized laplacian eigenvalues not in expected range, max deviation: {np.abs(eigvals-1).max():.2g}"
+
+    # 4) stable smoothing
+    from scipy.sparse.linalg import expm_multiply
+
+    b_s = np.stack([expm_multiply(-tau * Lsym, row) for row in b])
+
+    return b_s
+
+
+def boundary_field_ACC_weighted_pairwise(
+    node_classes_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
+    node_classes_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+    node_weights_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
+    node_weights_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+    weighted: bool = True,
+    alpha: float = 0.5,
+    dtype=np.float32,
+    return_components: bool = False,
+) -> np.ndarray:
+    """
+    Calculate pairwise multiclass balanced distances.
+
+    Returns:
+        np.ndarray: Distance matrix of shape (n1, n2)
+    """
+    # Use broadcasting for pairwise calculation
+    classes1_exp = node_classes_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    classes2_exp = node_classes_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
+    weights1_exp = node_weights_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    weights2_exp = node_weights_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
+    if weighted:
+        agree = (((classes1_exp == classes2_exp)) * (weights1_exp * weights2_exp)).sum(
+            axis=2
+        )
+        total_weight = (weights1_exp * weights2_exp).sum(axis=2)
+        acc = np.round((agree + 1e-10) / (total_weight + 1e-10), decimals=6)
+    else:
+        agree = (classes1_exp == classes2_exp).sum(axis=2)
+        total_weight = classes1_exp.shape[2]
+        acc = np.round((agree + 1e-10) / (total_weight + 1e-10), decimals=6)
+
+    boundary_field1_exp = 1 - node_weights_matrix1  # (n1, n_nodes)
+    boundary_field2_exp = 1 - node_weights_matrix2  # (n2, n_nodes)
+
+    # calculate Cosine similarity between boundary fields
+    boundary_field_similarity = cosine_similarity(
+        boundary_field1_exp, boundary_field2_exp
+    )
+
+    # Convert to distance (1 - accuracy)
+    distances = 1 - (alpha * acc + (1 - alpha) * boundary_field_similarity)
+    # ! try geometric mean
+
+    if dtype is not None:
+        distances = distances.astype(dtype)
+
+    if not return_components:
+        return distances
+    else:
+        return distances, acc, boundary_field_similarity
+
+
 def compute_distance_matrix_vectorized(
     data_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
     weights_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
@@ -630,6 +716,8 @@ def compute_distance_matrix_vectorized_joblib(
         metric = bACC_weighted_pairwise
     elif metric_name == "ACC":
         metric = ACC_weighted_pairwise
+    elif metric_name == "boundary_field_ACC":
+        metric = boundary_field_ACC_weighted_pairwise
     else:
         raise ValueError(f"Unknown metric: {metric_name}")
     # Generate chunk coordinates - lightweight memory usage

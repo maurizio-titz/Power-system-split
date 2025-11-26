@@ -67,15 +67,17 @@ def load_clustering_data(
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
         nx_graph
     )
-    bridge_idxs = data_handling.nx_edges_to_matrix_indices(
-        nx.bridges(nx_graph), nx_graph
-    )
-    double_line_failures = cascade_simulation.calc_possible_double_line_failures(
-        num_parallels, ignored_idxs=bridge_idxs
-    )
-    n_2_failures = cascade_simulation.calc_possible_double_line_failures(
-        num_parallels, ignored_idxs=bridge_idxs
-    )
+    try:
+        file_path = data_handling.path_to_grid_data + f"n_2_failures_co2lvl{0.0}.pklz"
+        with gzip.open(file_path, "rb") as fh:
+            n_2_failures = pickle.load(fh)
+    except FileNotFoundError:
+        bridge_idxs = data_handling.nx_edges_to_matrix_indices(
+            nx.bridges(nx_graph), nx_graph
+        )
+        n_2_failures = cascade_simulation.calc_possible_double_line_failures(
+            num_parallels, ignored_idxs=bridge_idxs
+        )
     weighted_trigger_count = sum(
         [initial_failure["weight"] for initial_failure in n_2_failures]
     )
@@ -152,7 +154,8 @@ def setup_colormaps():
     node_cmap = truncate_colormap(node_cmap, 0.1, 0.9, 1000)
     node_cmap.set_under("gainsboro", 1.0)
 
-    edge_cmap = copy.copy(mpl.cm.get_cmap("plasma_r"))
+    edge_cmap = copy.copy(mpl.cm.get_cmap("inferno_r"))
+    edge_cmap = truncate_colormap(edge_cmap, 0.1, 0.95, 1000)
     edge_cmap.set_under("gainsboro", 1.0)
 
     return node_cmap, edge_cmap
@@ -180,10 +183,27 @@ def find_best_clustering_file(save_dir, alg_filter=None):
         os.path.join(save_dir, "clustering_res_info.csv"), index_col=0
     )
     clust_res = clust_res.sort_values(by="silhouette_score", ascending=False)
-    clustering_files = clust_res.index.tolist()
+    clustering_files = clust_res.filename.tolist()
+    if isinstance(alg_filter, str):
+        alg_filter = [alg_filter]
     if alg_filter:
-        clustering_files = [f for f in clustering_files if alg_filter in f]
+        clustering_files = [
+            f for f in clustering_files if all(alg in f for alg in alg_filter)
+        ]
     return clustering_files[0]
+
+
+def classes_to_nonNeg(class_vecs):
+    if np.min(class_vecs) < 0:
+        class_vecs_nonNeg = np.zeros_like(class_vecs)
+        classes = np.unique(class_vecs)
+        classes = np.sort(classes)
+        old_class_to_new = {old_class: i for i, old_class in enumerate(classes)}
+        for i, class_val in enumerate(classes):
+            class_vecs_nonNeg[class_vecs == class_val] = i
+        return class_vecs_nonNeg, old_class_to_new
+    else:
+        return class_vecs, None
 
 
 def create_clustering_analysis_plot(
@@ -192,6 +212,8 @@ def create_clustering_analysis_plot(
     alg_filter=None,
     average_over_classes=True,
     min_lost_load_share=0.05,
+    colors_classes=["blue", "lightgray", "red"],
+    edge_log_scale=True,
 ):
     """Create the main clustering analysis plot."""
 
@@ -216,8 +238,6 @@ def create_clustering_analysis_plot(
     processed_data = load_processed_data(save_dir, n_nodes)
     split_properties_filtered = processed_data["split_properties_filtered"]
     weights_filtered = split_properties_filtered.total_weighting
-    masks_dict = processed_data["masks_dict"]
-    weights_dict = processed_data["weights_dict"]
     blackout_vectors_filtered_dict = processed_data["blackout_vectors_filtered_dict"]
     failed_edges_indicator_vectors_filtered = processed_data[
         "failed_edges_indicator_vectors_filtered"
@@ -228,108 +248,38 @@ def create_clustering_analysis_plot(
     node_cmap, edge_cmap = setup_colormaps()
 
     # Prepare data arrays
-    weights = weights_filtered.values
-    print("total weighted number of events:", weights.sum())
-    blackout_vectors_filtered = np.concatenate(
-        list(blackout_vectors_filtered_dict.values())
-    )
-    split_lost_load = split_properties_filtered.lost_load_share_blackout
-    split_weighted_lost_load = split_lost_load * weights
-    co2l_masks = [(split_properties_filtered.co2l == co2l).values for co2l in co2l_list]
-
-    # Check required files exist
-    labels_all_path = clustering_res_path.replace("fitted.pklz", "labels_all.npy")
-    group_masks_path = clustering_res_path.replace("fitted.pklz", "group_masks.pklz")
-
-    if not os.path.exists(labels_all_path):
-        raise FileNotFoundError(f"Required file not found: {labels_all_path}")
-    if not os.path.exists(group_masks_path):
-        raise FileNotFoundError(f"Required file not found: {group_masks_path}")
-
-    print("Processing clustering results...")
-    # Load clustering results
-    with gzip.open(clustering_res_path, "rb") as f:
-        clustering_res = pickle.load(f)
-
-    labels_all = np.load(labels_all_path, allow_pickle=True)
-    print(f"{clustering_res.labels_.shape[0]} unique blackouts.")
-
-    with gzip.open(group_masks_path, "rb") as f:
-        group_masks = pickle.load(f)
-
-    # Process clustering results
-    labels, counts = np.unique(clustering_res.labels_, return_counts=True)
-    n_clusters = len(labels)
-
-    # Create centroids dataframe
-    centroids_df = pd.DataFrame(index=labels)
-    centroids_df["weighted_lost_load"] = np.array(
-        [np.sum(split_weighted_lost_load[labels_all == i]) for i in labels]
-    )
-    centroids_df["lost_load_share"] = (
-        centroids_df["weighted_lost_load"] / centroids_df["weighted_lost_load"].sum()
-    )
-    centroids_df["n_samples"] = np.array(
-        [weights[group_masks[label]].sum() for label in labels]
-    )
-
-    # Calculate centroids
-    classes = np.unique(blackout_vectors_filtered)
-    n_classes = len(classes)
-    if average_over_classes:
-        centroids = {
-            label: blackout_vectors_filtered[group_masks[label]].T
-            @ weights[group_masks[label]]
-            / weights[group_masks[label]].sum()
-            for label in labels
-        }
-    else:
-        # map classes to non-negative
-        def classes_to_nonNeg(class_vecs):
-            if np.min(class_vecs) < 0:
-                classes = np.unique(class_vecs)
-                classes = np.sort(classes)
-                old_class_to_new = {old_class: i for i, old_class in enumerate(classes)}
-                for i, class_val in enumerate(classes):
-                    class_vecs[class_vecs == class_val] = i
-                return class_vecs, old_class_to_new
-            else:
-                return class_vecs, None
-
-        centroids = {}
-        for label in labels:
-            blackout_vectors_filtered_nonNeg, old_class_to_new = classes_to_nonNeg(
-                blackout_vectors_filtered
-            )
-            weighted_node_class_probs = (
-                np.array(
-                    [
-                        np.bincount(
-                            outcomes_node,
-                            minlength=n_classes,
-                            weights=weights[group_masks[label]],
-                        )
-                        for outcomes_node in blackout_vectors_filtered_nonNeg[
-                            group_masks[label]
-                        ].T
-                    ],
-                )
-                / weights[group_masks[label]].sum()
-            )  # n_nodes x n_classes
-            centroids[label] = weighted_node_class_probs
-
-    edge_centroids = {
-        label: failed_edges_indicator_vectors_filtered[group_masks[label]].T
-        @ weights[group_masks[label]]
-        / weights[
-            group_masks[label]
-        ].sum()  #! chech if replacing below line with this is correct!
-        # / group_masks[label].sum()
-        for label in labels
-    }
-
-    # Sort by weighted lost load
-    centroids_df = centroids_df.sort_values(by="weighted_lost_load", ascending=False)
+    try:
+        with gzip.open(
+            clustering_res_path.replace("fitted.pklz", "centroid_res.pklz"), "rb"
+        ) as f:
+            centroid_res = pickle.load(f)
+        weights = centroid_res["weights"]
+        split_lost_load = centroid_res["split_lost_load"]
+        co2l_masks = centroid_res["co2l_masks"]
+        group_masks = centroid_res["group_masks"]
+        centroids_df = centroid_res["centroids_df"]
+        centroids = centroid_res["centroids"]
+        edge_centroids = centroid_res["edge_centroids"]
+        print("Loaded pre-computed centroids from disk.")
+    except FileNotFoundError:
+        print("Computing centroids from clusters...")
+        (
+            weights,
+            split_lost_load,
+            co2l_masks,
+            group_masks,
+            centroids_df,
+            centroids,
+            edge_centroids,
+        ) = compute_centroids_from_clusters(
+            average_over_classes,
+            co2l_list,
+            clustering_res_path,
+            split_properties_filtered,
+            weights_filtered,
+            blackout_vectors_filtered_dict,
+            failed_edges_indicator_vectors_filtered,
+        )
 
     # === CREATE THE PLOT ===
     print("Creating visualization...")
@@ -342,8 +292,12 @@ def create_clustering_analysis_plot(
     # Color scale parameters
     vmax = 1.0
     vmin = 0.001
-    vmin_edge = 1e-3
-    vmax_edge = 1.0
+    if edge_log_scale:
+        vmin_edge = 1e-3
+        vmax_edge = 1.0
+    else:
+        vmin_edge = 0.0
+        vmax_edge = 1.0
     node_cbar_label = "blackout probability"
 
     # CO2 levels for histograms
@@ -416,24 +370,25 @@ def create_clustering_analysis_plot(
                 centroid,
                 failed_edges_prob,
                 ax,
-                colors_classes=["blue", "lightgray", "red"],
+                colors_classes=colors_classes,
                 radius=0.4,
+                edge_log_scale=edge_log_scale,
             )
 
             ax.axis("off")
 
             # Add cluster information
-            # cluster_label = (
-            #     f"{plot_count},"
-            #     rf"\\"
-            #     rf"$R={round(centroid_row.lost_load_share*100, ndigits=1)}\%$"
-            #     rf"\\"
-            #     rf"$\beta={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100)}\%$"
-            # )
-            cluster_label = f"{plot_count}," rf"\\" f"test line2," rf"\\" f"test line3"
+            cluster_label = (
+                f"{plot_count},"
+                rf"\\"
+                rf"$R={round(centroid_row.lost_load_share*100, ndigits=1)}\%$"
+                rf"\\"
+                rf"$\beta={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100)}\%$"
+            )
+            # cluster_label = f"{plot_count}," rf"\\" f"test line2," rf"\\" f"test line3"
             ax.set_title(
                 cluster_label,
-                y=0.74,
+                y=0.8,
                 x=-0,
                 fontsize=LABEL_FONTSIZE,
                 loc="left",
@@ -484,23 +439,68 @@ def create_clustering_analysis_plot(
             fontsize=LEGEND_FONTSIZE,
             ncols=3,
             title=r"CO$_2$ level [\% of 1990]",
+            handletextpad=0.2,
+            columnspacing=0.7,
         )
 
     # Node colorbar
-    cbar_ax_node = fig.add_subplot(gs_legend_colorax[1])
-    sm_node = plt.cm.ScalarMappable(
-        cmap=node_cmap, norm=mplcolors.LogNorm(vmin=vmin, vmax=vmax)
-    )
-    cb_node = fig.colorbar(sm_node, cax=cbar_ax_node, orientation="horizontal")
-    cb_node.ax.tick_params(labelsize=COLORBAR_TICK_FONTSIZE, width=1.0, which="both")
-    cb_node.ax.set_xlabel(node_cbar_label, fontsize=COLORBAR_LABEL_FONTSIZE, rotation=0)
-    cb_node.ax.xaxis.set_label_position("top")
+    if centroid.ndim == 1:
+        cbar_ax_node = fig.add_subplot(gs_legend_colorax[1])
+        sm_node = plt.cm.ScalarMappable(
+            cmap=node_cmap, norm=mplcolors.LogNorm(vmin=vmin, vmax=vmax)
+        )
+        cb_node = fig.colorbar(sm_node, cax=cbar_ax_node, orientation="horizontal")
+        cb_node.ax.tick_params(
+            labelsize=COLORBAR_TICK_FONTSIZE, width=1.0, which="both"
+        )
+        cb_node.ax.set_xlabel(
+            node_cbar_label, fontsize=COLORBAR_LABEL_FONTSIZE, rotation=0
+        )
+        cb_node.ax.xaxis.set_label_position("top")
+    else:
+        cbar_ax_node = fig.add_subplot(gs_legend_colorax[1])
+
+        class_labels = [
+            r"RoCoF$<-1$",
+            "stable",
+            r"RoCoF$>1$",
+        ]
+        legend_handles = []
+        for i, color in enumerate(colors_classes):
+            # use a rectangular patch for the legend handle
+            handle = mpl.patches.Rectangle(
+                (0, 0),
+                width=1.0,
+                height=0.6,
+                facecolor=color,
+                edgecolor="black",
+                label=class_labels[i] if i < len(class_labels) else f"Class {i}",
+            )
+            legend_handles.append(handle)
+
+        # Create the legend
+        cbar_ax_node.legend(
+            handles=legend_handles,
+            loc="center",
+            fontsize=COLORBAR_LABEL_FONTSIZE,
+            title="Node Classes",
+            title_fontsize=COLORBAR_LABEL_FONTSIZE,
+            ncol=len(colors_classes),
+            handletextpad=0.2,
+            columnspacing=0.7,
+        )
+        cbar_ax_node.axis("off")
 
     # Edge colorbar
     cbar_ax_edge = fig.add_subplot(gs_legend_colorax[2])
-    sm_edge = plt.cm.ScalarMappable(
-        cmap=edge_cmap, norm=mplcolors.LogNorm(vmin=vmin_edge, vmax=vmax_edge)
-    )
+    if edge_log_scale:
+        sm_edge = plt.cm.ScalarMappable(
+            cmap=edge_cmap, norm=mplcolors.LogNorm(vmin=vmin_edge, vmax=vmax_edge)
+        )
+    else:
+        sm_edge = plt.cm.ScalarMappable(
+            cmap=edge_cmap, norm=mplcolors.Normalize(vmin=vmin_edge, vmax=vmax_edge)
+        )
     cb_edge = fig.colorbar(sm_edge, cax=cbar_ax_edge, orientation="horizontal")
     cb_edge.ax.tick_params(labelsize=COLORBAR_TICK_FONTSIZE, width=1.0, which="both")
     cb_edge.ax.set_xlabel(
@@ -510,14 +510,140 @@ def create_clustering_analysis_plot(
 
     # Save the plot
     save_name = f"clustering_analysis_{ncols}cols_{n_subplots}"
-    if alg_filter:
-        save_name += f"_{alg_filter}"
     if fname:
         save_name += f"_{fname.replace('.pklz','')}"
     save_figure(fig, path_to_figures_sclopf, save_name)
     print(f"Plot saved to: {os.path.join(path_to_figures_sclopf, f'{save_name}.pdf')}")
 
     return fig
+
+
+def compute_centroids_from_clusters(
+    average_over_classes,
+    co2l_list,
+    clustering_res_path,
+    split_properties_filtered,
+    weights_filtered,
+    blackout_vectors_filtered_dict,
+    failed_edges_indicator_vectors_filtered,
+):
+    weights = weights_filtered.values
+    print("total weighted number of events:", weights.sum())
+    blackout_vectors_filtered = np.concatenate(
+        list(blackout_vectors_filtered_dict.values())
+    )
+    split_lost_load = split_properties_filtered.lost_load_share_blackout
+    split_weighted_lost_load = split_lost_load * weights
+    co2l_masks = [(split_properties_filtered.co2l == co2l).values for co2l in co2l_list]
+
+    # Check required files exist
+    labels_all_path = clustering_res_path.replace("fitted.pklz", "labels_all.npy")
+    group_masks_path = clustering_res_path.replace("fitted.pklz", "group_masks.pklz")
+
+    if not os.path.exists(labels_all_path):
+        raise FileNotFoundError(f"Required file not found: {labels_all_path}")
+    if not os.path.exists(group_masks_path):
+        raise FileNotFoundError(f"Required file not found: {group_masks_path}")
+
+    print("Processing clustering results...")
+    # Load clustering results
+    with gzip.open(clustering_res_path, "rb") as f:
+        clustering_res = pickle.load(f)
+
+    labels_all = np.load(labels_all_path, allow_pickle=True)
+    print(f"{clustering_res.labels_.shape[0]} unique blackouts.")
+
+    with gzip.open(group_masks_path, "rb") as f:
+        group_masks = pickle.load(f)
+
+    # Process clustering results
+    labels, counts = np.unique(clustering_res.labels_, return_counts=True)
+    n_clusters = len(labels)
+
+    # Create centroids dataframe
+    centroids_df = pd.DataFrame(index=labels)
+    centroids_df["weighted_lost_load"] = np.array(
+        [np.sum(split_weighted_lost_load[labels_all == i]) for i in labels]
+    )
+    centroids_df["lost_load_share"] = (
+        centroids_df["weighted_lost_load"] / centroids_df["weighted_lost_load"].sum()
+    )
+    centroids_df["n_samples"] = np.array(
+        [weights[group_masks[label]].sum() for label in labels]
+    )
+
+    # Calculate centroids
+    classes = np.unique(blackout_vectors_filtered)
+    n_classes = len(classes)
+    if average_over_classes:
+        centroids = {
+            label: blackout_vectors_filtered[group_masks[label]].T
+            @ weights[group_masks[label]]
+            / weights[group_masks[label]].sum()
+            for label in labels
+        }
+    else:
+        # map classes to non-negative
+        centroids = {}
+        for label in labels:
+            blackout_vectors_filtered_nonNeg, old_class_to_new = classes_to_nonNeg(
+                blackout_vectors_filtered
+            )
+            weighted_node_class_probs = (
+                np.array(
+                    [
+                        np.bincount(
+                            outcomes_node,
+                            minlength=n_classes,
+                            weights=weights[group_masks[label]],
+                        )
+                        for outcomes_node in blackout_vectors_filtered_nonNeg[
+                            group_masks[label]
+                        ].T
+                    ],
+                )
+                / weights[group_masks[label]].sum()
+            )  # n_nodes x n_classes
+            centroids[label] = weighted_node_class_probs
+
+    edge_centroids = {
+        label: failed_edges_indicator_vectors_filtered[group_masks[label]].T
+        @ weights[group_masks[label]]
+        / weights[
+            group_masks[label]
+        ].sum()  #! chech if replacing below line with this is correct!
+        # / group_masks[label].sum()
+        for label in labels
+    }
+
+    # Sort by weighted lost load
+    centroids_df = centroids_df.sort_values(by="weighted_lost_load", ascending=False)
+
+    # save all variables to disk
+    save_path = clustering_res_path.replace("fitted.pklz", "centroid_res.pklz")
+    with gzip.GzipFile(save_path, "wb") as f:
+        pickle.dump(
+            {
+                "weights": weights,
+                "split_lost_load": split_lost_load,
+                "co2l_masks": co2l_masks,
+                "group_masks": group_masks,
+                "centroids_df": centroids_df,
+                "centroids": centroids,
+                "edge_centroids": edge_centroids,
+            },
+            f,
+        )
+
+    return (
+        weights,
+        split_lost_load,
+        co2l_masks,
+        group_masks,
+        centroids_df,
+        centroids,
+        edge_centroids,
+    )
 
 
 def analyse_clusters_temporal_occurence_patterns(
@@ -984,12 +1110,19 @@ def analyse_clusters_temporal_occurence_patterns(
 if __name__ == "__main__":
 
     for n_subplots in [12]:
-        create_clustering_analysis_plot(
-            n_subplots=n_subplots,
-            fname="agglomerative_clustering_n600_ACC_impurity_maxD1_decay1_linkageComplete_n_clusters1.3e+02_fitted.pklz",
-            min_lost_load_share=0.5,
-            average_over_classes=False,
-        )
+        # for alg_filter in ["_ACC", "_bACC"]:
+        for metric in ["alpha"]:
+            alg = "agg"
+            alg_filter = [alg, metric]
+
+            create_clustering_analysis_plot(
+                n_subplots=n_subplots,
+                alg_filter=alg_filter,
+                # fname="agglomerative_clustering_n600_ACC_impurity_maxD1_decay1_linkageComplete_n_clusters1.3e+02_fitted.pklz",
+                min_lost_load_share=0.05,
+                average_over_classes=False,
+                edge_log_scale=True,
+            )
 
     # Run temporal analysis
     # analyse_clusters_temporal_occurence_patterns(

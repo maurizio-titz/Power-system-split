@@ -341,6 +341,7 @@ def plot_centroid_with_failures(
     edge_width=1,
     radius=0.5,
     pie_nodes=True,
+    edge_log_scale=True,
 ):
     if len(centroid.shape) > 1:
         if colors_classes is None:
@@ -389,42 +390,45 @@ def plot_centroid_with_failures(
         nodes.set_edgecolor("black")
         nodes.set_linewidth(0.2)
 
-    if len(centroid.shape) == 1:
-        if failed_edges_prob is None:
-            edges = nx.draw_networkx_edges(
-                nx_graph,
-                pos=pos,
-                ax=ax,
-                edge_color="black",
-                width=edge_width,
-                # edge_cmap=cmap,
-            )
-        else:
-            failed_edges_prob_log = np.array(
+    # if len(centroid.shape) == 1:
+    if failed_edges_prob is None:
+        edges = nx.draw_networkx_edges(
+            nx_graph,
+            pos=pos,
+            ax=ax,
+            edge_color="black",
+            width=edge_width,
+            # edge_cmap=cmap,
+        )
+    else:
+        if edge_log_scale:
+            failed_edges_prob = np.array(
                 [np.log10(x) if x > 1e-12 else -np.inf for x in failed_edges_prob]
             )
-            edges = nx.draw_networkx_edges(
-                nx_graph,
-                pos=pos,
-                ax=ax,
-                # edge_color="black",
-                width=edge_width,
-                edge_cmap=edge_cmap,
-                edge_color=failed_edges_prob_log,
-                # edge_vmin=vmin_edge,
-                # edge_vmax=vmax_edge
-                edge_vmin=np.log10(vmin_edge),
-                edge_vmax=np.log10(vmax_edge),
-            )
-    else:
-        for i_edge, edge in enumerate(nx_graph.edges()):
-            ax.plot(
-                [pos[edge[0]][0], pos[edge[1]][0]],
-                [pos[edge[0]][1], pos[edge[1]][1]],
-                color="black",
-                linewidth=edge_width,
-                zorder=-1,
-            )
+            vmin_edge = np.log10(vmin_edge)
+            vmax_edge = np.log10(vmax_edge)
+
+        edges = nx.draw_networkx_edges(
+            nx_graph,
+            pos=pos,
+            ax=ax,
+            # edge_color="black",
+            width=edge_width,
+            edge_cmap=edge_cmap,
+            edge_color=failed_edges_prob,
+            edge_vmin=vmin_edge,
+            edge_vmax=vmax_edge,
+        )
+        edges.set_zorder(0)
+    # else:
+    #     for i_edge, edge in enumerate(nx_graph.edges()):
+    #         ax.plot(
+    #             [pos[edge[0]][0], pos[edge[1]][0]],
+    #             [pos[edge[0]][1], pos[edge[1]][1]],
+    #             color=edge_cmap(failed_edges_prob[i_edge]),
+    #             linewidth=edge_width,
+    #             zorder=-1,
+    #         )
 
 
 def load_lost_load_share_broken(
