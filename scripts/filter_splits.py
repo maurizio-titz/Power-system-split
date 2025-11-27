@@ -89,15 +89,6 @@ def split_mask(
     if not n_nodes is None:
         raise NotImplementedError
 
-    # if ignore_shedding:
-    #     index_mask = (split_properties_df.n_nodes_split_off > n_nodes) | (
-    #         split_properties_df.lost_load_share_total > lost_load_share
-    #     )
-    # else:
-    #     index_mask = (split_properties_df.n_nodes_split_off > n_nodes) | (
-    #         split_properties_df.lost_load_rocof_share > lost_load_share
-    #     )
-
     if ignore_shedding:
         # index_mask = split_properties_df.lost_load_share_rocof > lost_load_share
         index_mask = split_properties_df.lost_load_share_blackout > lost_load_share
