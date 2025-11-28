@@ -97,8 +97,9 @@ def typed_katz_centrality_batch(
 
 
 def neighborhood_homo_batch(
-    adjacency_matrix: Union[np.matrix, sparse.csr_matrix],
     node_class_vectors: np.ndarray,
+    adjacency_matrix: Union[np.matrix, sparse.csr_matrix] = None,
+    L=None,
     decay_factor: float = 1.5,
     max_distance: int = 10,
     impurity_type: str = "normalized_shannon",
@@ -113,6 +114,13 @@ def neighborhood_homo_batch(
     neg_val_tolerance: tolerance for negative impurity values due to numerical errors
     returns: nodewise impurity values, shape (n_instances, n_nodes)
     """
+    from scipy.sparse import diags
+
+    if adjacency_matrix:
+        if L is not None:
+            raise ValueError("Provide either adjacency_matrix or L, not both.")
+        D = diags(L.diagonal())
+        adjacency_matrix = D - L
 
     if len(node_class_vectors.shape) == 3:
         raise NotImplementedError(

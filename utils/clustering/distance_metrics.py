@@ -29,6 +29,21 @@ from utils.config import (
 from utils.indicator_utils import load_indicator_vectors
 
 
+def product_weighted_hamming_distance(
+    node_classes0,
+    node_classes1,
+    node_weight0,
+    node_weight1,
+    order: int = 1,
+) -> float:
+    """calculates the distance between two indicator vectors, from the hamming distance between the two indicator vectors weighted by the product of the node weights."""
+
+    divs = node_classes0 != node_classes1
+    return np.linalg.norm(
+        np.multiply(node_weight0[divs], node_weight1[divs]), ord=order
+    )
+
+
 def balanced_overlap_distance_weighted(
     node_classes0: np.ndarray,
     node_classes1: np.ndarray,
@@ -332,3 +347,12 @@ def balanced_overlap_distance(
 
 # def graph_based_clustering():
 #     https://graph-tool.skewed.de/
+
+
+########## combining scores ##########
+def geometric_mean(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return np.sqrt(a * b)
+
+
+def harmonic_mean(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return 2 * (a * b) / (a + b + 1e-10)

@@ -35,14 +35,13 @@ root_path = "./"
 sys.path.append(root_path)
 
 # Import project utilities
-from utils.clustering import get_path_to_clustering_dir, load_clustering
+from utils.clustering.data_handling import get_path_to_clustering_dir, load_clustering
 from utils.data_handling import get_co2_levels, get_actual_co2_level
 from utils.config import path_to_clustering_results_sclopf, path_to_vis_results_sclopf
 from utils.clustering_visualisation import *
 from utils import data_handling
 from utils.config import path_to_pypsa_network_sclopf, path_to_figures_sclopf
 from utils import cascade_simulation
-from utils.clustering import get_path_to_clustering_dir
 from scripts.plots.plot_combined_generation_storage import LABEL_FONTSIZE
 from utils.plot_style import *
 
@@ -52,9 +51,6 @@ setup_matplotlib_style()
 
 def load_clustering_data(
     n_nodes=600,
-    indicator_type="rocof",
-    transformation="overUnder",
-    min_lost_load_share=0.05,
 ):
     """Load clustering data and network setup."""
     # Load network graph and node positions
@@ -86,25 +82,11 @@ def load_clustering_data(
         weighted_trigger_count * network.snapshot_weightings.generators
     ).sum()
 
-    # Get CO2 levels and setup paths
-    co2l_list = get_co2_levels(n_nodes=n_nodes)
-    save_dir = get_path_to_clustering_dir(
-        n_nodes=n_nodes,
-        co2l=co2l_list,
-        indicator_type=indicator_type,
-        transformation=transformation,
-        n_nodes_split=None,
-        lost_load_share=min_lost_load_share,
-    )
-
     return {
         "nx_graph": nx_graph,
         "pos": pos,
         "network": network,
-        "co2l_list": co2l_list,
-        "save_dir": save_dir,
         "num_failures_weighted": num_failures_weighted,
-        "n_nodes": n_nodes,
     }
 
 
@@ -118,13 +100,11 @@ def load_processed_data(save_dir, n_nodes):
     # Load masks and weights
     with gzip.open(save_dir + f"/masks_dict.pklz", "rb") as f:
         masks_dict = pickle.load(f)
-    with gzip.open(save_dir + f"/weights_filtered_dict.pklz", "rb") as f:
-        weights_dict = pickle.load(f)
+    # with gzip.open(save_dir + f"/weights_filtered_dict.pklz", "rb") as f:
+    #     weights_dict = pickle.load(f)
 
     # Load blackout vectors
-    with gzip.open(
-        save_dir + f"blackout_vectors_filtered_dict_{n_nodes}.pklz", "rb"
-    ) as f:
+    with gzip.open(save_dir + f"blackout_vectors_filtered_dict.pklz", "rb") as f:
         blackout_vectors_filtered_dict = pickle.load(f)
 
     # Load failed edges indicator
@@ -141,7 +121,7 @@ def load_processed_data(save_dir, n_nodes):
     return {
         "split_properties_filtered": split_properties_filtered,
         "masks_dict": masks_dict,
-        "weights_dict": weights_dict,
+        # "weights_dict": weights_dict,
         "blackout_vectors_filtered_dict": blackout_vectors_filtered_dict,
         "failed_edges_indicator_vectors_filtered": failed_edges_indicator_vectors_filtered,
         # "distance_matrix": distance_matrix,
@@ -197,6 +177,8 @@ def classes_to_nonNeg(class_vecs):
     if np.min(class_vecs) < 0:
         class_vecs_nonNeg = np.zeros_like(class_vecs)
         classes = np.unique(class_vecs)
+        if len(classes) > 3:
+            raise ValueError("More than 3 classes found in class_vecs.")
         classes = np.sort(classes)
         old_class_to_new = {old_class: i for i, old_class in enumerate(classes)}
         for i, class_val in enumerate(classes):
@@ -207,35 +189,36 @@ def classes_to_nonNeg(class_vecs):
 
 
 def create_clustering_analysis_plot(
-    fname="",
+    clustering_res_full_path="",
     n_subplots=12,
     alg_filter=None,
-    average_over_classes=True,
-    min_lost_load_share=0.05,
+    average_over_classes=False,
     colors_classes=["blue", "lightgray", "red"],
     edge_log_scale=True,
+    plot_dir=path_to_figures_sclopf,
+    n_nodes=600,
+    co2l_list=[0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0],
 ):
     """Create the main clustering analysis plot."""
 
     # Load data
     print("Loading clustering data...")
-    data = load_clustering_data(min_lost_load_share=min_lost_load_share)
+    data = load_clustering_data(n_nodes=n_nodes)
     nx_graph = data["nx_graph"]
     pos = data["pos"]
-    co2l_list = data["co2l_list"]
-    save_dir = data["save_dir"]
     num_failures_weighted = data["num_failures_weighted"]
-    n_nodes = data["n_nodes"]
+    cluster_res_dir = os.path.dirname(clustering_res_full_path) + "/"
+    fname = os.path.basename(clustering_res_full_path)
 
     # Find and load clustering results
     print("Loading clustering results...")
     if not fname:
-        fname = find_best_clustering_file(save_dir, alg_filter)
+        fname = find_best_clustering_file(cluster_res_dir, alg_filter)
     print(f"Using clustering file: {fname}")
-    clustering_res_path = os.path.join(save_dir, fname)
+    clustering_res_path = os.path.join(cluster_res_dir, fname)
 
     print("Loading processed data...")
-    processed_data = load_processed_data(save_dir, n_nodes)
+    processed_data = load_processed_data(cluster_res_dir + "../data/", n_nodes)
     split_properties_filtered = processed_data["split_properties_filtered"]
     weights_filtered = split_properties_filtered.total_weighting
     blackout_vectors_filtered_dict = processed_data["blackout_vectors_filtered_dict"]
@@ -512,8 +495,8 @@ def create_clustering_analysis_plot(
     save_name = f"clustering_analysis_{ncols}cols_{n_subplots}"
     if fname:
         save_name += f"_{fname.replace('.pklz','')}"
-    save_figure(fig, path_to_figures_sclopf, save_name)
-    print(f"Plot saved to: {os.path.join(path_to_figures_sclopf, f'{save_name}.pdf')}")
+    save_figure(fig, plot_dir, save_name)
+    print(f"Plot saved to: {os.path.join(plot_dir, f'{save_name}.pdf')}")
 
     return fig
 

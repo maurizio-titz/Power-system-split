@@ -103,6 +103,7 @@ def get_split_mask(
     split_props=None,
     err_on_missing=False,
     path_to_vis_results=path_to_vis_results_sclopf,
+    random_subsample_size=1,
 ):
 
     # get masks
@@ -133,6 +134,24 @@ def get_split_mask(
             )
             for co2l in co2l_list
         }
+
+        if random_subsample_size != 1:
+            rng = np.random.default_rng(42)
+            for co2l in co2l_list:
+                selected_indices = masks_dict[co2l].values.nonzero()
+                subsample_mask = np.zeros(len(masks_dict[co2l]), dtype=bool)
+                n_subsampled = (
+                    int(random_subsample_size * len(selected_indices[0]))
+                    if random_subsample_size < 1
+                    else int(random_subsample_size)
+                )
+                subsampled_indices = rng.choice(
+                    selected_indices[0],
+                    size=n_subsampled,
+                    replace=False,
+                )
+                subsample_mask[subsampled_indices] = True
+                masks_dict[co2l] = subsample_mask
 
         with gzip.open(masks_dict_path, "wb") as fh_out:
             pickle.dump(masks_dict, fh_out)
@@ -251,8 +270,8 @@ def get_path_to_clustering_dir(
     co2l,
     indicator_type,
     transformation,
-    n_nodes_split,
     lost_load_share,
+    n_nodes_split=None,
     use_sclopf=True,
 ):
     assert n_nodes is not None, "n_nodes must not be None"

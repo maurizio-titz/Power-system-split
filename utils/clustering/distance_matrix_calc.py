@@ -27,11 +27,19 @@ from utils.config import (
     path_to_clustering_results_sclopf,
 )
 from utils.indicator_utils import load_indicator_vectors
+from utils.clustering.distance_metrics import (
+    ACC_weighted_pairwise,
+    bACC_weighted_pairwise,
+    balanced_overlap_distance_weighted,
+    multiclass_accuracy_distance_weighted,
+    product_weighted_hamming_distance,
+    # boundary_field_ACC_weighted_pairwise,
+)
 
 
 def calc_distance_matrix(
     data,
-    mode: str = "sequential",
+    mode: str = "vec_joblib",
     metric="bACC",
     n_jobs=-1,
     test_mode=True,
@@ -509,8 +517,8 @@ def compute_distance_matrix_vectorized_joblib(
         metric = bACC_weighted_pairwise
     elif metric_name == "ACC":
         metric = ACC_weighted_pairwise
-    elif metric_name == "boundary_field_ACC":
-        metric = boundary_field_ACC_weighted_pairwise
+    # elif metric_name == "boundary_field_ACC":
+    #     metric = boundary_field_ACC_weighted_pairwise
     else:
         raise ValueError(f"Unknown metric: {metric_name}")
     # Generate chunk coordinates - lightweight memory usage
