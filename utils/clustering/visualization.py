@@ -21,7 +21,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
 from tqdm import tqdm
 
-from scripts.filter_splits import split_mask
+from utils.clustering.data_handling import split_mask
 from utils.config import (
     path_to_clustering_results_lopf,
     path_to_clustering_results_sclopf,
@@ -50,8 +50,8 @@ def prepare_clusters_for_analysis(
         group_masks, dictonary which holds a mask for each cluster.
     """
 
-    path_labels_all = clustering_res_path.replace("fitted.pklz", "labels_all.npy")
-    path_goup_masks = clustering_res_path.replace("fitted.pklz", "group_masks.pklz")
+    path_labels_all = clustering_res_path.replace(".pklz", "_labels_all.npy")
+    path_goup_masks = clustering_res_path.replace(".pklz", "_group_masks.pklz")
     # path_group_means = clustering_res_path.replace(".pklz", "_group_means.npy")
 
     if (
@@ -65,7 +65,7 @@ def prepare_clusters_for_analysis(
     print("preparing clusters for analysis...")
 
     with gzip.open(clustering_res_path, "rb") as out:
-        clustering_res = pickle.load(out)
+        clustering_res = pickle.load(out)["model"]
 
     unique_idx_to_ids = [val["idxs"] for val in unique_blackout_dict.values()]
     unique_blackout_vecs = np.array(list(unique_blackout_dict.keys()))
