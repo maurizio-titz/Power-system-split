@@ -21,7 +21,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
 from tqdm import tqdm
 
-from scripts.filter_splits import split_mask
 from utils.config import (
     path_to_clustering_results_lopf,
     path_to_clustering_results_sclopf,
@@ -304,3 +303,27 @@ def get_path_to_clustering_dir(
         co2_string = str(co2l)
 
     return f"{path_to_clustering_results}/{indicator_type}{transformation_string}_Co2L{co2_string}_n{n_nodes}{n_nodes_split_str}_lls{lost_load_share}/"
+
+
+def split_mask(
+    split_properties_df: pd.DataFrame,
+    lost_load_share: float,
+    n_nodes: int = None,
+    ignore_shedding: bool = True,
+):
+    """create mask for filtering insignificant splits
+
+    Args:
+        n_nodes (int): minimal number of nodes in split-off component for split to be considered significant
+        lost_load_share (float): minimal lost load share due to RoCoF and shedding for split to be considered significant
+    """
+    if not n_nodes is None:
+        raise NotImplementedError
+
+    if ignore_shedding:
+        # index_mask = split_properties_df.lost_load_share_rocof > lost_load_share
+        index_mask = split_properties_df.lost_load_share_blackout > lost_load_share
+    else:
+        index_mask = split_properties_df.lost_load_share_total > lost_load_share
+
+    return np.array(index_mask)

@@ -21,7 +21,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
 from tqdm import tqdm
 
-from scripts.filter_splits import split_mask
+from utils.clustering.data_handling import split_mask
 from utils.config import (
     path_to_clustering_results_lopf,
     path_to_clustering_results_sclopf,
