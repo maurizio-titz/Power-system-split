@@ -1,7 +1,10 @@
+import pickle
 import sys
 import os
 
 import numpy as np
+import gzip
+import networkx as nx
 
 sys.path.append("./")
 
@@ -9,7 +12,8 @@ import warnings
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-from utils import data_handling
+
+from utils import cascade_simulation, data_handling
 from utils.config import use_extensions
 from utils.data_handling import get_co2_levels
 
@@ -49,6 +53,16 @@ for co2l in co2ls:
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
         nx_graph
     )
+    bridge_idxs = data_handling.nx_edges_to_matrix_indices(
+        nx.bridges(nx_graph), nx_graph
+    )
+    n_2_failures = cascade_simulation.calc_possible_double_line_failures(
+        num_parallels, ignored_idxs=bridge_idxs
+    )
+    file_path = data_handling.path_to_grid_data + f"n_2_failures_co2lvl{co2l}.pklz"
+    with gzip.open(file_path, "wb") as fh:
+        pickle.dump(n_2_failures, fh, protocol=pickle.HIGHEST_PROTOCOL)
+
     data_handling.save_grid_matrices(
         snet_index=snet_index,
         co2lvl=co2l,
