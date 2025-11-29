@@ -24,6 +24,8 @@ sys.path.append("./")
 from utils.alternative_split_indicator_vectors import (
     add_indices_to_indicator_vectors,
     extract_nodal_rocof_and_load_share_in_split_from_old_results,
+    find_failed_edge_indicator_vector_for_cascade_results,
+    sort_failed_edge_indicator_vector,
     validate_rocofVec_splitProps_match,
 )
 from utils.data_handling import get_co2_levels
@@ -178,10 +180,19 @@ for lvl in split_props["co2l"].unique():
 
 ### add indices to indicator vectors for backward compatibility ###
 for co2l in co2l_list:
-    print(f"\n### Adding indices to rocof vectors for Co2L {co2l} ###\n")
+    print(f"\n### Adding indices to indicator vectors for Co2L {co2l} ###\n")
     add_indices_to_indicator_vectors(
         co2_lvl=co2l,
         n_nodes=n_nodes,
+        save_res=True,
+        verbose=True,
+        overwrite=True,
+        use_sclopf=use_sclopf,
+    )
+    sort_failed_edge_indicator_vector(
+        co2_lvl=co2l,
+        n_nodes=n_nodes,
+        snet_idx=snet_index,
         save_res=True,
         verbose=True,
         overwrite=True,

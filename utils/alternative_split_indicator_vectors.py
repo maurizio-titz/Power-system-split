@@ -249,6 +249,7 @@ def add_indices_to_indicator_vectors(
     verbose: bool = True,
     overwrite: bool = False,
     use_sclopf: bool = True,
+    type: str = "node",
 ):
     """Adds indices to the indicator vectors from eval_cascades."""
 
@@ -260,11 +261,16 @@ def add_indices_to_indicator_vectors(
         path_to_evaluation_results = path_to_evaluation_results_lopf
         path_to_indicator_vectors = path_to_indicator_vectors_lopf
 
+    if type == "node":
+        fname = "rocof_indicator_vectors_Co2L"
+    elif type == "edge":
+        fname = "failed_edges_indicator_vectors_Co2L"
+    else:
+        raise ValueError(f"Type {type} not recognized.")
+
     if save_res:
         fpath_indi_vec_rocof_out = (
-            path_to_indicator_vectors
-            + "/indicator_vector_rocof_Co2L"
-            + f"{co2_lvl}_n{n_nodes}.pklz"
+            path_to_indicator_vectors + fname + f"{co2_lvl}_n{n_nodes}.pklz"
         )
         print(fpath_indi_vec_rocof_out)
 
@@ -282,8 +288,7 @@ def add_indices_to_indicator_vectors(
 
     # Load component properties and indicator vector
     indicator_vectors_file_path = (
-        path_to_evaluation_results
-        + f"rocof_indicator_vectors_Co2L{co2_lvl}_n{n_nodes}.pklz"
+        path_to_evaluation_results + f"{fname}{co2_lvl}_n{n_nodes}.pklz"
     )
     with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
         indicator_vector_rocof = pickle.load(fh_in_indi)
@@ -568,6 +573,158 @@ def find_failed_edge_indicator_vector_for_cascade_results(
 
             indicator_failed_edges_arr[out_idx, failing_links] = True
             out_idx += 1
+
+    if use_sclopf:
+        path_to_evaluation_results = path_to_evaluation_results_sclopf
+    else:
+        path_to_evaluation_results = path_to_evaluation_results_lopf
+
+    df_comp_props = pd.read_hdf(
+        path_to_evaluation_results
+        + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
+        key="df",
+    )
+    df_comp_props_sorted = df_comp_props.sort_values(by=["time_stamp", "split_number"])
+    if not df_comp_props_sorted.reset_index(drop=True).equals(
+        df_comp_props.reset_index(drop=True)
+    ):
+        print(
+            "Warning! component props not sorted correctly, sorting now indicator vectors now."
+        )
+        df_comp_props_sorted = df_comp_props.drop_duplicates(
+            subset=["time_stamp", "split_number"], inplace=False
+        )
+        df_comp_props_sorted.reset_index(drop=True, inplace=True)
+        assert df_comp_props_sorted.shape[0] == indicator_failed_edges_arr.shape[0]
+
+        df_comp_props_sorted.sort_values(
+            by=["time_stamp", "split_number"], inplace=True
+        )
+        idx_sorted = df_comp_props_sorted.index
+        edge_names_ls = [edge_names_ls[i] for i in idx_sorted]
+        edge_pypsa_index_ls = edge_pypsa_index_ls[idx_sorted]
+        index_tuple_splits = [index_tuple_splits[i] for i in idx_sorted]
+        indicator_failed_edges_arr = indicator_failed_edges_arr[idx_sorted]
+
+    if save_res:
+        with gzip.open(fpath_out_edge_base, "wb") as fh_out_edges:
+            pickle.dump(
+                (
+                    edge_names_ls,
+                    edge_pypsa_index_ls,
+                    index_tuple_splits,
+                    indicator_failed_edges_arr,
+                ),
+                fh_out_edges,
+            )
+
+    return (
+        edge_names_ls,
+        edge_pypsa_index_ls,
+        index_tuple_splits,
+        indicator_failed_edges_arr,
+    )
+
+
+def sort_failed_edge_indicator_vector(
+    co2_lvl: float,
+    n_nodes: int,
+    snet_idx: int = 0,
+    save_res: bool = True,
+    verbose: bool = True,
+    overwrite: bool = False,
+    use_sclopf: bool = True,
+) -> tuple:
+    """Find the indicator vectors that has an entry for every split that has a 'True'
+    if a link failed during the split.
+
+    Args:
+        co2_lvl (float): CO2 level of the considered PyPSA scenario
+        n_nodes (int): Number of nodes of the PyPSA network
+        snet_idx (int, optional): Subnet index of PyPSA with 0 indicating CE. Defaults to 0.
+        save_res (bool, optional): If 'True', save the results to a file. Defaults to True.
+        verbose (bool, optional): If 'True', print additional details. Defaults to True.
+        overwrite (bool, optional): If 'True', overwrite previous run. Defaults to False.
+
+    Raises:
+        IOError: _description_
+
+    Returns:
+        edge_names_ls, edge_pypsa_index_ls,
+        index_tuple_splits, indicator_failed_edges_arr: _description_
+    """
+
+    # Check if files already exists
+    if save_res:
+        if use_sclopf:
+            fpath_out_edge_base = (
+                path_to_evaluation_results_sclopf
+                + "/failed_edges_indicator_vector_Co2L"
+                + f"{co2_lvl}_n{n_nodes}.pklz"
+            )
+        else:
+            fpath_out_edge_base = (
+                path_to_evaluation_results_lopf
+                + "/failed_edges_indicator_vector_Co2L"
+                + f"{co2_lvl}_n{n_nodes}.pklz"
+            )
+        if os.path.exists(fpath_out_edge_base) and not overwrite:
+            raise IOError(
+                "File already exists! Please remove or choose 'overwrite=True'."
+            )
+        os.makedirs(os.path.dirname(fpath_out_edge_base), exist_ok=True)
+
+    ## Results path of cascade simulations
+    if use_sclopf:
+        path_to_cascade_results_file = (
+            path_to_cascade_results_sclopf
+            + f"system_splits_Co2L{co2_lvl}_n{n_nodes}.pklz"
+        )
+    else:
+        path_to_cascade_results_file = (
+            path_to_cascade_results_lopf
+            + f"system_splits_singlelinefailures_Co2L{co2_lvl}_n{n_nodes}_lopf.pklz"
+        )
+
+    with gzip.open(fpath_out_edge_base, "rb") as fh_out_edges:
+        (
+            edge_names_ls,
+            edge_pypsa_index_ls,
+            index_tuple_splits,
+            indicator_failed_edges_arr,
+        ) = pickle.load(
+            fh_out_edges,
+        )
+
+    if use_sclopf:
+        path_to_evaluation_results = path_to_evaluation_results_sclopf
+    else:
+        path_to_evaluation_results = path_to_evaluation_results_lopf
+
+    df_comp_props = pd.read_hdf(
+        path_to_evaluation_results
+        + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
+        key="df",
+    )
+    df_comp_props_sorted = df_comp_props.sort_values(by=["time_stamp", "split_number"])
+    if not df_comp_props_sorted.reset_index(drop=True).equals(
+        df_comp_props.reset_index(drop=True)
+    ):
+        print(
+            "Warning! component props not sorted correctly, sorting now indicator vectors now."
+        )
+        df_comp_props_sorted = df_comp_props.drop_duplicates(
+            subset=["time_stamp", "split_number"], inplace=False
+        )
+        df_comp_props_sorted.reset_index(drop=True, inplace=True)
+        assert df_comp_props_sorted.shape[0] == indicator_failed_edges_arr.shape[0]
+
+        df_comp_props_sorted.sort_values(
+            by=["time_stamp", "split_number"], inplace=True
+        )
+        idx_sorted = df_comp_props_sorted.index
+        index_tuple_splits = [index_tuple_splits[i] for i in idx_sorted]
+        indicator_failed_edges_arr = indicator_failed_edges_arr[idx_sorted]
 
     if save_res:
         with gzip.open(fpath_out_edge_base, "wb") as fh_out_edges:
