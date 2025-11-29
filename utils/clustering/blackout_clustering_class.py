@@ -33,12 +33,12 @@ from utils.clustering.data_handling import (
 )
 from utils.clustering.distance_matrix_calc import calc_distance_matrix
 from utils.clustering.distance_metrics import (
-    ACC_weighted_pairwise,
+    hamming_distance_weighted_pairwise,
     bACC_weighted_pairwise,
     hamming_distance_pairwise,
 )
 from utils.clustering.boundary import (
-    boundary_field,
+    boundary_field_rw_smoothing,
     low_weight_boundary_field,
     neighborhood_homo_batch,
 )
@@ -47,7 +47,7 @@ from utils.config import path_to_indicator_vectors_sclopf, path_to_vis_results_s
 
 # Preprocessing method registry
 PREPROCESSING_METHODS = {
-    "boundary_field": boundary_field,
+    "boundary_field": boundary_field_rw_smoothing,
     "neighborhood_homo_batch": neighborhood_homo_batch,
     "low_weight_boundary_field": low_weight_boundary_field,
 }
@@ -60,12 +60,32 @@ CLUSTERING_ALGORITHMS = {
 
 # Module-level function for parallel execution (must be picklable)
 def _fit_clustering_worker(
-    distance_matrix, alg_func, params, fit_params, calc_silhouette=False
+    distance_matrix, alg_name, params, fit_params, calc_silhouette=False
 ):
     """Worker function for parallel clustering execution.
 
     This is defined at module level to be picklable by joblib.
+    All imports must be done inside the function to ensure they're available in worker processes.
+
+    Args:
+        distance_matrix: Precomputed distance matrix
+        alg_name: String name of algorithm ('agg', 'dbscan', 'optics')
+        params: Algorithm hyperparameters
+        fit_params: Parameters for fit method
+        calc_silhouette: Whether to calculate silhouette score
     """
+    from sklearn.cluster import AgglomerativeClustering, DBSCAN, OPTICS
+
+    # Resolve algorithm from name
+    alg_map = {
+        "agg": AgglomerativeClustering,
+        "dbscan": DBSCAN,
+        "optics": OPTICS,
+    }
+    alg_func = alg_map.get(
+        alg_name, alg_name
+    )  # fallback to alg_name if it's already a class
+
     model = alg_func(**params)
     model.fit(distance_matrix, **fit_params)
 
@@ -111,8 +131,12 @@ class Clustering(object):
     distance_matrices_dir: Optional[str]
     cluster_dir: Optional[str]
     plot_dir: Optional[str]
-    random_subsample_size: Optional[float] = 1
+    random_subsample_size: Optional[float] = None
     plotting_params: Optional[dict[str, Any]] = {}
+    distance_matrix_dtype: Optional[type] = None  # Cast to this dtype in memory
+    clustering_worker_func: Optional[Callable] = (
+        None  # External worker function for pickling
+    )
     adjacency_matrix: Optional[np.ndarray]
     incidence_matrix: Optional[np.ndarray]
     laplacian: Optional[np.ndarray]
@@ -160,12 +184,18 @@ class Clustering(object):
         setattr(self, key, value)
 
     def set_grid_matrices(self, snet_index=0, co2lvl=0.0):
-        self.I, self.B, self.num_par, self.line_limits = load_grid_matrices(
+        self.I, self.B_values, self.num_par, self.line_limits = load_grid_matrices(
             snet_index=snet_index, co2lvl=co2lvl
         )
-        self.L = self.I.dot(self.B).dot(self.I.T)
+        self.L = self.I.dot(self.I.T)
+        if np.min(self.L.todense()) != -1:
+            raise ValueError("Laplacian L must have -1 off-diagonal entries")
+        if np.min(self.L.diagonal()) < 1:
+            raise ValueError("Degree matrix D must have positive diagonal entries")
         self.D = diags(self.L.diagonal())
         self.A = self.D - self.L
+        if set(np.unique(np.array(self.A.todense().flatten().squeeze()))) != {0, 1}:
+            raise ValueError("Incidence matrix I must be binary (0/1)")
 
     def load_data(self):
         if not "split_properties" in self.__dict__:
@@ -317,6 +347,10 @@ class Clustering(object):
 
         # Call preprocessing method with matched arguments
         preprocessed = method(self.unique_vecs, **method_kwargs)
+        if target == "weights" and (preprocessed < 0).any():
+            raise ValueError(
+                f"Preprocessing method '{method_name}' produced negative weights."
+            )
 
         # Apply preprocessing based on target
         result = {}
@@ -384,14 +418,14 @@ class Clustering(object):
         if isinstance(metric, str):
             if metric == "bACC":
                 return bACC_weighted_pairwise
-            elif metric == "ACC":
-                return ACC_weighted_pairwise
+            elif metric == "hamming":
+                return hamming_distance_pairwise
+            elif metric == "hamming_weighted":
+                return hamming_distance_weighted_pairwise
             elif metric == "cosine_distance":
                 from sklearn.metrics.pairwise import cosine_distances
 
                 return cosine_distances
-            elif metric == "hamming":
-                return hamming_distance_pairwise
 
             # elif self.distance_metric_kwargs.get("name") == "boundary_field_ACC":
             #     return boundary_field_ACC_weighted_pairwise
@@ -415,6 +449,15 @@ class Clustering(object):
             print(f"Loading distance matrix for {metric_kwargs.get('name')}...")
             with gzip.open(matrix_path, "rb") as fh_in:
                 distance_matrix = pickle.load(fh_in)
+            # Check for NaNs
+            if np.isnan(distance_matrix).any():
+                raise ValueError(
+                    f"Distance matrix loaded from {matrix_path} contains NaN values. "
+                    "This indicates corrupted data or calculation errors."
+                )
+            # Cast to specified dtype in memory if configured
+            if self.distance_matrix_dtype is not None:
+                distance_matrix = distance_matrix.astype(self.distance_matrix_dtype)
         else:
             # Handle preprocessing if specified in metric_kwargs
             preprocessing_config = metric_kwargs.get("preprocessing")
@@ -437,9 +480,19 @@ class Clustering(object):
                     if k not in ["name", "preprocessing"]
                 },
             )
+            # Check for NaNs after calculation
+            if np.isnan(distance_matrix).any():
+                raise ValueError(
+                    f"Calculated distance matrix for {metric_kwargs.get('name')} contains NaN values. "
+                    "Check your distance metric implementation and input data."
+                )
+            # Save at full precision
             os.makedirs(os.path.dirname(matrix_path), exist_ok=True)
             with gzip.open(matrix_path, "wb") as fh_out:
                 pickle.dump(distance_matrix, fh_out)
+            # Cast to specified dtype in memory if configured
+            if self.distance_matrix_dtype is not None:
+                distance_matrix = distance_matrix.astype(self.distance_matrix_dtype)
 
         return distance_matrix
 
@@ -477,12 +530,24 @@ class Clustering(object):
 
         # Combine the matrices
         print("Combining distance matrices...")
-        self.distance_matrix = combiner(component_matrices)
+        combined_matrix = combiner(component_matrices)
 
-        # Save the combined matrix
+        # Check for NaNs in combined matrix
+        if np.isnan(combined_matrix).any():
+            raise ValueError(
+                "Combined distance matrix contains NaN values. "
+                "Check your combiner function and component matrices."
+            )
+
+        # Save the combined matrix at full precision
         os.makedirs(os.path.dirname(self.distance_matrix_path), exist_ok=True)
         with gzip.open(self.distance_matrix_path, "wb") as fh_out:
-            pickle.dump(self.distance_matrix, fh_out)
+            pickle.dump(combined_matrix, fh_out)
+
+        # Cast to specified dtype in memory if configured
+        if self.distance_matrix_dtype is not None:
+            combined_matrix = combined_matrix.astype(self.distance_matrix_dtype)
+        self.distance_matrix = combined_matrix
 
         print("Composite distance matrix created and saved.")
 
@@ -519,6 +584,15 @@ class Clustering(object):
     def load_distance_matrix(self):
         with gzip.open(self.distance_matrix_path, "rb") as fh_in:
             distance_matrix = pickle.load(fh_in)
+        # Check for NaNs
+        if np.isnan(distance_matrix).any():
+            raise ValueError(
+                f"Distance matrix loaded from {self.distance_matrix_path} contains NaN values. "
+                "This indicates corrupted data or calculation errors."
+            )
+        # Cast to specified dtype in memory if configured
+        if self.distance_matrix_dtype is not None:
+            distance_matrix = distance_matrix.astype(self.distance_matrix_dtype)
         self.distance_matrix = distance_matrix
 
     def post_process_distance_matrix(self, distance_matrix: np.ndarray) -> np.ndarray:
@@ -583,15 +657,24 @@ class Clustering(object):
                 alg_name = alg.__name__
 
             # Fit models in parallel and collect results
+            # Fit models in parallel and collect results
+            # Use external worker function if provided (for script execution)
+            # Otherwise use module-level worker (for interactive use)
+            worker_func = (
+                self.clustering_worker_func
+                if self.clustering_worker_func is not None
+                else _fit_clustering_worker
+            )
+
             fitted_models_and_silhouettes = Parallel(
                 n_jobs=n_jobs,
                 backend="loky",
                 max_nbytes=None,
                 temp_folder=None,
             )(
-                delayed(_fit_clustering_worker)(
+                delayed(worker_func)(
                     self.distance_matrix,
-                    alg_func,
+                    alg_name,  # Pass name instead of class for pickling
                     params,
                     fit_params,
                     calc_silhouette=calc_silhouette,

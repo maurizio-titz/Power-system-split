@@ -22,13 +22,14 @@ from sklearn.preprocessing import normalize
 from tqdm import tqdm
 
 from scripts.filter_splits import split_mask
+from utils.clustering.boundary import boundary_field_rw_smoothing
 from utils.config import (
     path_to_clustering_results_lopf,
     path_to_clustering_results_sclopf,
 )
 from utils.indicator_utils import load_indicator_vectors
 from utils.clustering.distance_metrics import (
-    ACC_weighted_pairwise,
+    hamming_distance_weighted_pairwise,
     bACC_weighted_pairwise,
     balanced_overlap_distance_weighted,
     multiclass_accuracy_distance_weighted,
@@ -37,59 +38,88 @@ from utils.clustering.distance_metrics import (
 )
 
 
+# def calc_distance_matrix_old(
+#     samples: np.ndarray,
+#     weights: Optional[np.ndarray] = None,
+#     mode: str = "vec_joblib",
+#     metric="bACC",
+#     n_jobs=-1,
+#     test_mode=True,
+#     # show_progress=True,
+# ):
+#     """Calculate the distance matrix."""
+#     if mode == "joblib":
+
+#         raise NotImplementedError(
+#             "joblib mode is deprecated, use vectorized_joblib mode instead"
+#         )
+#     elif mode == "seq":
+#         if metric == "bACC":
+#             metric = balanced_overlap_distance_weighted
+#         elif metric == "ACC":
+#             metric = multiclass_accuracy_distance_weighted
+#         else:
+#             raise ValueError(f"Unknown metric: {metric}")
+#         metric = partial(
+#             weighted_distance_wrapper,
+#             weighted_distance_metric=metric,
+#         )
+#         return calc_distance_matrix_sequential(
+#             samples, metric=metric, test_mode=test_mode
+#         )
+#     elif mode == "vec":
+#         # split data into classes and weights
+#         return compute_distance_matrix_vectorized(
+#             samples,
+#             bACC_weighted_pairwise,
+#             weights_matrix=weights,
+#             chunk_size=500,
+#             test_mode=test_mode,
+#         )
+#     elif mode == "vec_joblib":
+#         # split data into classes and weights
+#         return compute_distance_matrix_vectorized_joblib(
+#             samples,
+#             metric=metric,
+#             weights=weights,
+#             chunk_size=500,
+#             test_mode=test_mode,
+#             n_jobs=n_jobs,
+#         )
+#     else:
+#         raise ValueError(f"Unknown distance matrix calculation mode: {mode}")
+
+
 def calc_distance_matrix(
-    data,
-    mode: str = "vec_joblib",
-    metric="bACC",
+    samples: np.ndarray,
+    metric: Callable,
+    weights: Optional[np.ndarray] = None,
     n_jobs=-1,
-    test_mode=True,
-    # show_progress=True,
+    test_mode=False,
+    **kwargs,
 ):
     """Calculate the distance matrix."""
-    if mode == "joblib":
-
-        raise NotImplementedError(
-            "joblib mode is deprecated, use vectorized_joblib mode instead"
-        )
-    elif mode == "seq":
-        if metric == "bACC":
-            metric = balanced_overlap_distance_weighted
-        elif metric == "ACC":
-            metric = multiclass_accuracy_distance_weighted
-        else:
-            raise ValueError(f"Unknown metric: {metric}")
-        metric = partial(
-            weighted_distance_wrapper,
-            weighted_distance_metric=metric,
-        )
-        return calc_distance_matrix_sequential(data, metric=metric, test_mode=test_mode)
-    elif mode == "vec":
-        # split data into classes and weights
-        n_nodes = int(data.shape[1] / 2)
-        node_classes_matrix = data[:, :n_nodes]
-        node_weights_matrix = data[:, n_nodes:]
+    if test_mode:
+        print("########### Test mode: limiting to first 10000 samples ########### ")
+    if n_jobs == 1:
         return compute_distance_matrix_vectorized(
-            node_classes_matrix,
-            node_weights_matrix,
-            bACC_weighted_pairwise,
+            samples,
+            metric=metric,
+            weights_matrix=weights,
             chunk_size=500,
             test_mode=test_mode,
+            **kwargs,
         )
-    elif mode == "vec_joblib":
-        # split data into classes and weights
-        n_nodes = int(data.shape[1] / 2)
-        node_classes_matrix = data[:, :n_nodes]
-        node_weights_matrix = data[:, n_nodes:]
+    else:
         return compute_distance_matrix_vectorized_joblib(
-            node_classes_matrix,
-            node_weights_matrix,
-            metric,
+            samples,
+            metric=metric,
+            weights=weights,
             chunk_size=500,
             test_mode=test_mode,
             n_jobs=n_jobs,
+            **kwargs,
         )
-    else:
-        raise ValueError(f"Unknown distance matrix calculation mode: {mode}")
 
 
 def calc_distance_matrix_sequential(
@@ -417,8 +447,8 @@ def weighted_distance_wrapper(
 
 def compute_distance_matrix_vectorized(
     data_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
-    weights_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
-    metric_func,
+    metric: Callable,
+    weights_matrix: Optional[np.ndarray],  # Shape: (n_samples, n_nodes)
     chunk_size: int = 1000,
     test_mode: bool = False,
 ) -> np.ndarray:
@@ -430,7 +460,8 @@ def compute_distance_matrix_vectorized(
     """
     if test_mode:
         data_matrix = data_matrix[:10000, :]
-        weights_matrix = weights_matrix[:10000, :]
+        if weights_matrix is not None:
+            weights_matrix = weights_matrix[:10000, :]
     n_samples = data_matrix.shape[0]
     distance_matrix = np.zeros((n_samples, n_samples), dtype=np.float32)
 
@@ -443,14 +474,16 @@ def compute_distance_matrix_vectorized(
 
             # Extract chunks
             chunk1_data = data_matrix[i:i_end]
-            chunk1_weights = weights_matrix[i:i_end]
             chunk2_data = data_matrix[j:j_end]
-            chunk2_weights = weights_matrix[j:j_end]
-
             # Calculate pairwise distances for this chunk
-            chunk_distances = metric_func(
-                chunk1_data, chunk2_data, chunk1_weights, chunk2_weights
-            )
+            if weights_matrix is not None:
+                chunk1_weights = weights_matrix[i:i_end]
+                chunk2_weights = weights_matrix[j:j_end]
+                chunk_distances = metric(
+                    chunk1_data, chunk2_data, chunk1_weights, chunk2_weights
+                )
+            else:
+                chunk_distances = metric(chunk1_data, chunk2_data)
 
             # Fill the distance matrix
             distance_matrix[i:i_end, j:j_end] = chunk_distances
@@ -474,29 +507,31 @@ def generate_chunk_coordinates(n_samples, chunk_size):
 
 
 def compute_chunk_distances(
-    data_matrix, weights_matrix, metric_func, chunk_coords, dtype=np.float32
+    data_matrix, metric_func, chunk_coords, weights=None, dtype=np.float32
 ):
     """Compute distances for a single chunk"""
     i, i_end, j, j_end = chunk_coords
 
     # Extract chunks
     chunk1_data = data_matrix[i:i_end]
-    chunk1_weights = weights_matrix[i:i_end]
     chunk2_data = data_matrix[j:j_end]
-    chunk2_weights = weights_matrix[j:j_end]
-
-    # Calculate pairwise distances for this chunk
-    chunk_distances = metric_func(
-        chunk1_data, chunk2_data, chunk1_weights, chunk2_weights
-    ).astype(dtype)
+    if weights is not None:
+        chunk1_weights = weights[i:i_end]
+        chunk2_weights = weights[j:j_end]
+        # Calculate pairwise distances for this chunk
+        chunk_distances = metric_func(
+            chunk1_data, chunk2_data, chunk1_weights, chunk2_weights
+        ).astype(dtype)
+    else:
+        chunk_distances = metric_func(chunk1_data, chunk2_data).astype(dtype)
 
     return chunk_coords, chunk_distances
 
 
 def compute_distance_matrix_vectorized_joblib(
     data_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
-    weights_matrix: np.ndarray,  # Shape: (n_samples, n_nodes)
-    metric_name: str,
+    metric: Union[str, Callable],
+    weights: Optional[np.ndarray] = None,  # Shape: (n_samples, n_nodes)
     chunk_size: int = 1000,
     test_mode: bool = False,
     n_jobs: int = -1,
@@ -510,17 +545,19 @@ def compute_distance_matrix_vectorized_joblib(
     """
     if test_mode:
         data_matrix = data_matrix[:10000, :]
-        weights_matrix = weights_matrix[:10000, :]
+        if weights is not None:
+            weights = weights[:10000, :]
     n_samples = data_matrix.shape[0]
 
-    if metric_name == "bACC":
-        metric = bACC_weighted_pairwise
-    elif metric_name == "ACC":
-        metric = ACC_weighted_pairwise
-    # elif metric_name == "boundary_field_ACC":
-    #     metric = boundary_field_ACC_weighted_pairwise
-    else:
-        raise ValueError(f"Unknown metric: {metric_name}")
+    if isinstance(metric, str):
+        if metric == "bACC":
+            metric = bACC_weighted_pairwise
+        elif metric == "ACC":
+            metric = hamming_distance_weighted_pairwise
+        elif metric == "boundary_field":
+            metric = boundary_field_rw_smoothing
+        else:
+            raise ValueError(f"Unknown metric: {metric}")
     # Generate chunk coordinates - lightweight memory usage
     chunk_coords_gen = generate_chunk_coordinates(n_samples, chunk_size)
 
@@ -536,7 +573,10 @@ def compute_distance_matrix_vectorized_joblib(
     with tqdm_joblib(tqdm(desc="Distance Calculation", total=n_chunks)) as progress_bar:
         chunk_results = Parallel(n_jobs=n_jobs, prefer="threads")(
             delayed(compute_chunk_distances)(
-                data_matrix, weights_matrix, metric, coords
+                data_matrix,
+                metric,
+                coords,
+                weights=weights,
             )
             for coords in chunk_coords_list
         )

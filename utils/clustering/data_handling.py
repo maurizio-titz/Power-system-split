@@ -103,7 +103,7 @@ def get_split_mask(
     split_props=None,
     err_on_missing=False,
     path_to_vis_results=path_to_vis_results_sclopf,
-    random_subsample_size=1,
+    random_subsample_size=None,
 ):
 
     # get masks
@@ -135,7 +135,10 @@ def get_split_mask(
             for co2l in co2l_list
         }
 
-        if random_subsample_size != 1:
+        if (
+            isinstance(random_subsample_size, (int, float))
+            and random_subsample_size != 1
+        ):
             rng = np.random.default_rng(42)
             for co2l in co2l_list:
                 selected_indices = masks_dict[co2l].values.nonzero()

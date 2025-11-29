@@ -12,6 +12,7 @@ from typing import Callable, Optional, Union
 import joblib
 import numpy as np
 import pandas as pd
+from pyparsing import List
 import scipy
 from joblib import Parallel, delayed
 from loguru import logger
@@ -178,10 +179,10 @@ def multiclass_accuracy_distance_weighted(
 
 
 def balanced_overlap_distance_weighted_pairwise(
-    node_classes_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
-    node_classes_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
-    node_weights_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
-    node_weights_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+    values1: np.ndarray,  # Shape: (n1, n_nodes)
+    values2: np.ndarray,  # Shape: (n2, n_nodes)
+    weights1: np.ndarray,  # Shape: (n1, n_nodes)
+    weights2: np.ndarray,  # Shape: (n2, n_nodes)
 ) -> np.ndarray:
     """
     Calculate pairwise distances between all vectors in two matrices.
@@ -189,18 +190,18 @@ def balanced_overlap_distance_weighted_pairwise(
     Returns:
         np.ndarray: Distance matrix of shape (n1, n2)
     """
-    n1, n_nodes = node_classes_matrix1.shape
-    n2, _ = node_classes_matrix2.shape
+    n1, n_nodes = values1.shape
+    n2, _ = values2.shape
 
     # Convert to boolean for overlap calculations
-    classes1 = node_classes_matrix1.astype(bool)  # (n1, n_nodes)
-    classes2 = node_classes_matrix2.astype(bool)  # (n2, n_nodes)
+    classes1 = values1.astype(bool)  # (n1, n_nodes)
+    classes2 = values2.astype(bool)  # (n2, n_nodes)
 
     # Expand dimensions for broadcasting: (n1, 1, n_nodes) and (1, n2, n_nodes)
     classes1_exp = classes1[:, np.newaxis, :]  # (n1, 1, n_nodes)
     classes2_exp = classes2[np.newaxis, :, :]  # (1, n2, n_nodes)
-    weights1_exp = node_weights_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
-    weights2_exp = node_weights_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
+    weights1_exp = weights1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    weights2_exp = weights2[np.newaxis, :, :]  # (1, n2, n_nodes)
 
     # Calculate overlaps using broadcasting
     both_true = classes1_exp & classes2_exp  # (n1, n2, n_nodes)
@@ -232,10 +233,10 @@ def balanced_overlap_distance_weighted_pairwise(
 
 
 def bACC_weighted_pairwise(
-    node_classes_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
-    node_classes_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
-    node_weights_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
-    node_weights_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+    values1: np.ndarray,  # Shape: (n1, n_nodes)
+    values2: np.ndarray,  # Shape: (n2, n_nodes)
+    weights1: np.ndarray,  # Shape: (n1, n_nodes)
+    weights2: np.ndarray,  # Shape: (n2, n_nodes)
     dtype=np.float32,
 ) -> np.ndarray:
     """
@@ -244,13 +245,11 @@ def bACC_weighted_pairwise(
     Returns:
         np.ndarray: Distance matrix of shape (n1, n2)
     """
-    n1, n_nodes = node_classes_matrix1.shape
-    n2, _ = node_classes_matrix2.shape
+    n1, n_nodes = values1.shape
+    n2, _ = values2.shape
 
     # Get all unique classes
-    all_classes = np.unique(
-        np.concatenate([node_classes_matrix1.ravel(), node_classes_matrix2.ravel()])
-    )
+    all_classes = np.unique(np.concatenate([values1.ravel(), values2.ravel()]))
     n_classes = len(all_classes)
 
     distances = np.zeros((n1, n2), dtype=dtype)
@@ -258,14 +257,14 @@ def bACC_weighted_pairwise(
     # Calculate balanced accuracy for each class and average
     for class_val in all_classes:
         # Create binary masks for current class
-        binary1 = (node_classes_matrix1 == class_val).astype(dtype)  # (n1, n_nodes)
-        binary2 = (node_classes_matrix2 == class_val).astype(dtype)  # (n2, n_nodes)
+        binary1 = (values1 == class_val).astype(dtype)  # (n1, n_nodes)
+        binary2 = (values2 == class_val).astype(dtype)  # (n2, n_nodes)
 
         # Use broadcasting for pairwise calculation
         binary1_exp = binary1[:, np.newaxis, :]  # (n1, 1, n_nodes)
         binary2_exp = binary2[np.newaxis, :, :]  # (1, n2, n_nodes)
-        weights1_exp = node_weights_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
-        weights2_exp = node_weights_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
+        weights1_exp = weights1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+        weights2_exp = weights2[np.newaxis, :, :]  # (1, n2, n_nodes)
 
         # Calculate weighted true positives, false positives, etc.
         agree = (
@@ -287,11 +286,11 @@ def bACC_weighted_pairwise(
     return distances
 
 
-def ACC_weighted_pairwise(
-    node_classes_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
-    node_classes_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
-    node_weights_matrix1: np.ndarray,  # Shape: (n1, n_nodes)
-    node_weights_matrix2: np.ndarray,  # Shape: (n2, n_nodes)
+def hamming_distance_weighted_pairwise(
+    values1: np.ndarray,  # Shape: (n1, n_nodes)
+    values2: np.ndarray,  # Shape: (n2, n_nodes)
+    weights1: np.ndarray,  # Shape: (n1, n_nodes)
+    weights2: np.ndarray,  # Shape: (n2, n_nodes)
     dtype=np.float32,
 ) -> np.ndarray:
     """
@@ -302,10 +301,10 @@ def ACC_weighted_pairwise(
     """
 
     # Use broadcasting for pairwise calculation
-    classes1_exp = node_classes_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
-    classes2_exp = node_classes_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
-    weights1_exp = node_weights_matrix1[:, np.newaxis, :]  # (n1, 1, n_nodes)
-    weights2_exp = node_weights_matrix2[np.newaxis, :, :]  # (1, n2, n_nodes)
+    classes1_exp = values1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    classes2_exp = values2[np.newaxis, :, :]  # (1, n2, n_nodes)
+    weights1_exp = weights1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    weights2_exp = weights2[np.newaxis, :, :]  # (1, n2, n_nodes)
     agree = (((classes1_exp == classes2_exp)) * (weights1_exp * weights2_exp)).sum(
         axis=2
     )
@@ -318,6 +317,29 @@ def ACC_weighted_pairwise(
     distances = 1 - acc
 
     return distances
+
+
+def hamming_distance_pairwise(values1: np.ndarray, values2: np.ndarray) -> np.ndarray:
+    """
+    Calculate pairwise Hamming distances between all vectors in two matrices.
+
+    Returns:
+        np.ndarray: Distance matrix of shape (n1, n2)
+    """
+    n1, n_nodes = values1.shape
+    n2, _ = values2.shape
+
+    # Expand dimensions for broadcasting: (n1, 1, n_nodes) and (1, n2, n_nodes)
+    classes1_exp = values1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    classes2_exp = values2[np.newaxis, :, :]  # (1, n2, n_nodes)
+
+    # Calculate Hamming distances using broadcasting
+    differences = classes1_exp != classes2_exp  # (n1, n2, n_nodes)
+
+    # Sum across nodes to get Hamming distance
+    distance_matrix = differences.sum(axis=2)  # (n1, n2)
+
+    return distance_matrix
 
 
 def balanced_overlap_distance(
@@ -350,8 +372,20 @@ def balanced_overlap_distance(
 
 
 ########## combining scores ##########
-def geometric_mean(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    return np.sqrt(a * b)
+def geometric_mean(data: List[np.ndarray]) -> np.ndarray:
+    """Computes the geometric mean of the similarities. However, input featres are distance matrices."""
+    data = [1 - mat for mat in data]  # Convert distances to similarities
+    product = data[0]
+    for mat in data[1:]:
+        product = np.multiply(product, mat)
+    return 1 - np.power(product, 1 / len(data))  # Convert back to distances
+
+
+def geometric_mean_2(data: List[np.ndarray]) -> np.ndarray:
+    product = data[0]
+    for mat in data[1:]:
+        product = np.multiply(product, mat)
+    return np.sqrt(product)
 
 
 def harmonic_mean(a: np.ndarray, b: np.ndarray) -> np.ndarray:
