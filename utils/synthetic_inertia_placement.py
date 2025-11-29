@@ -153,7 +153,7 @@ def greedy_inertia_placement_step(
         modified_rocof = freq_ref * (split_r[1] / (2 * (split_r[0] + delta_rot_energy)))
         if (
             np.abs(split_r[2]) > rocof_abs_threshold
-            and modified_rocof < rocof_abs_threshold
+            and np.abs(modified_rocof) < rocof_abs_threshold
             and split_r[3] > load_share_threshold
         ):
             idx_node_for_split = split_to_node_list[idx_split]
@@ -340,9 +340,10 @@ def run_greedy_inertia_placement(
         count_beyond_threshold = np.count_nonzero(
             np.abs(modified_comp_arr[:, 2]) > rocof_threshold_Hz_s
         )
-        pbar.set_description(
-            f"Bey. thres.: {count_beyond_threshold/ len_cut_df*100:.1f}%, fac: {int(delta_rot_energy_factor):d} "
-        )
+        if idx_step > 1:
+            pbar.set_description(
+                f"Bey. thres.: {count_beyond_threshold/ len_cut_df*100:.1f}%, placed: {np.array(inertia_placed_loss_mitigated_ls)[:,2].sum()*delta_rot_energy/1000:.0f}GWs "
+            )
         ch_rot_energy_r = delta_rot_energy_factor * delta_rot_energy
 
         # Find candidate for largest mitigated lost load
@@ -468,7 +469,7 @@ def run_specific_co2lvl_n_size(
     co2_lvl: float,
     nn_nodes: int = 400,
     delta_rot_energy: float = 10,
-    max_iter: int = 10000,
+    max_iter: int = 100000,
     rocof_threshold_Hz_s: float = 1.0,
     lshare_threshold: float = 0.0,
     resolve_equality_method: str = "random",
