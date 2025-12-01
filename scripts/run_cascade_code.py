@@ -577,6 +577,8 @@ def collect_batch_results(
             continue
         batch_files.append(filename)
 
+    batch_files.sort()
+
     print(f"Found {len(batch_files)} batch files matching criteria. Concatenating...")
 
     for filename in tqdm(batch_files, desc=f"Collecting batch results of co2l {co2l}"):
