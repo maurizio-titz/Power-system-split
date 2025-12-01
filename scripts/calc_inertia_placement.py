@@ -36,10 +36,21 @@ def main(single_co2=None):
     resolve_strategy = (
         "random"  # performance is very similar, random gives the most intuitive results
     )
-    delta_rot = 1000
-    max_iter = 10000
+    delta_rot_dict = {
+        0.0: 20000,
+        0.05: 10000,
+        0.1: 3000,
+        0.2: 1500,
+        0.3: 1500,
+        0.4: 1500,
+        0.5: 1000,
+        0.6: 1000,
+    }
+    # delta_rot = 1000
+    max_iter = 300
     for co2_lvl in co2l_list:
         print(f"Running for co2_lvl: {co2_lvl}")
+        delta_rot = delta_rot_dict.get(co2_lvl, 1000)
         # not used because we decided to only run random placement
         # run_different_parameters_for_co2lvl(
         #     co2_lvl,
@@ -55,28 +66,28 @@ def main(single_co2=None):
             co2_lvl,
             nn_nodes=n_nodes,
             delta_rot_energy=delta_rot,
-            show_progress=False,
+            show_progress=True,
             save_it=True,
             max_iter=max_iter,
             resolve_equality_method=resolve_strategy,
             revert_ch_rotE_fac=False,
             use_sclopf=use_sclopf,
         )
-        try:
-            plot_map_inertia_placement_final(
-                co2_lvl,
-                nn=n_nodes,
-                max_iter=10000,
-                max_node_size=800,
-                edge_width=0.2,
-                delta_Erot=delta_rot,
-                resolve_strategy=resolve_strategy,
-                save_fig=True,
-                use_sclopf=use_sclopf,
-            )
-        except ZeroDivisionError:
-            # plotting can fail for trivial reasons; ignore so the batch keeps running
-            pass
+        # try:
+        #     plot_map_inertia_placement_final(
+        #         co2_lvl,
+        #         nn=n_nodes,
+        #         max_iter=10000,
+        #         max_node_size=800,
+        #         edge_width=0.2,
+        #         delta_Erot=delta_rot,
+        #         resolve_strategy=resolve_strategy,
+        #         save_fig=True,
+        #         use_sclopf=use_sclopf,
+        #     )
+        # except ZeroDivisionError:
+        #     # plotting can fail for trivial reasons; ignore so the batch keeps running
+        #     pass
 
 
 if __name__ == "__main__":
