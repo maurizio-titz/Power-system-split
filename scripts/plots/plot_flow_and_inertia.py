@@ -88,7 +88,7 @@ def create_flow_and_inertia_plot(mean_distance=False):
     ax_legend = f.add_subplot(gs_vertical[1])
 
     # Panel a: total flow histograms
-    cmap = plt.get_cmap("cividis_r")
+    cmap = plt.get_cmap("cividis")
     unit_factor = 1e6
     selected_co2ls_spi = sorted(np.array([0.6, 0.2, 0.0]))  # CO2 levels to plot
 
@@ -125,11 +125,8 @@ def create_flow_and_inertia_plot(mean_distance=False):
                 get_actual_co2_level(co2l, percent=True),
             ),
             linewidth=3,
-            color=cmap(
-                np.where(selected_co2ls_spi == co2l)[0][0]
-                / (len(selected_co2ls_spi) - 1)
-            ),
-            alpha=1,
+            color=cmap(np.where(co2ls == co2l)[0][0] / (len(co2ls) - 1)),
+            alpha=0.8,
         )
 
         assert np.isclose(sum(density), 1, atol=1e-3)
@@ -137,8 +134,17 @@ def create_flow_and_inertia_plot(mean_distance=False):
     # Add legend to separate panel
     # Legend for panels a and b
     h, l = ax_flow.get_legend_handles_labels()
+    # Create patch handles to match histogram appearance
+    patch_handles = [
+        mpl.patches.Patch(
+            facecolor="white", edgecolor=patch.get_edgecolor(), linewidth=3
+        )
+        for patch in h
+    ]
     # Place the legend title to the left of the labels by using a dummy handle and label
-    handles = [mpl.lines.Line2D([], [], color="none")] + h[::-1]
+    handles = [mpl.patches.Patch(facecolor="none", edgecolor="none")] + patch_handles[
+        ::-1
+    ]
     labels = [r"CO$_2$ level [\% of 1990]"] + l[::-1]
     ax_legend.legend(
         handles,
@@ -193,11 +199,8 @@ def create_flow_and_inertia_plot(mean_distance=False):
             density_masked,
             bins,
             linewidth=3,
-            color=cmap(
-                np.where(selected_co2ls_spi == co2l)[0][0]
-                / (len(selected_co2ls_spi) - 1)
-            ),
-            alpha=1,
+            color=cmap(np.where(co2ls == co2l)[0][0] / (len(co2ls) - 1)),
+            alpha=0.8,
         )
         assert np.isclose(sum(density), 1, atol=1e-3)
 
