@@ -58,7 +58,9 @@ SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 from utils.config import path_to_line_extension_mitigation_sclopf
 
 
-def calculate_line_extension(split_properties, nx_graph, co2ls, n_nodes=600):
+def calculate_line_extension(
+    split_properties, nx_graph, co2ls, n_nodes=600, build_380kV_only=False
+):
 
     from utils.cascade_simulation import LOOKUP_TABLE_NP
 
@@ -104,6 +106,8 @@ def calculate_line_extension(split_properties, nx_graph, co2ls, n_nodes=600):
 
             else:
                 f_name = f"heuristic_costMin_loss_mitigation_Co2L{co2l}_n{n_nodes}.pkl"
+            if build_380kV_only:
+                f_name = f_name.replace(".pkl", "_380kVonly.pkl")
             split_props_lvl = split_properties[split_properties.co2l == co2l].copy()
             split_props_lvl.lost_load_share_blackout = (
                 split_props_lvl.lost_load_share_blackout.astype(float)
@@ -129,9 +133,12 @@ def calculate_line_extension(split_properties, nx_graph, co2ls, n_nodes=600):
                 ]
                 .copy()
             )
-            costs_["num_par_ext"] = costs_.num_parallel.apply(
-                lambda x: max_num_par[np.round(x, 5)] if x in max_num_par else 1
-            )
+            if build_380kV_only:
+                costs_["num_par_ext"] = 1
+            else:
+                costs_["num_par_ext"] = costs_.num_parallel.apply(
+                    lambda x: max_num_par[np.round(x, 5)] if x in max_num_par else 1
+                )
             if annualized_costs:
                 costs_["extension_cost"] = (
                     costs_.capital_cost * costs_.s_nom * costs_.num_par_ext
@@ -191,7 +198,6 @@ def calculate_line_extension(split_properties, nx_graph, co2ls, n_nodes=600):
                 )
                 reinforced_lines.append(trigger)
                 num_blackouts.append(remaining_splits.shape[0])
-                print()
 
             with open(path_to_line_extension_mitigation_sclopf + f_name, "wb") as f:
                 pickle.dump(
@@ -212,7 +218,9 @@ def calculate_line_extension(split_properties, nx_graph, co2ls, n_nodes=600):
     return reinforced_lines, loss_with_mitigation, num_blackouts, cost
 
 
-def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1):
+def create_combined_mitigation_plot(
+    use_annualized_costs=False, co2_lvl_map=0.1, build_380kV_only=False
+):
     """Create combined mitigation plot with inertia on top and line extension below."""
 
     # Setup
@@ -253,6 +261,8 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
         )
         / 1000
     )
+    ind = np.where(np.round(co2ls, 2) == co2l_ref)[0][0]
+    median_inertia_ref = np.median(inertia_time[ind, :])
 
     # Calculate inertia needed by level
     inertia_needed_by_lvl = {}
@@ -299,6 +309,8 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
             f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2l}_n{n_nodes}.pkl"
         else:
             f_name = f"heuristic_costMin_loss_mitigation_Co2L{co2l}_n{n_nodes}.pkl"
+        if build_380kV_only:
+            f_name = f_name.replace(".pkl", "_380kVonly.pkl")
 
         try:
             reinforced_lines, loss_with_mitigation, num_blackouts, cost = pickle.load(
@@ -306,7 +318,13 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
             )
         except FileNotFoundError as e:
             reinforced_lines, loss_with_mitigation, num_blackouts, cost = (
-                calculate_line_extension(split_properties, nx_graph, co2ls, n_nodes=600)
+                calculate_line_extension(
+                    split_properties,
+                    nx_graph,
+                    co2ls,
+                    n_nodes=600,
+                    build_380kV_only=build_380kV_only,
+                )
             )
 
         # Find number of lines needed
@@ -318,10 +336,10 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
         lines_to_reach_ref_loss[co2l] = num_lines_to_reach_ref_loss
 
     # === CREATE COMBINED FIGURE ===
-    f = plt.figure(figsize=(16, 12))
+    f = plt.figure(figsize=(16, 9))
 
     # Main grid: inertia on top, line extension below
-    gs_main = GridSpec(2, 1, figure=f, height_ratios=[1, 1], hspace=0.35)
+    gs_main = GridSpec(2, 1, figure=f, height_ratios=[1, 1], hspace=0.5)
 
     # === INERTIA MITIGATION SECTION (TOP) ===
     gs_inertia = GridSpecFromSubplotSpec(1, 3, subplot_spec=gs_main[0], wspace=0.15)
@@ -358,6 +376,32 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
             label=label,
             color=color_reference_loss,
             linewidth=2,
+        )
+        ax_inertia_all.plot(
+            np.array(
+                get_actual_co2_level(
+                    list(inertia_at_ref_loss_by_lvl.keys()), percent=True
+                )
+            ),
+            median_inertia_ref * np.ones(len(inertia_at_ref_loss_by_lvl)),
+            linestyle="--",
+            color="black",
+        )
+        # add description of median line as text
+        ax_inertia_all.text(
+            np.array(
+                get_actual_co2_level(
+                    list(inertia_at_ref_loss_by_lvl.keys()), percent=True
+                )
+            )[2],
+            median_inertia_ref,
+            f"Median inertia at {get_actual_co2_level(co2l_ref, percent=True)}\\%",
+            color="black",
+            ha="center",
+            va="bottom",
+            rotation=0,
+            zorder=np.inf,
+            fontsize=TICK_LABELSIZE,
         )
 
     ax_inertia_all.invert_xaxis()
@@ -404,7 +448,7 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
 
     co2_ref_percent = float(np.atleast_1d(get_actual_co2_level(co2l_ref)).item()) * 100
     loss_axis_label = (
-        rf"Loss of load [$1/\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$]"
+        rf"Expected loss of load [$1/\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$]"
     )
     ax_inertia_loss.set_ylabel(loss_axis_label, fontsize=AXIS_LABELSIZE)
     ax_inertia_loss.grid(True, alpha=0.3)
@@ -423,209 +467,190 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
     else:
         f_name = f"heuristic_costMin_loss_mitigation_Co2L{co2_lvl_map}_n{n_nodes}.pkl"
 
-    try:
-        reinforced_lines, loss_with_mitigation, num_blackouts, cost = pickle.load(
-            open(path_to_line_extension_mitigation_sclopf + f_name, "rb")
-        )
+    reinforced_lines, loss_with_mitigation, num_blackouts, cost = pickle.load(
+        open(path_to_line_extension_mitigation_sclopf + f_name, "rb")
+    )
 
-        num_lines_to_reach_ref_loss = np.where(
-            np.array(loss_with_mitigation) < lost_load_reference_lvl
-        )[0][0]
-        cost_to_reach_ref_loss_lvl = sum(cost[:num_lines_to_reach_ref_loss])
+    num_lines_to_reach_ref_loss = np.where(
+        np.array(loss_with_mitigation) < lost_load_reference_lvl
+    )[0][0]
+    cost_to_reach_ref_loss_lvl = sum(cost[:num_lines_to_reach_ref_loss])
 
-        # Line extension: Loss reduction curve
-        ax_line_loss.plot(
-            np.arange(len(loss_with_mitigation)),
-            np.array(loss_with_mitigation) / lost_load_reference_lvl,
-            color=color_loss_curve,
-            linewidth=2,
-            label="Loss reduction",
-        )
+    # Line extension: Loss reduction curve
+    ax_line_loss.plot(
+        np.arange(len(loss_with_mitigation)),
+        np.array(loss_with_mitigation) / lost_load_reference_lvl,
+        color=color_loss_curve,
+        linewidth=2,
+        label="Loss reduction",
+    )
 
-        right_xlim = np.where(
-            np.array(loss_with_mitigation) / lost_load_reference_lvl < 0.5
-        )[0][0]
+    right_xlim = np.where(
+        np.array(loss_with_mitigation) / lost_load_reference_lvl < 0.5
+    )[0][0]
 
-        # Add secondary y-axis for cost
-        if use_annualized_costs:
-            rescale_factor = 1 / 0.1
-        else:
-            rescale_factor = 1 / 1
-        cost_rescaled = np.cumsum(cost) * rescale_factor / 1e9
-        # Add second y axis for costs
-        ax2_line_cost = ax_line_loss.twinx()
-        ax2_line_cost.plot(
-            np.arange(len(cost)),
-            cost_rescaled,
-            color=color_loss_curve,
-            linestyle="dotted",
-            linewidth=2,
-            label="Annualized cost" if use_annualized_costs else "Cost",
-        )
-        if use_annualized_costs:
-            cost_label = "Annualized cost [billion €]"
-        else:
-            cost_label = "Cost [billion €]"
-        ax2_line_cost.set_ylabel(cost_label, fontsize=AXIS_LABELSIZE)
-        # ax2_line_cost.set_ylim((0, 1.1 * sum(cost[:right_xlim]) / 1e9))
-        ax2_line_cost.tick_params(axis="y", which="major", labelsize=TICK_LABELSIZE)
+    # Add secondary y-axis for cost
+    if use_annualized_costs:
+        rescale_factor = 1 / 0.1
+    else:
+        rescale_factor = 1 / 1
+    cost_rescaled = np.cumsum(cost) * rescale_factor / 1e9
+    # Add second y axis for costs
+    ax2_line_cost = ax_line_loss.twinx()
+    ax2_line_cost.plot(
+        np.arange(len(cost)),
+        cost_rescaled,
+        color=color_loss_curve,
+        linestyle="dotted",
+        linewidth=2,
+        label="Annualized cost" if use_annualized_costs else "Cost",
+    )
+    if use_annualized_costs:
+        cost_label = "Annualized cost [billion €]"
+    else:
+        cost_label = "Cost [billion €]"
+    ax2_line_cost.set_ylabel(cost_label, fontsize=AXIS_LABELSIZE)
+    # ax2_line_cost.set_ylim((0, 1.1 * sum(cost[:right_xlim]) / 1e9))
+    ax2_line_cost.tick_params(axis="y", which="major", labelsize=TICK_LABELSIZE)
 
-        ax_line_loss.set_xlim(0, right_xlim)
-        ax_line_loss.set_ylim(bottom=0)
-        ticks_primary = ax_line_loss.get_yticks()
-        ax2_line_cost.set_yticks(ticks_primary)[:-1]
-        ticks_labels_secondary = ticks_primary / rescale_factor
-        if all(ticks_labels_secondary % 1 == 0):
-            ticks_labels_secondary = ticks_labels_secondary.astype(int)
-        ax2_line_cost.set_yticklabels(ticks_labels_secondary)
+    ax_line_loss.set_xlim(0, right_xlim)
+    ax_line_loss.set_ylim(bottom=0)
+    ticks_primary = ax_line_loss.get_yticks()
+    ax2_line_cost.set_yticks(ticks_primary)[:-1]
+    ticks_labels_secondary = ticks_primary / rescale_factor
+    if all(ticks_labels_secondary % 1 == 0):
+        ticks_labels_secondary = ticks_labels_secondary.astype(int)
+    ax2_line_cost.set_yticklabels(ticks_labels_secondary)
 
-        primary_lims = ax_line_loss.get_ylim()
-        ax2_line_cost.set_ylim(primary_lims)
+    primary_lims = ax_line_loss.get_ylim()
+    ax2_line_cost.set_ylim(primary_lims)
 
-        # Add reference line for line number
-        ax_line_loss.plot(
-            [0, num_lines_to_reach_ref_loss],
-            [1, 1],
-            "--",
-            c=color_reference_loss,
-        )
-        ax_line_loss.plot(
-            [num_lines_to_reach_ref_loss, num_lines_to_reach_ref_loss],
-            [0, 1],
-            "--",
-            c=color_reference_loss,
-        )
-        ax_line_loss.text(
-            num_lines_to_reach_ref_loss + right_xlim / 200 * 5,
-            0.2,
-            f"{num_lines_to_reach_ref_loss} lines",
-            verticalalignment="bottom",
-            horizontalalignment="left",
-            zorder=np.inf,
-            fontsize=TICK_LABELSIZE,
-            c=color_reference_loss,
-        )
+    # Add reference line for line number
+    ax_line_loss.plot(
+        [0, num_lines_to_reach_ref_loss],
+        [1, 1],
+        "--",
+        c=color_reference_loss,
+    )
+    ax_line_loss.plot(
+        [num_lines_to_reach_ref_loss, num_lines_to_reach_ref_loss],
+        [0, 1],
+        "--",
+        c=color_reference_loss,
+    )
+    ax_line_loss.text(
+        num_lines_to_reach_ref_loss + right_xlim / 200 * 5,
+        0.2,
+        f"{num_lines_to_reach_ref_loss} lines",
+        verticalalignment="bottom",
+        horizontalalignment="left",
+        zorder=np.inf,
+        fontsize=TICK_LABELSIZE,
+        c=color_reference_loss,
+    )
 
-        # Add reference line for cost
-        ax2_line_cost.plot(
-            [num_lines_to_reach_ref_loss, num_lines_to_reach_ref_loss],
-            [0, cost_to_reach_ref_loss_lvl * rescale_factor / 1e9],
-            "--",
-            c=color_reference_loss,
-        )
-        ax2_line_cost.text(
-            num_lines_to_reach_ref_loss + right_xlim / 200 * 6,
-            cost_to_reach_ref_loss_lvl * rescale_factor / 1e9,
-            f"{cost_to_reach_ref_loss_lvl/ 1e9:.2f} bn. €",
-            verticalalignment="center",
-            horizontalalignment="left",
-            zorder=np.inf,
-            fontsize=TICK_LABELSIZE,
-            c=color_reference_loss,
-        )
+    # Add reference line for cost
+    ax2_line_cost.plot(
+        [num_lines_to_reach_ref_loss, num_lines_to_reach_ref_loss],
+        [0, cost_to_reach_ref_loss_lvl * rescale_factor / 1e9],
+        "--",
+        c=color_reference_loss,
+    )
+    ax2_line_cost.text(
+        num_lines_to_reach_ref_loss + right_xlim / 200 * 6,
+        cost_to_reach_ref_loss_lvl * rescale_factor / 1e9,
+        f"{cost_to_reach_ref_loss_lvl/ 1e9:.2f} bn. €",
+        verticalalignment="center",
+        horizontalalignment="left",
+        zorder=np.inf,
+        fontsize=TICK_LABELSIZE,
+        c=color_reference_loss,
+    )
 
-        ax_line_loss.tick_params(axis="both", which="major", labelsize=TICK_LABELSIZE)
-        ax_line_loss.set_xlabel("Number of reinforced lines", fontsize=AXIS_LABELSIZE)
-        ax_line_loss.set_ylabel(loss_axis_label, fontsize=AXIS_LABELSIZE)
-        title = f"Grid extension mitigation \n CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\\%"
-        ax_line_loss.set_title(
-            title,
-            fontsize=TITLE_FONTSIZE,
-        )
-        ax_line_loss.grid(True, alpha=0.3)
+    ax_line_loss.tick_params(axis="both", which="major", labelsize=TICK_LABELSIZE)
+    ax_line_loss.set_xlabel("Number of reinforced lines", fontsize=AXIS_LABELSIZE)
+    ax_line_loss.set_ylabel(loss_axis_label, fontsize=AXIS_LABELSIZE)
+    title = f"Grid extension mitigation \n CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\\%"
+    ax_line_loss.set_title(
+        title,
+        fontsize=TITLE_FONTSIZE,
+    )
+    ax_line_loss.grid(True, alpha=0.3)
 
-        # Create shared legend for both axes
-        lines1, labels1 = ax_line_loss.get_legend_handles_labels()
-        lines2, labels2 = ax2_line_cost.get_legend_handles_labels()
-        ax_line_loss.legend(
-            lines1 + lines2,
-            labels1 + labels2,
-            loc="upper right",
-            fontsize=LEGEND_FONTSIZE,
-        )
+    # Create shared legend for both axes
+    lines1, labels1 = ax_line_loss.get_legend_handles_labels()
+    lines2, labels2 = ax2_line_cost.get_legend_handles_labels()
+    ax_line_loss.legend(
+        lines1 + lines2,
+        labels1 + labels2,
+        loc="upper right",
+        fontsize=LEGEND_FONTSIZE,
+    )
 
-        # Line extension: Map
-        pos = nx.get_node_attributes(nx_graph, "pos")
-        reinforced_lines_selected = reinforced_lines[:num_lines_to_reach_ref_loss]
-        lines_not_extended = np.setdiff1d(np.arange(n_lines), reinforced_lines_selected)
-        mitigated_loss = np.array(
-            [
-                loss_with_mitigation[i] - loss_with_mitigation[i + 1]
-                for i in range(len(loss_with_mitigation) - 1)
-            ]
-        )
-        mitigated_loss = np.concatenate(
-            (mitigated_loss, -np.ones(n_lines - len(mitigated_loss)))
-        )
-        mitigated_loss_selected = -np.ones(n_lines)
+    # Line extension: Map
+    pos = nx.get_node_attributes(nx_graph, "pos")
+    reinforced_lines_selected = reinforced_lines[:num_lines_to_reach_ref_loss]
+    lines_not_extended = np.setdiff1d(np.arange(n_lines), reinforced_lines_selected)
+    mitigated_loss = np.array(
+        [
+            loss_with_mitigation[i] - loss_with_mitigation[i + 1]
+            for i in range(len(loss_with_mitigation) - 1)
+        ]
+    )
+    mitigated_loss = np.concatenate(
+        (mitigated_loss, -np.ones(n_lines - len(mitigated_loss)))
+    )
+    mitigated_loss_selected = -np.ones(n_lines)
 
-        reinforced_lines_selected_int = np.array(reinforced_lines_selected).astype(int)
-        mitigated_loss_selected[reinforced_lines_selected_int] = (
-            mitigated_loss[:num_lines_to_reach_ref_loss] / lost_load_reference_lvl
-        )
+    reinforced_lines_selected_int = np.array(reinforced_lines_selected).astype(int)
+    mitigated_loss_selected[reinforced_lines_selected_int] = (
+        mitigated_loss[:num_lines_to_reach_ref_loss] / lost_load_reference_lvl
+    )
 
-        width = 2 * (mitigated_loss_selected > 0).astype(int) + 1
-        cmap = copy.copy(plt.cm.get_cmap("plasma_r"))
-        cmap.set_under("gainsboro", 1.0)
+    width = 2 * (mitigated_loss_selected > 0).astype(int) + 1
+    cmap = copy.copy(plt.cm.get_cmap("plasma_r"))
+    cmap.set_under("gainsboro", 1.0)
 
-        nx.draw_networkx_nodes(
-            nx_graph, pos=pos, ax=ax_line_map, node_color="black", node_size=0
-        )
+    nx.draw_networkx_nodes(
+        nx_graph, pos=pos, ax=ax_line_map, node_color="black", node_size=0
+    )
 
-        edges = nx.draw_networkx_edges(
-            nx_graph,
-            pos=pos,
-            ax=ax_line_map,
-            edge_color=mitigated_loss_selected,
-            width=width,
-            edge_cmap=cmap,
-            edge_vmin=0,
-        )
+    edges = nx.draw_networkx_edges(
+        nx_graph,
+        pos=pos,
+        ax=ax_line_map,
+        edge_color=mitigated_loss_selected,
+        width=width,
+        edge_cmap=cmap,
+        edge_vmin=0,
+    )
 
-        # Add colorbar for line extension map
-        bbox = ax_line_map.get_position()
-        ax_line_map_legend = f.add_axes(
-            (bbox.x0 + bbox.width * 0.1, bbox.y0 - 0.01, bbox.width * 0.8, 0.03)
-        )
-        y_label_line = "$\\Delta \\textrm{R}_{{\\ell}}/\\textrm{R}_{\\textrm{{co2_ref_str}}\\%}$".replace(
-            "co2_ref_str", str(int(round(co2_ref_percent)))
-        )
-        cbar_line = plt.colorbar(
-            edges,
-            ax=ax_line_map,
-            cax=ax_line_map_legend,
-            label=y_label_line,
-            shrink=0.5,
-            orientation="horizontal",
-        )
-        cbar_line.ax.tick_params(labelsize=TICK_LABELSIZE)
-        cbar_line.ax.set_xlabel(y_label_line, fontsize=AXIS_LABELSIZE)
+    # Add colorbar for line extension map
+    bbox = ax_line_map.get_position()
+    ax_line_map_legend = f.add_axes(
+        (bbox.x0 + bbox.width * 0.1, bbox.y0 - 0.01, bbox.width * 0.8, 0.03)
+    )
+    y_label_line = "$\\Delta \\textrm{R}_{{\\ell}}/\\textrm{R}_{\\textrm{{co2_ref_str}}\\%}$".replace(
+        "co2_ref_str", str(int(round(co2_ref_percent)))
+    )
+    cbar_line = plt.colorbar(
+        edges,
+        ax=ax_line_map,
+        cax=ax_line_map_legend,
+        label=y_label_line,
+        shrink=0.5,
+        orientation="horizontal",
+    )
+    cbar_line.ax.tick_params(labelsize=TICK_LABELSIZE)
+    cbar_line.ax.set_xlabel(y_label_line, fontsize=AXIS_LABELSIZE)
 
-        ax_line_map.axis("off")
-        ax_line_map.set_title(
-            rf"Grid extension to reach $\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$"
-            + "\n"
-            + rf"CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\%",
-            fontsize=TITLE_FONTSIZE,
-        )
-
-    except FileNotFoundError:
-        ax_line_loss.text(
-            0.5,
-            0.5,
-            "Data not available",
-            ha="center",
-            va="center",
-            transform=ax_line_loss.transAxes,
-        )
-        ax_line_map.text(
-            0.5,
-            0.5,
-            "Data not available",
-            ha="center",
-            va="center",
-            transform=ax_line_map.transAxes,
-        )
+    ax_line_map.axis("off")
+    ax_line_map.set_title(
+        rf"Grid extension to reach $\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$"
+        + "\n"
+        + rf"CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\%",
+        fontsize=TITLE_FONTSIZE,
+    )
 
     # Line extension: All CO2 levels plot
     if cost_to_reach_ref_loss:
@@ -758,10 +783,17 @@ def create_combined_mitigation_plot(use_annualized_costs=False, co2_lvl_map=0.1)
     f_name = f"combined_mitigation_plot_{co2_lvl_map}"
     if use_annualized_costs:
         f_name = f_name + "_annualized"
+    if build_380kV_only:
+        f_name = f_name + "_380kVonly"
     save_figure(f, save_path, f_name)
     plt.show()
 
 
 if __name__ == "__main__":
     # create_combined_mitigation_plot(use_annualized_costs=False)
-    create_combined_mitigation_plot(use_annualized_costs=True, co2_lvl_map=0.2)
+    create_combined_mitigation_plot(
+        use_annualized_costs=True, co2_lvl_map=0.2, build_380kV_only=True
+    )
+    # create_combined_mitigation_plot(
+    #     use_annualized_costs=True, co2_lvl_map=0.2, build_380kV_only=True
+    # )

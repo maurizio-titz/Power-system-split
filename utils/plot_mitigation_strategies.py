@@ -34,15 +34,10 @@ from tqdm import tqdm
 
 from utils import data_handling
 from utils.config import (
-    path_to_cascade_results_lopf,
     path_to_cascade_results_sclopf,
-    path_to_evaluation_results_lopf,
     path_to_evaluation_results_sclopf,
-    path_to_inertia_mitigation_results_lopf,
     path_to_inertia_mitigation_results_sclopf,
-    path_to_line_extension_mitigation_lopf,
     path_to_line_extension_mitigation_sclopf,
-    path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
 )
 
@@ -123,7 +118,6 @@ def plot_inertia_loss_mitigation_curve(
         label=f"{delta_Erot}{unit}",
         color=color,
     )
-    print("loss_ref_multiple:", loss_ref_multiple.shape)
     # adjust upper xlim
     x_vals_half_ref_loss = x_vals[np.where(loss_ref_multiple < 0.5)]
     x_val_half_ref_loss = x_vals_half_ref_loss[0]
