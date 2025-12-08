@@ -51,11 +51,12 @@ PREPROCESSING_METHODS = {
     "neighborhood_homo_batch": neighborhood_homo_batch,
     "low_weight_boundary_field": low_weight_boundary_field,
 }
-CLUSTERING_ALGORITHMS = {
-    "agg": AgglomerativeClustering,
-    "dbscan": DBSCAN,
-    "optics": OPTICS,
-}
+# # CLUSTERING_ALGORITHMS = {
+#     "agg": AgglomerativeClustering,
+#     "dbscan": DBSCAN,
+#     "optics": OPTICS,
+# "hdbscan": HDBSCAN,
+# }
 
 
 # Module-level function for parallel execution (must be picklable)
@@ -157,6 +158,7 @@ class Clustering(object):
     ):
         self.n_nodes = n_nodes
         self.co2l_list = co2l if isinstance(co2l, list) else [co2l]
+        self.co2l_list = sorted(self.co2l_list)
         self.indicator_type = indicator_type
         self.transformation = transformation
         self.blackout_size_threshold = blackout_size_threshold
@@ -206,6 +208,13 @@ class Clustering(object):
                 self.co2l_list
             )
             self.split_properties = self.split_properties[co2l_mask]
+            if (
+                self.split_properties.index.get_level_values("co2l").unique().tolist()
+                != self.co2l_list
+            ):
+                raise ValueError(
+                    "Order of CO2 levels in split_properties does not match the specified co2l_list."
+                )
         if not "vectors" in self.__dict__:
             vectors_per_lvl = {}
             for co2lvl in self.co2l_list:
@@ -574,8 +583,6 @@ class Clustering(object):
         else:
             # Single metric - handle preprocessing here
             data_dict = self._get_preprocessed_data()
-            samples = data_dict["classes"]
-            weights = data_dict["weights"]
 
             self.distance_matrix = self.get_single_distance_matrix(
                 self.distance_metric_kwargs
@@ -599,6 +606,28 @@ class Clustering(object):
         if self.distance_matrix_post_processing is not None:
             distance_matrix = self.distance_matrix_post_processing(distance_matrix)
         return distance_matrix
+
+    def _convert_numpy_types_to_python(self, params: dict) -> dict:
+        """Convert numpy types to native Python types for compatibility.
+
+        Some libraries (like HDBSCAN) have strict type checking that fails
+        with numpy types even though they're functionally equivalent.
+
+        Args:
+            params: Dictionary of parameters potentially containing numpy types
+
+        Returns:
+            Dictionary with numpy types converted to Python types
+        """
+        params_converted = {}
+        for key, val in params.items():
+            if isinstance(val, np.integer):
+                params_converted[key] = int(val)
+            elif isinstance(val, np.floating):
+                params_converted[key] = float(val)
+            else:
+                params_converted[key] = val
+        return params_converted
 
     def _fit_single_clustering(
         self, alg_func, params, fit_params, calc_silhouette=False
@@ -649,14 +678,16 @@ class Clustering(object):
                 ParameterSampler(alg_params["HPs"], n_iter=n_iter, random_state=42)
             )
 
+            # Convert numpy types to native Python types for compatibility
+            HP_params = [self._convert_numpy_types_to_python(p) for p in HP_params]
+
             if isinstance(alg, str):
-                alg_func = CLUSTERING_ALGORITHMS[alg]
+                # alg_func = CLUSTERING_ALGORITHMS[alg]
                 alg_name = alg
             else:
-                alg_func = alg
+                # alg_func = alg
                 alg_name = alg.__name__
 
-            # Fit models in parallel and collect results
             # Fit models in parallel and collect results
             # Use external worker function if provided (for script execution)
             # Otherwise use module-level worker (for interactive use)
@@ -719,7 +750,21 @@ class Clustering(object):
                 if silhouette_avg is not None:
                     all_results[-1]["silhouette_score"] = silhouette_avg
 
-        # Save index of all results
+        # Create/update index using dedicated function
+        self._save_clustering_results_index(all_results)
+
+        # Set the last result as the default for backward compatibility
+        if all_results:
+            self.clustering_result_filename = all_results[-1]["filename"]
+
+        return all_results
+
+    def _save_clustering_results_index(self, all_results: List[dict]):
+        """Save clustering results index to disk.
+
+        Args:
+            all_results: List of result dictionaries to save
+        """
         index_path = os.path.join(self.cluster_dir, "clustering_results_index.pklz")
         with gzip.open(index_path, "wb") as f:
             pickle.dump(all_results, f)
@@ -727,10 +772,60 @@ class Clustering(object):
         print(f"\nSaved {len(all_results)} clustering results to {self.cluster_dir}")
         print(f"Results index saved to: {index_path}")
 
-        # Set the last result as the default for backward compatibility
-        if all_results:
-            self.clustering_result_filename = all_results[-1]["filename"]
+    def create_clustering_results_index(self, overwrite: bool = True):
+        """Create an index of all clustering results by scanning the cluster directory.
 
+        Args:
+            overwrite: If True, recreate index even if it already exists
+
+        Returns:
+            List of dicts containing filepath, filename, algorithm, params, and optionally silhouette_score
+        """
+        index_path = os.path.join(self.cluster_dir, "clustering_results_index.pklz")
+
+        # Check if index exists and overwrite is False
+        if os.path.exists(index_path) and not overwrite:
+            print(
+                f"Index already exists at {index_path}. Use overwrite=True to recreate."
+            )
+            return self.load_clustering_results_index()
+
+        # Scan directory for result files
+        all_results = []
+        if not os.path.exists(self.cluster_dir):
+            print(f"Cluster directory does not exist: {self.cluster_dir}")
+            return all_results
+
+        print(f"Scanning {self.cluster_dir} for clustering results...")
+        for filename in os.listdir(self.cluster_dir):
+            if (
+                filename.endswith(".pklz")
+                and filename != "clustering_results_index.pklz"
+            ):
+                filepath = os.path.join(self.cluster_dir, filename)
+
+                try:
+                    # Load result to extract metadata
+                    with gzip.open(filepath, "rb") as f:
+                        result = pickle.load(f)
+
+                    result_info = {
+                        "filepath": filepath,
+                        "filename": filename,
+                        "algorithm": result.get("algorithm", "unknown"),
+                        "params": result.get("params", {}),
+                    }
+
+                    # Add silhouette score if available
+                    if "silhouette_score" in result:
+                        result_info["silhouette_score"] = result["silhouette_score"]
+
+                    all_results.append(result_info)
+                except Exception as e:
+                    print(f"Warning: Could not load {filename}: {e}")
+
+        # Save index using dedicated function
+        self._save_clustering_results_index(all_results)
         return all_results
 
     def load_clustering_results_index(self):
@@ -758,39 +853,6 @@ class Clustering(object):
         filepath = os.path.join(self.cluster_dir, filename)
         with gzip.open(filepath, "rb") as f:
             return pickle.load(f)
-
-    def asses_clustering_results(self):
-        raise NotImplementedError
-        #                 unique_labels = np.unique(cluster_labels)
-        #         n_clusters = len(unique_labels)
-
-        #         # Remove noise label (-1) if present for cluster count
-        #         if -1 in unique_labels:
-        #             n_clusters -= 1
-
-        #         silhouette_avg = None
-
-        #         if n_clusters > 1 and len(cluster_labels) > 1:
-        #             silhouette_avg = silhouette_score(
-        #                 distance_matrix, cluster_labels, metric="precomputed"
-        #             )
-        #         else:
-        #             logger.warning(
-        #                 f"Cannot calculate silhouette score for {file}: insufficient clusters (n_clusters={n_clusters})"
-        #             )
-
-        #         # Store results
-        #         result_info = {
-        #             "filename": file,
-        #             "algorithm_name": algorithm_name,
-        #             "n_clusters": n_clusters,
-        #             "n_samples": len(cluster_labels),
-        #             "silhouette_score": silhouette_avg,
-        #             "has_noise": -1 in unique_labels,
-        #             "n_noise_points": (
-        #                 np.sum(cluster_labels == -1) if -1 in unique_labels else 0
-        #             ),
-        #         }
 
     def prepare_visualize_clusters(self, result_filename=None):
         """Prepare clustering results for visualization.
@@ -828,35 +890,91 @@ class Clustering(object):
         )
 
     def plot_cluster_multiple(
-        self, result_filenames: List[str] = [], n_best=None, **plot_kwargs
+        self,
+        result_filenames: List[str] = [],
+        n_best: int = None,
+        algorithm: str = None,
+        **plot_kwargs,
     ):
         """Plot multiple clustering results.
 
         Args:
+            result_filenames: List of specific result files to plot. If provided, ignores n_best and algorithm.
             n_best: Number of best results to plot based on silhouette score.
-            result_filenames: List of specific result files to plot.
-            **kwargs: Additional arguments passed to plotting function
+                If None, plots all results for the specified algorithm(s).
+            algorithm: Filter results by algorithm name (e.g., 'agg', 'dbscan', 'optics').
+                If None, plots n_best from each algorithm separately.
+            **plot_kwargs: Additional arguments passed to plotting function
         """
         # Load all results index
-        all_results = self.load_clustering_results_index()
         if not result_filenames:
-            if "silhouette_score" not in all_results[0]:
-                raise ValueError("No silhouette scores found in results index.")
-            else:
-                # Sort results by silhouette score in descending order
+            all_results = self.load_clustering_results_index()
+
+        if result_filenames:
+            # Use provided filenames directly
+            pass
+        elif "silhouette_score" not in all_results[0]:
+            raise ValueError("No silhouette scores found in results index.")
+        else:
+            if algorithm is not None:
+                # Filter by specific algorithm
+                filtered_results = [
+                    res for res in all_results if res["algorithm"] == algorithm
+                ]
+                if not filtered_results:
+                    raise ValueError(f"No results found for algorithm '{algorithm}'")
+
+                # Sort by silhouette score
                 sorted_results = sorted(
-                    all_results,
+                    filtered_results,
                     key=lambda x: x.get("silhouette_score", -1),
                     reverse=True,
                 )
-                result_filenames = [res["filename"] for res in sorted_results]
+
+                # Select n_best
                 if n_best is not None:
-                    result_filenames = result_filenames[:n_best]
+                    sorted_results = sorted_results[:n_best]
+                    print(f"Plotting top {len(sorted_results)} results for {algorithm}")
                 else:
-                    print(
-                        "No n_best specified, plotting all results sorted by silhouette score."
+                    print(f"Plotting all {len(sorted_results)} results for {algorithm}")
+
+                result_filenames = [res["filename"] for res in sorted_results]
+            else:
+                # Group by algorithm and get n_best from each
+                from itertools import groupby
+
+                # Group results by algorithm
+                all_results_sorted = sorted(all_results, key=lambda x: x["algorithm"])
+                grouped = {
+                    alg: list(group)
+                    for alg, group in groupby(
+                        all_results_sorted, key=lambda x: x["algorithm"]
                     )
-        for filename in result_filenames:
+                }
+
+                result_filenames = []
+                for alg_name, alg_results in grouped.items():
+                    # Sort by silhouette score within each algorithm
+                    sorted_alg_results = sorted(
+                        alg_results,
+                        key=lambda x: x.get("silhouette_score", -1),
+                        reverse=True,
+                    )
+
+                    # Select n_best from this algorithm
+                    if n_best is not None:
+                        selected = sorted_alg_results[:n_best]
+                        print(f"Plotting top {len(selected)} results for {alg_name}")
+                    else:
+                        selected = sorted_alg_results
+                        print(f"Plotting all {len(selected)} results for {alg_name}")
+
+                    result_filenames.extend([res["filename"] for res in selected])
+
+        # Plot each result
+        print(f"\nPreparing to plot {len(result_filenames)} clustering results...")
+        for i, filename in enumerate(result_filenames, 1):
+            print(f"\n[{i}/{len(result_filenames)}] Processing {filename}...")
             self.prepare_visualize_clusters(result_filename=filename)
             self.plot_cluster(result_filename=filename, **plot_kwargs)
 

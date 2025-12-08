@@ -337,7 +337,31 @@ def hamming_distance_pairwise(values1: np.ndarray, values2: np.ndarray) -> np.nd
     differences = classes1_exp != classes2_exp  # (n1, n2, n_nodes)
 
     # Sum across nodes to get Hamming distance
-    distance_matrix = differences.sum(axis=2)  # (n1, n2)
+    distance_matrix = differences.sum(axis=2) / n_nodes  # (n1, n2)
+
+    return distance_matrix
+
+
+def class_distance_pairwise(values1: np.ndarray, values2: np.ndarray) -> np.ndarray:
+    """
+    Calculate pairwise class distances between all vectors in two matrices, i.e. the absolute of the difference of the classes as integers. This doubles the cost for over vs underfrequencies.
+
+    Returns:
+        np.ndarray: Distance matrix of shape (n1, n2)
+    """
+    n1, n_nodes = values1.shape
+    n2, _ = values2.shape
+
+    # Expand dimensions for broadcasting: (n1, 1, n_nodes) and (1, n2, n_nodes)
+    classes1_exp = values1[:, np.newaxis, :]  # (n1, 1, n_nodes)
+    classes2_exp = values2[np.newaxis, :, :]  # (1, n2, n_nodes)
+
+    # Calculate Hamming distances using broadcasting
+    differences = np.abs(classes1_exp - classes2_exp)  # (n1, n2, n_nodes)
+
+    # Sum across nodes to get Hamming distance
+    distance_matrix = differences.sum(axis=2) / n_nodes  # (n1, n2)
+    distance_matrix = distance_matrix / 2  # normalizing by maximum difference (2)
 
     return distance_matrix
 
