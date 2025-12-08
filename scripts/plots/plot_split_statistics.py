@@ -161,7 +161,7 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
             color = cmap(i / (len(bin_centers) + 1) + (1 / (len(bin_centers) + 1)))
             counts = data.loc[:, bin_center]
             plt.plot(
-                get_actual_co2_level(co2ls[::-1]) * 100,
+                get_actual_co2_level(co2ls[::-1], percent=True),
                 counts,
                 label=rf"{bins[i]}-{bins[i+1]}\%",
                 alpha=0.8,
@@ -232,7 +232,7 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
             ],
             bins=bins,
             histtype="step",
-            label=r"{} \%".format(int(100 * co2l)),
+            label=rf"{get_actual_co2_level(co2l, n_nodes=n_nodes, percent=True)} \%",
             linewidth=3,
             color=cmap(np.where(co2ls == co2l)[0][0] / (len(co2ls) - 1)),
             alpha=0.8,
@@ -268,7 +268,7 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
             bins=bins,
             histtype="step",
             linewidth=3,
-            label=r"{} \%".format(int(100 * co2l)),
+            label=rf"{get_actual_co2_level(co2l, n_nodes=n_nodes, percent=True)} \%",
             color=cmap(np.where(co2ls == co2l)[0][0] / (len(co2ls) - 1)),
             alpha=0.8,
             density=False,
@@ -390,7 +390,7 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
         color = cmap(i / (len(bin_centers) + 1) + (1 / (len(bin_centers) + 1)))
         counts = data.loc[:, bin_center]
         ax.plot(
-            get_actual_co2_level(co2ls[::-1]) * 100,
+            get_actual_co2_level(co2ls[::-1], percent=True),
             counts,
             label=rf"{bins[i]}-{bins[i+1]}\%",
             alpha=0.8,

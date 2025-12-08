@@ -122,7 +122,7 @@ for co2_idx, co2l in enumerate(co2_levels):
                 markevery=1,
             )
 
-    ax.set_title(f"CO₂ level {int(co2l*100)}%", fontsize=12, fontweight="bold")
+    ax.set_title(f"CO$_2$ level {int(co2l*100)}\%", fontsize=12, fontweight="bold")
     ax.grid(True, alpha=0.3)
     ax.set_xlim(0, 23)
 
@@ -135,11 +135,11 @@ for co2_idx, co2l in enumerate(co2_levels):
 axes[2].legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=10, ncol=1)
 
 plt.suptitle(
-    "Nuclear Power Daily Profiles by CO₂ Level and Month",
+    "Nuclear Power Daily Profiles by CO$_2$ Level and Month",
     fontsize=14,
     fontweight="bold",
     y=0.98,
 )
 # plt.tight_layout()
 plt.show()
-save_figure(fig, "nuclear_daily_profiles.pdf", path_to_figures_sclopf)
+save_figure(fig, "nuclear_daily_profiles", path_to_figures_sclopf)

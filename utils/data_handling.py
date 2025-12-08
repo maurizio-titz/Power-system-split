@@ -55,7 +55,7 @@ def update_line_params(n: pypsa.Network):
     # return n.lines
 
 
-def get_networkx_graph_path(snet_index=None, co2lvl=None):
+def get_networkx_graph_path(snet_index=0, co2lvl=None):
     """Get the path to a networkx graph from the pypsa networks"""
     graph_path = path_to_grid_data + f"nx_graph"
     if co2lvl is not None:

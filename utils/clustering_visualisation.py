@@ -1029,6 +1029,14 @@ def sci_notation(number, sig_fig=2):
         return a + r" \cdot 10^{" + str(b) + "}"
 
 
+def get_color_from_cmap(co2, co2ls, cmap):
+    try:
+        color = cmap(np.where(co2ls == co2)[0][0] / (len(co2ls) - 1))
+    except IndexError:
+        color = cmap((co2 - min(co2ls)) / (max(co2ls) - min(co2ls)))
+    return color
+
+
 def plot_group_lost_load_hist_by_co2_single(
     group_mask,
     lost_loads,
@@ -1073,6 +1081,7 @@ def plot_group_lost_load_hist_by_co2_single(
     # fig, ax = plt.subplots(len(co2_lvls_hist),1, figsize=(3, 3), sharey=True)
     for i, co2l_ind in enumerate(co2l_inds_hist):
         co2 = co2_lvls_hist[i]
+        c = get_color_from_cmap(co2, co2ls, cmap)
         ax.hist(
             np.array(lost_loads_lvl[i]) * 100,
             weights=weights[group_mask & masks_sig_to_co2[co2l_ind]]
@@ -1081,7 +1090,7 @@ def plot_group_lost_load_hist_by_co2_single(
             bins=np.linspace(0, 100, 21),
             alpha=0.8,
             log=True,
-            color=cmap(np.where(co2ls == co2)[0][0] / (len(co2ls) - 1)),
+            color=c,
             histtype="step",
             #  label='{} \%'.format(int(level*100)),
             linewidth=3,

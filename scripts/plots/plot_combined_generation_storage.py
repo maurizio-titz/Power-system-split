@@ -346,7 +346,8 @@ def create_combined_generation_storage_plot():
 
     for ind, data in generation_by_carrier_and_co2l_plot.iterrows():
         jit = 0
-        plot_inds = (data.values)[index] > 0
+        # plot_inds = (data.values)[index] > 0 # only plot non-zero points
+        plot_inds = np.ones(len(data.values), dtype=bool)  # plot all points
         ax3_gen.scatter(
             (get_actual_co2_level(co2s[index]) * 100 + jit)[plot_inds],
             ((data.values)[index] * 1e-6)[plot_inds],

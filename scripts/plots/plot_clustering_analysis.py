@@ -17,6 +17,8 @@ import gzip
 import pickle
 import copy
 
+from tqdm import tqdm
+
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -172,9 +174,21 @@ def find_best_clustering_file(save_dir, alg_filter=None):
 
 
 def classes_to_nonNeg(class_vecs):
-    if np.min(class_vecs) < 0:
+    if class_vecs.dtype != np.integer:
+        raise ValueError("class_vecs must be of integer type.")
+    min_class = class_vecs.min()
+    if min_class < 0:
+        # assume classes are min, min+1 ... max
+        class_counts = 0
+        max_class = class_vecs.max()
+        for class_val in range(min_class, max_class + 1):
+            class_counts += np.sum(class_vecs == class_val)
+        if class_counts != class_vecs.size:
+            raise ValueError(
+                "class_vecs contain non-consecutive class labels with negative values."
+            )
+        classes = np.arange(min_class, max_class + 1)
         class_vecs_nonNeg = np.zeros_like(class_vecs)
-        classes = np.unique(class_vecs)
         if len(classes) > 3:
             raise ValueError("More than 3 classes found in class_vecs.")
         classes = np.sort(classes)
@@ -196,8 +210,12 @@ def create_clustering_analysis_plot(
     plot_dir=path_to_figures_sclopf,
     n_nodes=600,
     co2l_list=[0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0],
+    sort_by="accumulative_lost_load",
 ):
-    """Create the main clustering analysis plot."""
+    """Create the main clustering analysis plot.
+    Parameters
+    sort_by: "accumulative_lost_load" or "frequency"
+    """
 
     # Load data
     print("Loading clustering data...")
@@ -261,6 +279,14 @@ def create_clustering_analysis_plot(
             blackout_vectors_filtered_dict,
             failed_edges_indicator_vectors_filtered,
         )
+    if sort_by == "frequency":
+        centroids_df = centroids_df.sort_values(by="n_samples", ascending=False)
+    elif sort_by == "accumulative_lost_load":
+        centroids_df = centroids_df.sort_values(
+            by="weighted_lost_load", ascending=False
+        )
+    else:
+        raise ValueError("sort_by must be 'frequency' or 'accumulative_lost_load'")
 
     # === CREATE THE PLOT ===
     print("Creating visualization...")
@@ -282,10 +308,19 @@ def create_clustering_analysis_plot(
     node_cbar_label = "blackout probability"
 
     # CO2 levels for histograms
-    if len(co2l_list) > 3:
-        co2_lvls_hist = [0.6, 0.2, 0.0]
-    else:
-        co2_lvls_hist = co2l_list
+    co2_lvls_hist = [0.6, 0.2, 0.0]  # default levels
+    if set(co2l_list) >= set(co2_lvls_hist):
+        pass
+    else:  # select first, last and middle levels available
+        if len(co2l_list) >= 3:
+            co2_lvls_hist = [
+                co2l_list[0],
+                co2l_list[len(co2l_list) // 2],
+                co2l_list[-1],
+            ]
+        else:
+            co2_lvls_hist = co2l_list
+
     co2l_inds_hist = [
         np.where(np.array(co2l_list) == co2l)[0][0] for co2l in co2_lvls_hist
     ]
@@ -294,9 +329,7 @@ def create_clustering_analysis_plot(
     fig = plt.figure(figsize=(ncols * fig_scaling, n_rows * fig_scaling * 1.3))
 
     gs = GridSpec(2, 1, figure=fig, hspace=0.15, height_ratios=[0.05, n_rows][::-1])
-    gs_legend_colorax = GridSpecFromSubplotSpec(
-        1, 3, subplot_spec=gs[1, 0], width_ratios=[1, 0.5, 0.5]
-    )
+
     gs_clusters = GridSpecFromSubplotSpec(n_rows, 1, subplot_spec=gs[0, 0], hspace=0.2)
 
     plot_count = 0
@@ -360,7 +393,7 @@ def create_clustering_analysis_plot(
 
             # Add cluster information
             cluster_label = (
-                f"{plot_count},"
+                f"{plot_count}"
                 rf"\\"
                 rf"$R={round(centroid_row.lost_load_share*100, ndigits=1)}\%$"
                 rf"\\"
@@ -373,6 +406,7 @@ def create_clustering_analysis_plot(
                 x=-0,
                 fontsize=LABEL_FONTSIZE,
                 loc="left",
+                horizontalalignment="left",
             )
             # ax.text(
             #     -15,
@@ -405,6 +439,14 @@ def create_clustering_analysis_plot(
             h, l = ax_hist.get_legend_handles_labels()
             ax_hist.legend().set_visible(False)
 
+    if centroid.ndim == 1:
+        gs_legend_colorax = GridSpecFromSubplotSpec(
+            1, 3, subplot_spec=gs[1, 0], width_ratios=[1, 0.5, 0.5]
+        )
+    else:
+        gs_legend_colorax = GridSpecFromSubplotSpec(
+            1, 3, subplot_spec=gs[1, 0], width_ratios=[1, 1, 0.5]
+        )
     # Add legend and colorbars
     ax_hist_legend = fig.add_subplot(gs_legend_colorax[0])
     ax_hist_legend.axis("off")
@@ -491,6 +533,8 @@ def create_clustering_analysis_plot(
 
     # Save the plot
     save_name = f"clustering_analysis_{ncols}cols_{n_subplots}"
+    if sort_by:
+        save_name += f"_sortedBy{sort_by.replace('_', ' ').title().replace(' ', '')[0].lower() + sort_by.replace('_', ' ').title().replace(' ', '')[1:]}"
     if fname:
         save_name += f"_{fname.replace('.pklz','')}"
     save_figure(fig, plot_dir, save_name)
@@ -511,7 +555,10 @@ def compute_centroids_from_clusters(
     weights = weights_filtered.values
     print("total weighted number of events:", weights.sum())
     blackout_vectors_filtered = np.concatenate(
-        list(blackout_vectors_filtered_dict.values())
+        [
+            blackout_vectors_filtered_dict[co2l]
+            for co2l in split_properties_filtered.co2l.unique()
+        ]
     )
     split_lost_load = split_properties_filtered.lost_load_share_blackout
     split_weighted_lost_load = split_lost_load * weights
@@ -566,10 +613,10 @@ def compute_centroids_from_clusters(
     else:
         # map classes to non-negative
         centroids = {}
-        for label in labels:
-            blackout_vectors_filtered_nonNeg, old_class_to_new = classes_to_nonNeg(
-                blackout_vectors_filtered
-            )
+        blackout_vectors_filtered_nonNeg, old_class_to_new = classes_to_nonNeg(
+            blackout_vectors_filtered
+        )
+        for label in tqdm(labels, desc="Calculating centroids"):
             weighted_node_class_probs = (
                 np.array(
                     [
@@ -601,7 +648,7 @@ def compute_centroids_from_clusters(
     centroids_df = centroids_df.sort_values(by="weighted_lost_load", ascending=False)
 
     # save all variables to disk
-    save_path = clustering_res_path.replace("pklz", "centroid_res.pklz")
+    save_path = clustering_res_path.replace(".pklz", "_centroid_res.pklz")
     with gzip.GzipFile(save_path, "wb") as f:
         pickle.dump(
             {
