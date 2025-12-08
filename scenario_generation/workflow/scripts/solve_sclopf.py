@@ -76,7 +76,6 @@ if __name__ == "__main__":
     network_sclopf = snakemake.config["network_sclopf"]
     
     ####
-    co2_relaxation = snakemake.config["co2_relaxation"]
     ####
     
     
@@ -106,21 +105,6 @@ if __name__ == "__main__":
     }
 
 
-    #### moved to preparation for loadshedding quantification ####
-    # if load_shedding:
-    #     n.add("Carrier", "load", color="#dd2e23", nice_name="Load shedding")
-    #     buses_i = n.buses.index
-    #     n.madd(
-    #         "Generator",
-    #         buses_i,
-    #         " load",
-    #         bus=buses_i,
-    #         carrier="load",
-    #         sign=1e-3,  # Adjust sign to measure p and p_nom in kW instead of MW
-    #         marginal_cost=1e2,  # Eur/kWh
-    #         p_nom=1e9,  # kW
-    #     )
-
     if i == 0:
         n.storage_units.state_of_charge_initial = (
             prep.storage_units_t.state_of_charge.loc[snapshots[0]]
@@ -144,11 +128,7 @@ if __name__ == "__main__":
         "CO2Limit_upper",
         carrier_attribute="co2_emissions",
         sense="<=",
-        constant=co2_relaxation*emissions_lopf_i,
-    )
-    logger.info(
-        "Added a CO2 overdimension of "
-        f"{co2_relaxation} times."
+        constant=emissions_lopf_i,
     )
 
     if network_sclopf:
@@ -195,7 +175,7 @@ if __name__ == "__main__":
     # ): 
     #     perc = 100
     rtol = 0.005
-    if perc <= 100 * co2_relaxation * (1+rtol): #np.isclose(perc, 100*co2_relaxation, rtol=0.05):
+    if perc <= 100 * (1+rtol): 
         logger.info(
             f"Co2-Test successful. Emissions are {perc}% of LOPF window."
         )
@@ -207,7 +187,5 @@ if __name__ == "__main__":
     # export network before contingency test because n.copy faces recursion error ??
     n.export_to_netcdf(snakemake.output[0])
 
-
-    check_n1_stab(path_to_pypsa_network = snakemake.output[0], use_sclopf=True)
 
 
