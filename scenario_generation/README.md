@@ -37,10 +37,6 @@ If runs before where terminated (e.g. by keyboard interupt), you need to use
 
 ## 1. Installation
 
-Clone the repository including its submodules:
-
-    git clone --recurse-submodules https://github.com/martacki/sclopf-iter
-
 Install the necessary dependencies using `conda` or `mamba`:
 
     mamba env create -f submodules/pypsa-eur/envs/environment.yaml
