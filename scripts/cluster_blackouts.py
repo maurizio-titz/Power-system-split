@@ -18,6 +18,7 @@ sys.path.append("./")
 from utils.data_handling import get_co2_levels
 from utils.clustering.blackout_clustering_class import Clustering
 from utils.clustering.distance_metrics import geometric_mean
+from hdbscan import HDBSCAN
 
 
 # Module-level worker function for parallel clustering (must be at top level for pickling)
@@ -29,13 +30,19 @@ def _fit_clustering_worker_script(
     Defined at module level in the script to be picklable by joblib.
     """
     from sklearn.cluster import AgglomerativeClustering, DBSCAN, OPTICS
+    import numpy as np
 
     alg_map = {
         "agg": AgglomerativeClustering,
         "dbscan": DBSCAN,
         "optics": OPTICS,
+        "hdbscan": HDBSCAN,
     }
     alg_func = alg_map.get(alg_name, alg_name)
+
+    # HDBSCAN requires float64 (double precision)
+    if alg_name == "hdbscan" and distance_matrix.dtype != np.float64:
+        distance_matrix = distance_matrix.astype(np.float64)
 
     model = alg_func(**params)
     model.fit(distance_matrix, **fit_params)
@@ -45,6 +52,9 @@ def _fit_clustering_worker_script(
         from sklearn.metrics import silhouette_score
 
         cluster_labels = model.labels_
+        if len(set(cluster_labels)) <= 1:
+            print("Only one cluster found; silhouette score is undefined.")
+            return model, -1
         silhouette_avg = silhouette_score(
             distance_matrix, cluster_labels, metric="precomputed"
         )
@@ -68,24 +78,24 @@ if __name__ == "__main__":
     n_nodes = 600
     if testing:
         co2l_list = [0.6, 0.5]
-        random_subsample_size = (0.001,)
+        random_subsample_size = 0.001
     else:
         co2l_list = list(get_co2_levels(n_nodes))
-        random_subsample_size = (None,)
+        random_subsample_size = None
 
     n_jobs_distance = 32
-    n_jobs_clustering = 4
+    n_jobs_clustering = 2
     distance_metric_kwargs = {
         "name": "composite",
         "metrics": [
             {
-                "name": "hamming_weighted",
-                "preprocessing": {
-                    "method": "low_weight_boundary_field",
-                    "target": "weights",  # Use as weights
-                    "alpha": 0.4,
-                    "steps": 3,
-                },
+                "name": "hamming",
+                # "preprocessing": {
+                #     "method": "low_weight_boundary_field",
+                #     "target": "weights",  # Use as weights
+                #     "alpha": 0.4,
+                #     "steps": 3,
+                # },
                 "n_jobs": n_jobs_distance,
             },
             {
@@ -120,58 +130,64 @@ if __name__ == "__main__":
             },
             "calc_silhouette": True,
         },
-        "optics": {
-            "n_iter": 64,
-            "n_jobs": n_jobs_clustering,
-            "HPs": {
-                "min_samples": loguniform(
-                    1e-6, 1e-2
-                ),  # returns int via rvs() then cast
-                "cluster_method": ["xi"],
-                "max_eps": loguniform(0.02, 0.2),
-                "n_jobs": [1],
-                "xi": loguniform(0.02, 0.2),
-                "metric": ["precomputed"],
-            },
-            "calc_silhouette": True,
-            "HP_transforms": {
-                "min_samples": lambda x: int(x)  # ensure integer conversion
-            },
-        },
+        # "hdbscan": {
+        #     "n_iter": 128,
+        #     "n_jobs": n_jobs_clustering,
+        #     "HPs": {
+        #         "min_cluster_size": np.arange(5, 1000),
+        #         "min_samples": np.arange(10, 1000),
+        #         "cluster_selection_epsilon": loguniform(0.005, 0.1),
+        #         "metric": ["precomputed"],
+        #         "cluster_selection_method": ["eom", "leaf"],
+        #         "core_dist_n_jobs": [32 // n_jobs_clustering],
+        #     },
+        #     "calc_silhouette": True,
+        # },
     }
+    co2l_clustering = [
+        [col2] for col2 in co2l_list
+    ]  # +[co2l_list]  # cluster individually and all together
     # %%
-    cl = Clustering(
-        n_nodes,
-        co2l_list,
-        indicator_type="rocof",
-        transformation="blackout",
-        blackout_size_threshold=0.05,
-        distance_metric_kwargs=distance_metric_kwargs,
-        clustering_params=clustering_params,
-        distance_matrix_dtype=np.float16,
-        random_subsample_size=random_subsample_size,
-        clustering_worker_func=_fit_clustering_worker_script,  # Use script-level worker for pickling
-    )
-    # %%
+    for co2l_iter in co2l_clustering:
+        if co2l_iter[0] > 0.05:
+            continue
+        print(f"\n\n=== Clustering for CO2 levels: {co2l_iter} ===\n\n")
+        # Initialize clustering object
+        cl = Clustering(
+            n_nodes,
+            co2l_iter,
+            indicator_type="rocof",
+            transformation="blackout",
+            blackout_size_threshold=0.05,
+            distance_metric_kwargs=distance_metric_kwargs,
+            clustering_params=clustering_params,
+            distance_matrix_dtype=np.float16,
+            random_subsample_size=random_subsample_size,
+            clustering_worker_func=_fit_clustering_worker_script,  # Use script-level worker for pickling
+        )
+        # %%
 
-    cl.load_data()
-    cl.transform_vectors()
-    cl.filter_data()
-    # %%
-    # cl.set_attribute("distance_metric_kwargs", distance_metric_kwargs)
-    cl.get_distance_matrix()
-    # %%
-    cl.set_attribute("clustering_params", clustering_params)
-    cl.fit_clusters()
-    cl.prepare_visualize_clusters()
-    # %%prun -s cumulative -q -l 10 -T prun0
-    # We profile the cell, sort the report by "cumulative
-    # time", limit it to 10 lines, and save it to a file
-    # named "prun0".
-    cl.plot_cluster_multiple(
-        n_best=12,
-        average_over_classes=False,
-    )
+        cl.load_data()
+        cl.transform_vectors()
+        cl.filter_data()
+        # # %%
+        cl.get_distance_matrix()
+        # # # # %%
+        cl.fit_clusters()
+        # %%prun -s cumulative -q -l 10 -T prun0
+        # We profile the cell, sort the report by "cumulative
+        # time", limit it to 10 lines, and save it to a file
+        # named "prun0".
+        # cl.create_clustering_results_index()
+        cl.plot_cluster_multiple(
+            n_best=1, average_over_classes=False, algorithm="agg", sort_by="frequency"
+        )
+        cl.plot_cluster_multiple(n_best=1, average_over_classes=False, algorithm="agg")
+        # cl.plot_cluster_multiple(
+        #     n_best=4,
+        #     average_over_classes=False,
+        #     algorithm="agg",
+        # )
     # %%
 
     # cl.run_all()
