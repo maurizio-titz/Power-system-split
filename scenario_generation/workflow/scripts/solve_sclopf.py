@@ -4,9 +4,6 @@ import pandas as pd
 import logging
 from importlib.metadata import version
 
-#############
-from Johannes.utils import data_handling
-from Johannes.check_n1_stab import check_n1_stab
 from pyomo.util.infeasible import log_infeasible_constraints 
 from linopy.common import print_single_constraint
 
@@ -169,11 +166,7 @@ if __name__ == "__main__":
     # get co2 emissions after sclopf
     emissions_sclopf_i = get_emissions(n, snapshots)
     perc = 100 * emissions_sclopf_i / (emissions_lopf_i)
-    # if (
-    #     np.isclose(emissions_sclopf_i, 0, atol=10) and
-    #     np.isclose(emissions_lopf_i, 0, atol=10)
-    # ): 
-    #     perc = 100
+
     rtol = 0.005
     if perc <= 100 * (1+rtol): 
         logger.info(
@@ -184,7 +177,7 @@ if __name__ == "__main__":
             f"Co2-Test not succesful. Emissions are {perc}% of LOPF window."
         )
 
-    # export network before contingency test because n.copy faces recursion error ??
+    # export network
     n.export_to_netcdf(snakemake.output[0])
 
 
