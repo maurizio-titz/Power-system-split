@@ -1,0 +1,37 @@
+solving:
+  #tmpdir: "path/to/tmp"
+  solver:
+    name: gurobi
+    options: gurobi-default
+
+  solver_options:
+    threads: 4
+    method: 1 # 1=simplex (stable with numerical troubles), 2=barrier (faster)
+    crossover: 0
+    BarConvTol: 1.e-6
+    Seed: 123
+    AggFill: 0
+    PreDual: 0
+    GURO_PAR_BARDENSETHRESH: 200
+    DualReductions: 0 # to get definite error message?
+
+overdim_extendables: 1.01 #1.001 # overdimension extendable generators factor (only generators & storages, no lines)
+force_storage: 'all' # if 'all', state of charge is set from LOPF, if 'boundaries', SoC is set at the first and last snapshot of every window, 'upper limit' costraits to a certai discharge / charge behaviour.
+load_shedding: True # includes load shedding / redispatch
+artificial_load: True # includes load shedding / redispatch
+
+co2_relaxation: 1.0 #1.05 # 5 # [1.0, 1.1, 1.05, 1.01]
+
+path_syntax: "new"
+
+# unfortunately, the linopy implementation of sclopf
+# didn't work for pypsa v0.28.0 (or earlier) if multiple SubNetworks are present.
+# (linopy is A LOT faster when passing the model to the solver)
+# v0.28 of PyPSA also contains a different model formulation, but the linopy fix is
+# available only after v0.28.0 (which is currently not released)
+network_sclopf: False # if False, jumps to faster formulation using linopy
+
+# size of the rolling horizon window (# snapshots)
+groupsize: 60 #2920
+
+Co2-scenarios: ['0.05', '0.1','0.2', '0.3','0.4', '0.5', '0.6'] #'0.2',[0.2] #
