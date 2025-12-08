@@ -358,7 +358,7 @@ def plot_map_inertia_placement_final(
     ax.legend(
         labelspacing=0,
         handletextpad=0.1,
-        # loc="upper left",
+        loc="upper left",
         # bbox_to_anchor=(0.7, 0.975),
         frameon=False,
         fontsize=18,
