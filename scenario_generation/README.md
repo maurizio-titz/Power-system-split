@@ -106,3 +106,5 @@ Unfortunately, this version does not support the old `sclopf` formulation. If yo
     pip install pypsa==0.28.0
 
 You don't have to uninstall, all updates should be treaded automatically.
+
+After solving the security constrained optimization, one needs to reassemble the networks by executing `reassemble_all.py` script in `\scripts`.
