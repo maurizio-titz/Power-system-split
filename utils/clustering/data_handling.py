@@ -22,7 +22,6 @@ from sklearn.preprocessing import normalize
 from tqdm import tqdm
 
 from utils.config import (
-    path_to_clustering_results_lopf,
     path_to_clustering_results_sclopf,
     path_to_vis_results_sclopf,
 )

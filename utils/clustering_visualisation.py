@@ -21,7 +21,6 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from utils.data_handling import get_actual_co2_level
 from utils.config import (
     path_to_clustering_results_sclopf,
-    path_to_evaluation_results_lopf,
     path_to_evaluation_results_sclopf,
     path_to_indicator_vectors_sclopf,
 )

@@ -22,11 +22,8 @@ from utils import send_mattermost_messages
 
 # Send messages to mattermost
 from utils.config import (
-    path_to_evaluation_results_lopf,
     path_to_evaluation_results_sclopf,
-    path_to_inertia_mitigation_results_lopf,
     path_to_inertia_mitigation_results_sclopf,
-    path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
 )
 from utils.data_handling import load_pypsa_network_from_path, load_pypsa_network

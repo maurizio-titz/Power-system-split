@@ -27,9 +27,7 @@ from utils import (
     send_mattermost_messages,
 )
 from utils.config import (
-    path_to_cascade_results_lopf,
     path_to_cascade_results_sclopf,
-    path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
 )
 

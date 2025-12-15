@@ -29,16 +29,12 @@ from utils.alternative_split_indicator_vectors import (  # run_all_co2_lvl_node_
     find_failed_edge_indicator_vector_for_cascade_results,
 )
 from utils.config import (
-    path_to_cascade_results_lopf,
     path_to_cascade_results_sclopf,
-    path_to_evaluation_results_lopf,
     path_to_evaluation_results_sclopf,
-    path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
 )
 
 save_path_sclopf = path_to_evaluation_results_sclopf
-save_path_lopf = path_to_evaluation_results_lopf
 
 # Dummy decorator to not get stuck on @profile
 if "profile" not in globals():

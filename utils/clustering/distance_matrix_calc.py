@@ -24,7 +24,6 @@ from tqdm import tqdm
 from utils.clustering.data_handling import split_mask
 from utils.clustering.boundary import boundary_field_rw_smoothing
 from utils.config import (
-    path_to_clustering_results_lopf,
     path_to_clustering_results_sclopf,
 )
 from utils.indicator_utils import load_indicator_vectors

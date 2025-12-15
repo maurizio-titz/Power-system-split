@@ -32,14 +32,10 @@ from utils.data_handling import get_co2_levels
 from utils import cascade_simulation, data_handling
 from utils import visualization as vis
 from utils.config import (
-    path_to_cascade_results_lopf,
     path_to_cascade_results_sclopf,
-    path_to_evaluation_results_lopf,
     path_to_evaluation_results_sclopf,
-    path_to_vis_results_lopf,
     path_to_vis_results_sclopf,
     path_to_indicator_vectors_sclopf,
-    path_to_indicator_vectors_lopf,
 )
 
 use_sclopf = True

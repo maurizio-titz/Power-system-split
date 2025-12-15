@@ -17,14 +17,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from utils.config import (  # path_to_cascade_results_lopf,
-    path_to_cascade_results_lopf,
+from utils.config import (
     path_to_cascade_results_sclopf,
-    path_to_evaluation_results_lopf,
     path_to_evaluation_results_sclopf,
-    path_to_indicator_vectors_lopf,
     path_to_indicator_vectors_sclopf,
-    path_to_pypsa_network_lopf,
     path_to_pypsa_network_sclopf,
     path_to_vis_results_sclopf,
 )
