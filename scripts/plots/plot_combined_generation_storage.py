@@ -26,7 +26,11 @@ sys.path.append("./")
 
 
 from utils.data_handling import get_actual_co2_level, get_co2_levels
-from utils.config import path_to_pypsa_network_sclopf, path_to_figures_sclopf
+from utils.config import (
+    path_to_pypsa_network_sclopf,
+    path_to_figures_sclopf,
+    use_extensions,
+)
 from utils import data_handling
 from utils.clustering_visualisation import truncate_colormap
 from utils.plot_style import (
@@ -98,7 +102,7 @@ def create_combined_generation_storage_plot():
     # Load network graph and node positions
     snet_index = 0
     network = data_handling.load_pypsa_network(
-        n_nodes=n_nodes, co2lvl=0.0, use_sclopf=True
+        n_nodes=n_nodes, co2lvl=0.0, use_sclopf=True, lopt=use_extensions
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
     pos = nx.get_node_attributes(nx_graph, "pos")
@@ -107,7 +111,7 @@ def create_combined_generation_storage_plot():
     co2ls = get_co2_levels(n_nodes)
     networks = {
         co2l: data_handling.load_pypsa_network(
-            n_nodes=600, co2lvl=co2l, use_sclopf=True
+            n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
         )
         for co2l in co2ls
     }
@@ -233,7 +237,7 @@ def create_combined_generation_storage_plot():
     }
 
     for i, target_level in enumerate(target_levels):
-        n = data_handling.load_pypsa_network(target_level, n_nodes, True)
+        n = networks[target_level]
         for ii, month in enumerate(months):
             axs_primary_gen[i][ii].set_ylim([0, vmax])
             current_snapshots = n.snapshots[n.snapshots.month == month]
