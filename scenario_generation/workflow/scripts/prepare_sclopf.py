@@ -87,41 +87,6 @@ if __name__ == "__main__":
 
     n = pypsa.Network(snakemake.input.network)
 
-
-    ### if loadshedding is activated, add loadshedding possibility to each bus ###
-    if load_shedding:
-        print("Loadshedding included")
-        n.add("Carrier", "load", color="#dd2e23", nice_name="Load shedding")
-        buses_i = n.buses.index
-        n.madd(
-            "Generator",
-            buses_i,
-            " load",
-            bus=buses_i,
-            carrier="load",
-            sign=1e-3,  # Adjust sign to measure p and p_nom in kW instead of MW
-            marginal_cost=1e2,  # Eur/kWh
-            p_nom=1e9,  # kW
-        )
-    
-    
-    ### if artificial load is activated, add art_load possibility to each bus ###
-    if artificial_load:
-        print("Artificial Load included")
-        n.add("Carrier", "art_load", color="#38761d", nice_name="artificial load")
-        buses_i = n.buses.index
-        n.madd(
-            "Generator",
-            buses_i,
-            " art_load",
-            bus=buses_i,
-            carrier="art_load",
-            sign=-1e-3,  # Adjust sign to measure p and p_nom in kW instead of MW
-            marginal_cost=1e2,  # Eur/kWh
-            p_nom=1e9,  # kW
-        )
-
-
     fix_capacities(n, config["overdim_extendables"])
 
     lookup = pd.read_csv(snakemake.input.lookup, header=[1]).iloc[:-1]
