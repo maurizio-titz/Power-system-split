@@ -40,6 +40,17 @@ from utils.config import (
     path_to_line_extension_mitigation_sclopf,
     path_to_pypsa_network_sclopf,
 )
+from utils.plot_style import (
+    setup_matplotlib_style,
+    TITLE_FONTSIZE,
+    SUBTITLE_FONTSIZE,
+    AXIS_LABEL_FONTSIZE,
+    TICK_LABEL_FONTSIZE,
+    LEGEND_FONTSIZE,
+    PANEL_LABEL_FONTSIZE,
+    add_panel_label,
+    save_figure,
+)
 
 color1 = "#d95f02"
 color2 = "#7570b3"
@@ -68,6 +79,7 @@ def plot_inertia_loss_mitigation_curve(
     l_share=0.0,
     unit="GWs",
     color=None,
+    annualized_cost_per_GWs_max=None,
 ):
     # unit = "MWs"
 
@@ -115,7 +127,7 @@ def plot_inertia_loss_mitigation_curve(
         x_vals * unit_factor,
         loss_ref_multiple,
         linestyle="-",
-        label=f"{delta_Erot}{unit}",
+        label=f"Loss Reduction",
         color=color,
     )
     # adjust upper xlim
@@ -127,10 +139,62 @@ def plot_inertia_loss_mitigation_curve(
             x_vals * unit_factor,
             inertia_placed_arr[:, 4] / total_dangerous_splits,
             linestyle="--",
-            label=f"{delta_Erot}{unit}",
+            label=f"Split Number",
         )
 
     ax_loss.set_xlim(left=0, right=x_val_half_ref_loss * unit_factor)
+    ax_loss.set_ylim(bottom=0)
+
+    if annualized_cost_per_GWs_max is not None:
+        x_lim_mask = x_vals <= x_val_half_ref_loss
+        x_vals = x_vals[x_lim_mask]  # limit x vals to half ref loss for cost plot
+        cost_unit_factor = 1e-9  # to billion euros
+        rescale_divider = 0.3
+        cumulative_annualized_cost = np.cumsum(
+            inertia_placed_arr[:, 2]
+            * delta_Erot
+            * unit_factor
+            * cost_unit_factor
+            * annualized_cost_per_GWs_max
+        )[x_lim_mask]
+        cumulative_annualized_cost_rescaled = (
+            cumulative_annualized_cost / rescale_divider
+        )
+
+        ax_loss_twin = ax_loss.twinx()
+        ax_loss_twin.plot(
+            x_vals * unit_factor,
+            cumulative_annualized_cost_rescaled,
+            linestyle=":",
+            color=color,
+            label=f"Annualized Cost",
+        )
+        ax_loss_twin.set_ylabel("Annualized Cost [billion €]")
+        ax_loss_twin.grid(False)
+
+        ax_loss_twin.tick_params(axis="y", which="major", labelsize=TICK_LABEL_FONTSIZE)
+
+        ticks_primary = ax_loss.get_yticks()
+        ax_loss_twin.set_yticks(ticks_primary)[:-1]
+        ticks_labels_secondary = np.round(ticks_primary * rescale_divider, 2)
+        if all(ticks_labels_secondary % 1 == 0):
+            ticks_labels_secondary = ticks_labels_secondary.astype(int)
+        ax_loss_twin.set_yticklabels(ticks_labels_secondary)
+
+        primary_lims = ax_loss.get_ylim()
+        ax_loss_twin.set_ylim(primary_lims)
+
+        ax_loss_twin.set_ylim(bottom=0)
+
+        # Combine legends from both axes
+        lines1, labels1 = ax_loss.get_legend_handles_labels()
+        lines2, labels2 = ax_loss_twin.get_legend_handles_labels()
+        ax_loss.legend(
+            lines1 + lines2,
+            labels1 + labels2,
+            loc="upper center",
+            fontsize=12,
+        )
 
     return x_val_half_ref_loss
 
@@ -158,6 +222,7 @@ def plot_map_inertia_placement_final(
     use_sclopf=True,
     split_properties=None,
     line_color=None,
+    annualized_cost_per_GWs_max=None,
 ):
     """Plot the results of the inertia placement"""
 
@@ -289,16 +354,31 @@ def plot_map_inertia_placement_final(
             inertia_placed_ls=inertia_placed_ls,
             unit=unit,
             color=line_color,
+            annualized_cost_per_GWs_max=annualized_cost_per_GWs_max,
         )
     ax2.grid(True)
     ax2.set_ylim(bottom=0)
-    ax2.plot(
-        [inertia_in_map_plot * unit_factor, inertia_in_map_plot * unit_factor],
-        [ax2.get_ylim()[0], ref_loss_factor],
-        linestyle="--",
-        c=color,
-        lw=2,
+    cost_map_plot = (
+        inertia_in_map_plot * unit_factor * annualized_cost_per_GWs_max * 1e-9
     )
+    ax2_twin = ax2.get_shared_x_axes().get_siblings(ax2)
+    if len(ax2_twin) > 1:
+        ax2_twin = [ax for ax in ax2_twin if ax != ax2][0]
+        ax2_twin.plot(
+            [inertia_in_map_plot * unit_factor, inertia_in_map_plot * unit_factor],
+            [ax2_twin.get_ylim()[0], cost_map_plot / 0.3],  # rescale divider 0.3
+            linestyle="--",
+            c=color,
+            lw=2,
+        )
+    else:
+        ax2.plot(
+            [inertia_in_map_plot * unit_factor, inertia_in_map_plot * unit_factor],
+            [ax2.get_ylim()[0], ref_loss_factor],
+            linestyle="--",
+            c=color,
+            lw=2,
+        )
     ax2.plot(
         [0, inertia_in_map_plot * unit_factor],
         [ref_loss_factor, ref_loss_factor],
@@ -310,11 +390,21 @@ def plot_map_inertia_placement_final(
     ax2.text(
         inertia_in_map_plot * unit_factor + right_xlim / 200 * 5,
         0.2,
-        f"{int(round(inertia_in_map_plot*unit_factor))}GWs",
+        f"{int(round(inertia_in_map_plot*unit_factor))} GWs",
         verticalalignment="bottom",
         horizontalalignment="left",
         zorder=np.inf,
-        fontsize=12,
+        fontsize=TICK_LABEL_FONTSIZE,
+        c=color,
+    )
+    ax2.text(
+        inertia_in_map_plot * unit_factor + right_xlim / 200 * 5,
+        1.2,
+        f"{cost_map_plot:.2f} bn. €",
+        verticalalignment="bottom",
+        horizontalalignment="left",
+        zorder=np.inf,
+        fontsize=TICK_LABEL_FONTSIZE,
         c=color,
     )
     # ax2.text(

@@ -50,6 +50,9 @@ from utils.plot_style import (
     save_figure,
 )
 
+annualized_cost_per_MWs_max = 888.5  # € per MWs/a of synthetic intertia as per https://www.netztransparenz.de/de-de/Systemdienstleistungen/Frequenzhaltung/Marktgest%C3%BCtzte-Beschaffung-von-Momentanreserve
+annualized_cost_per_GWs_max = annualized_cost_per_MWs_max * 1e3  # € per GWs/a
+
 # Backwards compatibility
 AXIS_LABELSIZE = AXIS_LABEL_FONTSIZE
 TICK_LABELSIZE = TICK_LABEL_FONTSIZE
@@ -219,7 +222,10 @@ def calculate_line_extension(
 
 
 def create_combined_mitigation_plot(
-    use_annualized_costs=False, co2_lvl_map=0.1, build_380kV_only=False
+    use_annualized_costs=False,
+    co2_lvl_map=0.1,
+    build_380kV_only=False,
+    plot_intertia_cost=False,
 ):
     """Create combined mitigation plot with inertia on top and line extension below."""
 
@@ -404,6 +410,39 @@ def create_combined_mitigation_plot(
             fontsize=TICK_LABELSIZE,
         )
 
+        if plot_intertia_cost:
+            # add secondary axis for cost of inertia
+            ax_inertia_all_cost = ax_inertia_all.twinx()
+            ax_inertia_all_cost.set_ylabel(
+                f"Annualized cost [billion €]", fontsize=AXIS_LABELSIZE
+            )
+            # scale inertia to cost
+            rescale_factor = annualized_cost_per_GWs_max / 1e6
+            ticks_cost = ax_inertia_all.get_yticks() * rescale_factor
+            ax_inertia_all_cost.set_yticks(
+                ticks_cost,
+                labels=[int(tick) / 1e3 for tick in ax_inertia_all.get_yticks()],
+            )
+            ax_inertia_all_cost.tick_params(
+                axis="y",
+                which="major",
+                labelsize=TICK_LABELSIZE,
+            )
+            ax_inertia_all_cost.set_ylim(ax_inertia_all.get_ylim())
+            ax_inertia_all_cost.grid(False)
+
+            # ax_inertia_all_cost.plot(
+            #     np.array(
+            #         get_actual_co2_level(
+            #             list(inertia_at_ref_loss_by_lvl.keys()), percent=True
+            #         )
+            #     ),
+            #     np.array(list(inertia_at_ref_loss_by_lvl.values()))
+            #     * unit_factor
+            #     * annualized_cost_per_MWs_max,
+            #     linestyle="dotted",
+            # )
+
     ax_inertia_all.invert_xaxis()
     ax_inertia_all.set_ylabel(f"Inertia placed [{unit}]", fontsize=AXIS_LABELSIZE)
     ax_inertia_all.set_xlabel("CO$_2$ level [\\% of 1990]", fontsize=AXIS_LABELSIZE)
@@ -435,6 +474,7 @@ def create_combined_mitigation_plot(
             plot_curve=plot_curve,
             split_properties=split_properties,
             line_color=color_loss_curve,
+            annualized_cost_per_GWs_max=annualized_cost_per_GWs_max,
         )
 
     # Set consistent styling for inertia plots
@@ -446,10 +486,9 @@ def create_combined_mitigation_plot(
     ax_inertia_loss.tick_params(axis="both", which="major", labelsize=TICK_LABELSIZE)
     ax_inertia_loss.set_xlabel("Inertia placed [GWs]", fontsize=AXIS_LABELSIZE)
 
-    co2_ref_percent = float(np.atleast_1d(get_actual_co2_level(co2l_ref)).item()) * 100
-    loss_axis_label = (
-        rf"Expected loss of load [$1/\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$]"
-    )
+    co2_ref_percent = get_actual_co2_level(co2l_ref, percent=True)
+    co2_lvl_map_percent = get_actual_co2_level(co2_lvl_map, percent=True)
+    loss_axis_label = rf"Expected loss of load [$\textrm{{R}}_{{{int(round(co2_lvl_map_percent))}\%}}/\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$]"
     ax_inertia_loss.set_ylabel(loss_axis_label, fontsize=AXIS_LABELSIZE)
     ax_inertia_loss.grid(True, alpha=0.3)
 
@@ -583,7 +622,7 @@ def create_combined_mitigation_plot(
     ax_line_loss.legend(
         lines1 + lines2,
         labels1 + labels2,
-        loc="upper right",
+        loc="upper center",
         fontsize=LEGEND_FONTSIZE,
     )
 
@@ -785,6 +824,9 @@ def create_combined_mitigation_plot(
         f_name = f_name + "_annualized"
     if build_380kV_only:
         f_name = f_name + "_380kVonly"
+    if plot_intertia_cost:
+        f_name = f_name + "_inertiaCost"
+
     save_figure(f, save_path, f_name)
     plt.show()
 
@@ -792,7 +834,10 @@ def create_combined_mitigation_plot(
 if __name__ == "__main__":
     # create_combined_mitigation_plot(use_annualized_costs=False)
     create_combined_mitigation_plot(
-        use_annualized_costs=True, co2_lvl_map=0.2, build_380kV_only=True
+        use_annualized_costs=True,
+        co2_lvl_map=0.2,
+        build_380kV_only=True,
+        plot_intertia_cost=True,
     )
     # create_combined_mitigation_plot(
     #     use_annualized_costs=True, co2_lvl_map=0.2, build_380kV_only=True
