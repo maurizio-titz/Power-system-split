@@ -431,7 +431,7 @@ def create_clustering_analysis_plot(
 
             ax_hist.tick_params(axis="y", which="major", pad=0)
             ax_hist.set_xticks(np.arange(0, 101, step=20))
-            ax_hist.set_xlabel("Blackout size [\%]", rotation=0, labelpad=0)
+            ax_hist.set_xlabel("Share of load not served [\%]", rotation=0, labelpad=0)
             if column != 0:
                 ax_hist.set_ylabel("")
                 ax_hist.set_yticklabels([])

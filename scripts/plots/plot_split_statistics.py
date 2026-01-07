@@ -40,7 +40,9 @@ from utils.plot_style import (
 )
 
 
-def create_split_statistics_plot(load_normalization=False, show_blackout_stats=True):
+def create_split_statistics_plot(
+    load_normalization=False, show_blackout_stats=True, secondary_proba_axis=False
+):
     """Create split statistics plot.
 
     Parameters:
@@ -110,7 +112,7 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
     if show_blackout_stats:
         fig = plt.figure(figsize=(12, 5))
         n_cols = 4
-        width_ratios = [1, 1, 1, 0.4]
+        width_ratios = [1, 1, 1, 1]
     else:
         fig = plt.figure(figsize=(8, 5))
         n_cols = 2
@@ -119,7 +121,12 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
     gs_vertical = GridSpec(2, 1, figure=fig, hspace=0.4, height_ratios=[1, 0.1])
 
     # Panel setup
-    wspace = 0.4 if show_blackout_stats else 0.3
+    if not show_blackout_stats:
+        wspace = 0.3
+    elif show_blackout_stats and secondary_proba_axis:
+        wspace = 0.40
+    else:
+        wspace = 0.4
     gsTop = GridSpecFromSubplotSpec(
         1,
         n_cols,
@@ -187,16 +194,50 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
         ax3_num_splits.set_yscale("log")
         ax3_num_splits.invert_xaxis()
 
+        if secondary_proba_axis:
+            # add secondary axis for fraction of total simulations
+            ax3_num_splits_secondary = ax3_num_splits.twinx()
+            for i, bin_center in enumerate(bin_centers):
+                color = cmap(i / (len(bin_centers) + 1) + (1 / (len(bin_centers) + 1)))
+                counts = data.loc[:, bin_center]
+                # plot invisible lines to set the ticks
+                plt.plot(
+                    get_actual_co2_level(co2ls[::-1], percent=True),
+                    counts
+                    / len(n_2_failures)
+                    / network.snapshot_weightings.generators.sum(),
+                    label=rf"{bins[i]}-{bins[i+1]}\%",
+                    alpha=0.0,
+                )
+            ax3_num_splits_secondary.set_ylabel(
+                "Fraction of total contingencies", fontsize=AXIS_LABEL_FONTSIZE
+            )
+            ax3_num_splits_secondary.set_yscale("log")
+            ax3_num_splits_secondary.tick_params(
+                axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE
+            )
+
         # Legend for panel c
         h, l = ax3_num_splits.get_legend_handles_labels()
-        ax3_num_splits_legend.legend(
-            h,
-            l,
-            title="Blackout size",
-            loc="center",
-            ncols=1,
-            columnspacing=0.5,
-        )
+        if secondary_proba_axis:
+            # Place legend below the axis when secondary axis is present
+            ax3_num_splits_legend.legend(
+                h,
+                l,
+                title="Share of load not served",
+                loc="center right",
+                ncols=1,
+                columnspacing=0.5,
+            )
+        else:
+            ax3_num_splits_legend.legend(
+                h,
+                l,
+                title="Share of load not served",
+                loc="center",
+                ncols=1,
+                columnspacing=0.5,
+            )
         ax3_num_splits_legend.axis("off")
 
     # Filter out very small components
@@ -302,6 +343,7 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
         handles,
         labels,
         loc="center left",
+        bbox_to_anchor=(-0.08, 0.5),
         ncols=4,
         columnspacing=1,
         handletextpad=0.5,
@@ -324,6 +366,8 @@ def create_split_statistics_plot(load_normalization=False, show_blackout_stats=T
     )
     if show_blackout_stats:
         save_name += "_with_blackout_stats"
+    if secondary_proba_axis:
+        save_name += "_with_secondary_proba_axis"
 
     save_figure(fig, save_path, save_name)
     plt.show()
@@ -415,7 +459,7 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
     ax_legend.legend(
         h,
         l,
-        title="Blackout size",
+        title="Share of load not served",
         loc="center",
         ncols=1,
         columnspacing=0.5,
@@ -431,15 +475,17 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
 
 
 if __name__ == "__main__":
-    create_split_statistics_plot()
-    for load_norm in [True, False]:
-        for blackout_stat in [True, False]:
+    # create_split_statistics_plot()
+    for load_norm in [False]:
+        for blackout_stat in [True]:
             create_split_statistics_plot(
-                load_normalization=load_norm, show_blackout_stats=blackout_stat
+                load_normalization=load_norm,
+                show_blackout_stats=blackout_stat,
+                secondary_proba_axis=True,
             )
 
     # Create standalone blackout statistics plot
-    create_blackout_statistics_plot()
+    # create_blackout_statistics_plot()
 
     # Example usage:
     # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)

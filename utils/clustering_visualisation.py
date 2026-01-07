@@ -1106,8 +1106,8 @@ def plot_group_lost_load_hist_by_co2_single(
     # if i!=0:
     #     ax.set_yticks([])
     # ax[1].set_title(group)
-    ax.set_xlabel("total lost load share [%]")
-    ax.set_ylabel("share of events")
+    ax.set_xlabel("Share of load not served [%]")
+    ax.set_ylabel("Share of events")
 
 
 def plot_group_lost_load_hist_by_co2(
