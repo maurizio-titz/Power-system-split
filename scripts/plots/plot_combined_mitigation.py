@@ -86,7 +86,10 @@ def calculate_line_extension(
         split_properties.co2l == co2l_ref
     ].copy()
     lost_load_reference_lvl = split_properties_reference.lost_load_share_blackout.sum()
-    extension_cost_per_MWkm = 445
+    extension_cost_per_MWkm = 1100  # € / MVA / km ##  source: Tom Brown updated fig of https://ariadneprojekt.de/publikation/report-szenarien-zur-klimaneutralitat-2045-2/ Fig 7.2
+    annualized_extension_cost_per_MWkm = (
+        0.058 * extension_cost_per_MWkm
+    )  # € / MVA / km / a
 
     networks = {
         co2l: data_handling.load_pypsa_network(
@@ -136,20 +139,34 @@ def calculate_line_extension(
                 ]
                 .copy()
             )
+            s_380kV = (
+                (
+                    np.sqrt(3)
+                    * networks[0.6].lines["type"].map(networks[0.6].line_types.i_nom)
+                    * networks[0.6].lines.bus0.map(networks[0.6].buses.v_nom)
+                )
+                .unique()
+                .astype(float)
+            )
+            # if only building 380kV lines, set s_380kV accordingly
             if build_380kV_only:
                 costs_["num_par_ext"] = 1
             else:
+                # take the highest voltage line possible for extension, so that failures on the corridor are save
                 costs_["num_par_ext"] = costs_.num_parallel.apply(
                     lambda x: max_num_par[np.round(x, 5)] if x in max_num_par else 1
                 )
             if annualized_costs:
                 costs_["extension_cost"] = (
-                    costs_.capital_cost * costs_.s_nom * costs_.num_par_ext
+                    annualized_extension_cost_per_MWkm
+                    * s_380kV
+                    * costs_.num_par_ext
+                    * costs_.length
                 )
             else:
                 costs_["extension_cost"] = (
                     extension_cost_per_MWkm
-                    * costs_.s_nom
+                    * s_380kV
                     * costs_.num_par_ext
                     * costs_.length
                 )
