@@ -87,41 +87,6 @@ if __name__ == "__main__":
 
     n = pypsa.Network(snakemake.input.network)
 
-
-    ### if loadshedding is activated, add loadshedding possibility to each bus ###
-    if load_shedding:
-        print("Loadshedding included")
-        n.add("Carrier", "load", color="#dd2e23", nice_name="Load shedding")
-        buses_i = n.buses.index
-        n.madd(
-            "Generator",
-            buses_i,
-            " load",
-            bus=buses_i,
-            carrier="load",
-            sign=1e-3,  # Adjust sign to measure p and p_nom in kW instead of MW
-            marginal_cost=1e2,  # Eur/kWh
-            p_nom=1e9,  # kW
-        )
-    
-    
-    ### if artificial load is activated, add art_load possibility to each bus ###
-    if artificial_load:
-        print("Artificial Load included")
-        n.add("Carrier", "art_load", color="#38761d", nice_name="artificial load")
-        buses_i = n.buses.index
-        n.madd(
-            "Generator",
-            buses_i,
-            " art_load",
-            bus=buses_i,
-            carrier="art_load",
-            sign=-1e-3,  # Adjust sign to measure p and p_nom in kW instead of MW
-            marginal_cost=1e2,  # Eur/kWh
-            p_nom=1e9,  # kW
-        )
-
-
     fix_capacities(n, config["overdim_extendables"])
 
     lookup = pd.read_csv(snakemake.input.lookup, header=[1]).iloc[:-1]
@@ -150,6 +115,8 @@ if __name__ == "__main__":
 
     n.determine_network_topology()
     n.calculate_dependent_values()
+
+
  ### if loadshedding is activated, add loadshedding possibility to each bus ###
     if load_shedding:
         print("Loadshedding included")
@@ -191,16 +158,11 @@ if __name__ == "__main__":
         n.storage_units_t.state_of_charge_set = n.storage_units_t.state_of_charge
             
     elif config["force_storage"] == 'boundaries':
-        #### fixate start and endpoints ####
-        # docs in  https://pypsa.readthedocs.io/en/latest/user-guide/optimal-power-flow.html:
-        # If in the time series n.storage_units_t.state_of_charge_set there are values which are not NaNs, 
-        # then it will be assumed that these are fixed state of charges desired for that time
-        # and these will be added as extra constraints. 
         logger.info("Fixing the boundaries of each window to the storage levels of the lopf result")
 
         n.storage_units_t.state_of_charge_set = n.storage_units_t.state_of_charge
 
-        i_values = [n for n in range(int(np.ceil(8760 / temp_resolution / group_size)))] # ToDo: change
+        i_values = [n for n in range(int(np.ceil(8760 / temp_resolution / group_size)))]
         for i in i_values:
             n.storage_units_t.set = n.storage_units_t.state_of_charge
             
@@ -234,22 +196,5 @@ if __name__ == "__main__":
         n.storage_units.marginal_cost = avg_cost
         
         
-    elif config["force_storage"] == 'Martha':
-        logger.info("Setting upper and lower bound for storage behavior according to lopf result.")
-        n.storage_units.cyclic_state_of_charge = False
-        
-        discharge = n.storage_units_t.p.divide(n.storage_units.p_nom).clip(lower=0.)
-        charge = n.storage_units_t.p.divide(n.storage_units.p_nom).clip(upper=0.)
-
-        n.storage_units_t.p_max_pu = discharge
-        n.storage_units_t.p_min_pu = charge
-
-        # add up shadow prices for improved merit order
-        avg_cost = (
-            n.storage_units_t.mu_lower.mean() +
-            n.storage_units_t.mu_upper.abs().mean()
-        ) / 2
-        n.storage_units.marginal_cost = avg_cost
-
     n.export_to_netcdf(snakemake.output[0])
 
