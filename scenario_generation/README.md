@@ -39,7 +39,7 @@ If runs before where terminated (e.g. by keyboard interupt), you need to use
 
 Install the necessary dependencies using `conda` or `mamba`:
 
-    mamba env create -f submodules/pypsa-eur/envs/environment.yaml
+    mamba env create -f submodules/pypsa-eur/envs/environment.fixed.yaml
 
 Activate `pypsa-eur` environment:
 
