@@ -50,7 +50,13 @@ from utils.plot_style import (
     save_figure,
 )
 
-annualized_cost_per_MWs_max = 888.5  # € per MWs/a of synthetic intertia as per https://www.netztransparenz.de/de-de/Systemdienstleistungen/Frequenzhaltung/Marktgest%C3%BCtzte-Beschaffung-von-Momentanreserve
+annualized_cost_per_MWs_max_DE = 888.5  # € per MWs/a of synthetic intertia as per https://www.netztransparenz.de/de-de/Systemdienstleistungen/Frequenzhaltung/Marktgest%C3%BCtzte-Beschaffung-von-Momentanreserve
+# annualized_cost_per_MVAs_GB = (
+#     5080 * 1.1672
+# )  # € per MWs/a of synthetic intertia as per https://www.neso.energy/news/neso-awards-first-contracts-under-mid-term-y-1-stability-market?utm_source=chatgpt.com However, this is not directly comparable to inertia, so we don't use it.
+# # mean exchange rate in 2025 from https://www.exchangerates.org.uk/GBP-EUR-spot-exchange-rates-history-2025.html
+# # 25.4 millionn Pound for 5 GVAs: 25.4 / 5 * 1e6 / 1e3 = 5080 £ per MWs/a
+annualized_cost_per_MWs_max = annualized_cost_per_MWs_max_DE
 annualized_cost_per_GWs_max = annualized_cost_per_MWs_max * 1e3  # € per GWs/a
 
 # Backwards compatibility
@@ -67,6 +73,7 @@ def calculate_line_extension(
 
     from utils.cascade_simulation import LOOKUP_TABLE_NP
 
+    print("Calculating line extension mitigation and saving results...")
     table_rounded = np.round(LOOKUP_TABLE_NP, 5)
     num_par_paths = {}
     for tup in table_rounded:
@@ -243,6 +250,7 @@ def create_combined_mitigation_plot(
     co2_lvl_map=0.1,
     build_380kV_only=False,
     plot_intertia_cost=False,
+    recalc_cost=False,
 ):
     """Create combined mitigation plot with inertia on top and line extension below."""
 
@@ -522,6 +530,8 @@ def create_combined_mitigation_plot(
         f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2_lvl_map}_n{n_nodes}.pkl"
     else:
         f_name = f"heuristic_costMin_loss_mitigation_Co2L{co2_lvl_map}_n{n_nodes}.pkl"
+    if build_380kV_only:
+        f_name = f_name.replace(".pkl", "_380kVonly.pkl")
 
     reinforced_lines, loss_with_mitigation, num_blackouts, cost = pickle.load(
         open(path_to_line_extension_mitigation_sclopf + f_name, "rb")
@@ -556,7 +566,8 @@ def create_combined_mitigation_plot(
     ax2_line_cost.plot(
         np.arange(len(cost)),
         cost_rescaled,
-        color=color_loss_curve,
+        color="black",
+        # color=color_loss_curve,
         linestyle="dotted",
         linewidth=2,
         label="Annualized cost" if use_annualized_costs else "Cost",
@@ -855,6 +866,7 @@ if __name__ == "__main__":
         co2_lvl_map=0.2,
         build_380kV_only=True,
         plot_intertia_cost=True,
+        recalc_cost=True,
     )
     # create_combined_mitigation_plot(
     #     use_annualized_costs=True, co2_lvl_map=0.2, build_380kV_only=True
