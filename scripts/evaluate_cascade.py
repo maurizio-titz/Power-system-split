@@ -25,7 +25,7 @@ from utils.cascade_simulation import solve_lpf
 import utils.config as cfg
 from utils import data_handling, send_mattermost_messages, subgraph_evaluation
 from utils.alternative_split_indicator_vectors import (  # run_all_co2_lvl_node_based,
-    extract_nodal_rocof_and_load_share_in_split_from_old_results,
+    get_nodal_rocof_vectors,
     find_failed_edge_indicator_vector_for_cascade_results,
 )
 from utils.config import (
@@ -43,6 +43,9 @@ if "profile" not in globals():
         return func
 
 
+load_inertia_constant = 0.4  # in seconds, for load inertia approximation
+
+
 @profile
 def evaluate_cascade(
     co2l: float,
@@ -56,6 +59,8 @@ def evaluate_cascade(
     use_sclopf=True,
     overrwrite: bool = False,
     calc_split_indicator_vectors: bool = True,
+    load_inertia: bool = True,
+    show_progress_2: bool = False,
 ):
     """Find the properties of the splits (i.e., RoCoF or lost load) and
     indicator vectors describing the network.
@@ -105,11 +110,13 @@ def evaluate_cascade(
         )
         save_path = save_path_sclopf
     else:
+        raise NotImplementedError("LOPF based not supported anymore.")
         full_path_to_cascades = (
             path_to_cascade_results_lopf
             + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}_lopf.pklz"
         )
         save_path = save_path_lopf
+
     print(f"saving results to {save_path}")
 
     save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
@@ -134,24 +141,45 @@ def evaluate_cascade(
 
     # Initialize results
     if use_sclopf:
-        comp_cols = [
-            "time_stamp",
-            "trigger_weighting",
-            "init_failure_0",
-            "num_par_failure_0",
-            "init_failure_1",
-            "num_par_failure_1",
-            "split_number",
-            "rot_energy",
-            "power_imbalance",
-            "load",
-            "rocof",
-            "load_share",
-            "shedding_load_loss_share",
-            "blackout_load_loss_share",
-            "total_load_loss_share",
-            # "line_momentum",
-        ]
+        if load_inertia:
+            comp_cols = [
+                "time_stamp",
+                "trigger_weighting",
+                "init_failure_0",
+                "num_par_failure_0",
+                "init_failure_1",
+                "num_par_failure_1",
+                "split_number",
+                "rot_energy_gen",
+                "power_imbalance",
+                "load",
+                "rocof_noLoadInertia",
+                "load_share",
+                "load_inertia",
+                "rot_energy",  # this the total inertia, i.e. generation + load inertia
+                "rocof",
+                "shedding_load_loss_share",
+                "blackout_load_loss_share",
+                "total_load_loss_share",
+            ]
+        else:
+            comp_cols = [
+                "time_stamp",
+                "trigger_weighting",
+                "init_failure_0",
+                "num_par_failure_0",
+                "init_failure_1",
+                "num_par_failure_1",
+                "split_number",
+                "rot_energy",
+                "power_imbalance",
+                "load",
+                "rocof",
+                "load_share",
+                "shedding_load_loss_share",
+                "blackout_load_loss_share",
+                "total_load_loss_share",
+            ]
     else:
         comp_cols = [
             "time_stamp",
@@ -214,7 +242,7 @@ def evaluate_cascade(
         # flows_dict = dict(zip(networkx.get_edge_attributes(nx_graph, "orientation").values(), flows))
 
         for component_number, (init_failures, cascade_weight_tuple) in enumerate(
-            tqdm(splits.items(), leave=False, disable=not show_progress)
+            tqdm(splits.items(), leave=False, disable=not show_progress_2)
         ):
             split_number_total += 1
 
@@ -238,33 +266,68 @@ def evaluate_cascade(
             # each entry holds: [rot_energy, power_imbalance, load, rocof, load_share]
 
             for observables_single_component in observables_split_components:
+                rot_energy_gen = observables_single_component[0]
+                power_imbalance = observables_single_component[1]
+                load = observables_single_component[2]
+                rocof = observables_single_component[3]
+                load_share = observables_single_component[4]
+
+                if (
+                    load_inertia
+                ):  # compute load inertia contribution and update rocof accordingly
+
+                    load_inertia = load * load_inertia_constant
+                    rot_energy_total = rot_energy_gen + load_inertia
+                    rocof_updated = (
+                        50 * power_imbalance / ((rot_energy_total + 1e-8) * 2)
+                    )
+                    observables_single_component[3] = (
+                        rocof_updated  # update rocof value
+                    )
+                    rocof = rocof_updated
+
                 # the shedded and blackout load losses are given in share of total system load!
-                load_shedded = (
-                    abs(min(0, observables_single_component[1]))
-                    / observables_single_component[2]
-                    * observables_single_component[4]
-                )
+                if load != 0:
+                    load_shedded = abs(min(0, power_imbalance)) / load * load_share
+                else:
+                    load_shedded = 0
                 blackout_load_loss = (
-                    int(
-                        abs(observables_single_component[3]) > 1
-                    )  # if |RoCoF| > 1 Hz/s, consider it a blackout
-                    * observables_single_component[4]
+                    int(abs(rocof) > 1)  # if |RoCoF| > 1 Hz/s, consider it a blackout
+                    * load_share
                 )
                 total_load_loss_share = max(load_shedded, blackout_load_loss)
                 if use_sclopf:
-                    dict_out_ele = [
-                        timestamp,
-                        weight,
-                        trigger0,
-                        num_par_failure0,
-                        trigger1,
-                        num_par_failure1,
-                        component_number,
-                        *observables_single_component,
-                        load_shedded,
-                        blackout_load_loss,
-                        total_load_loss_share,
-                    ]
+                    if load_inertia:
+                        dict_out_ele = [
+                            timestamp,
+                            weight,
+                            trigger0,
+                            num_par_failure0,
+                            trigger1,
+                            num_par_failure1,
+                            component_number,
+                            *observables_single_component,
+                            load_inertia,
+                            rot_energy_total,
+                            rocof,
+                            load_shedded,
+                            blackout_load_loss,
+                            total_load_loss_share,
+                        ]
+                    else:
+                        dict_out_ele = [
+                            timestamp,
+                            weight,
+                            trigger0,
+                            num_par_failure0,
+                            trigger1,
+                            num_par_failure1,
+                            component_number,
+                            *observables_single_component,
+                            load_shedded,
+                            blackout_load_loss,
+                            total_load_loss_share,
+                        ]
                 else:
                     dict_out_ele = [
                         timestamp,
@@ -386,6 +449,7 @@ if __name__ == "__main__":
                 use_sclopf=True,
                 eval_indicator_vectors=True,
                 overrwrite=False,
+                load_inertia=True,
                 # end_time_str="2013-01-02 00:00",
             )
         except FileExistsError as e:
@@ -418,38 +482,38 @@ if __name__ == "__main__":
         co2l_list = sorted(co2l_list, reverse=True)
 
         for co2l_in in co2l_list:
-            # print(f"###############################################################")
-            # print(
-            #     f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
-            # )
-            # print(f"###############################################################")
-            # try:
-            #     evaluate_cascade(
-            #         co2l_in,
-            #         n_nodes_in,
-            #         use_sclopf=True,
-            #         eval_indicator_vectors=True,
-            #         overrwrite=False,
-            #         # end_time_str="2013-01-02 00:00",
-            #     )
-            # except FileExistsError as e:
-            #     print(
-            #         f"Skipping evaluation for {co2l_in} and {n_nodes_in} due to existing results."
-            #     )
             print(f"###############################################################")
             print(
-                f"Getting edge indicator vecs for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
+                f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
             )
             print(f"###############################################################")
-            find_failed_edge_indicator_vector_for_cascade_results(
-                co2l_in,
-                n_nodes_in,
-                save_res=True,
-                verbose=True,
-                overwrite=True,
-                use_sclopf=True,
-            )
-            print(f"###############################################################")
+            try:
+                evaluate_cascade(
+                    co2l_in,
+                    n_nodes_in,
+                    use_sclopf=True,
+                    eval_indicator_vectors=True,
+                    overrwrite=False,
+                    # end_time_str="2013-01-02 00:00",
+                )
+            except FileExistsError as e:
+                print(
+                    f"Skipping evaluation for {co2l_in} and {n_nodes_in} due to existing results."
+                )
+            # print(f"###############################################################")
+            # print(
+            #     f"Getting edge indicator vecs for CO2 level {co2l_in} and n_nodes {n_nodes_in}"
+            # )
+            # print(f"###############################################################")
+            # find_failed_edge_indicator_vector_for_cascade_results(
+            #     co2l_in,
+            #     n_nodes_in,
+            #     save_res=True,
+            #     verbose=True,
+            #     overwrite=True,
+            #     use_sclopf=True,
+            # )
+            # print(f"###############################################################")
     else:
         print(
             "Please specify either --co2l <value> for single CO2 level or --all for all levels"

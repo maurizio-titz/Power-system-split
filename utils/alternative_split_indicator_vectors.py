@@ -70,13 +70,14 @@ def nodal_rocof_in_split(co2_lvl: float, n_nodes: int, save_res: bool = True):
     return
 
 
-def extract_nodal_rocof_and_load_share_in_split_from_old_results(
+def get_nodal_rocof_vectors(
     co2_lvl: float,
     n_nodes: int,
     save_res: bool = True,
     verbose: bool = True,
     overwrite: bool = False,
     use_sclopf: bool = True,
+    comp_props: pd.DataFrame = None,
 ):
     """Use the results from the old indicator vectors to arrive at the
     vectors that give the RoCoF for every node's component"""
@@ -86,8 +87,7 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
         path_to_cascade_results = path_to_cascade_results_sclopf
         path_to_evaluation_results = path_to_evaluation_results_sclopf
     else:
-        path_to_evaluation_results = path_to_evaluation_results_lopf
-        path_to_cascade_results = path_to_cascade_results_lopf
+        raise NotImplementedError("LOPF not implemented anymore.")
 
     if save_res:
         fpath_indi_vec_rocof_out = (
@@ -95,17 +95,9 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
             + "/indicator_vector_rocof_Co2L_old"
             + f"{co2_lvl}_n{n_nodes}.pklz"
         )
-        fpath_indi_vec_lshare_out = (
-            path_to_evaluation_results
-            + "/indicator_vector_lshare_Co2L"
-            + f"{co2_lvl}_n{n_nodes}.pklz"
-        )
         print(fpath_indi_vec_rocof_out)
 
-        if (
-            os.path.exists(fpath_indi_vec_rocof_out)
-            or os.path.exists(fpath_indi_vec_lshare_out)
-        ) and not overwrite:
+        if (os.path.exists(fpath_indi_vec_rocof_out)) and not overwrite:
             raise IOError(
                 "Output was written previously. "
                 + "Please move or delete the previous results, or chose 'overwrite=True'."
@@ -143,42 +135,48 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
     with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
         indicator_vector_arr = pickle.load(fh_in_indi)
 
-    df_comp_props = pd.read_hdf(
-        path_to_evaluation_results
-        + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
-        key="df",
-    )
+    if comp_props is None:
+        comp_props = pd.read_hdf(
+            path_to_evaluation_results
+            + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(
+                co2_lvl, n_nodes
+            ),
+            key="df",
+        )
+    if comp_props.time_stamp.values != comp_props.time_stamp.sort_values().values:
+        raise ValueError("Component properties are not sorted by time stamp!")
+
     if verbose:
         print("Finished loading data.\n")
 
     # Convert index to datetime
-    df_comp_props.time_stamp = pd.to_datetime(df_comp_props.time_stamp)
+    comp_props.time_stamp = pd.to_datetime(comp_props.time_stamp)
 
     # Add list of tuples of initial failures
     if use_sclopf:
-        df_comp_props["weight"] = (
-            df_comp_props.trigger_weighting * df_comp_props.snapshot_weighting
+        comp_props["weight"] = (
+            comp_props.trigger_weighting * comp_props.snapshot_weighting
         )
-        df_comp_props["init_failure_tuples"] = list(
+        comp_props["init_failure_tuples"] = list(
             zip(
-                df_comp_props.init_failure_0.astype(int),
-                df_comp_props.num_par_failure_0,
-                df_comp_props.init_failure_1.astype(int),
-                df_comp_props.num_par_failure_1,
-                df_comp_props.weight.astype(int),
+                comp_props.init_failure_0.astype(int),
+                comp_props.num_par_failure_0,
+                comp_props.init_failure_1.astype(int),
+                comp_props.num_par_failure_1,
+                comp_props.weight.astype(int),
             )
         )
 
     # iterate through each time
-    unique_times = pd.unique(df_comp_props.time_stamp)
+    unique_times = pd.unique(comp_props.time_stamp)
     total_nr_splits = sum(len(vv) for vv in cascade_dict.values())
 
     indicator_vector_rocof = np.full(
         (total_nr_splits, indicator_vector_arr.shape[1]), np.nan, dtype=float
     )
-    indicator_vector_load_share = np.full(
-        (total_nr_splits, indicator_vector_arr.shape[1]), np.nan, dtype=float
-    )
+    # indicator_vector_load_share = np.full(
+    #     (total_nr_splits, indicator_vector_arr.shape[1]), np.nan, dtype=float
+    # )
 
     if verbose:
         print("Starting to extract rocof and load share indicator vectors:")
@@ -186,7 +184,7 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
     index_tuple_time_split = list()
     out_idx = 0
     for idx_time, time_stamp_r in enumerate(tqdm(unique_times, disable=not verbose)):
-        df_time_r = df_comp_props.loc[df_comp_props.time_stamp == time_stamp_r]
+        df_time_r = comp_props.loc[comp_props.time_stamp == time_stamp_r]
 
         # Find the number of unique tuples aka number of splits
         if use_sclopf:
@@ -219,9 +217,9 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
                     indicator_vector_arr[idx_in_split_r] == 1
                 )
                 indicator_vector_rocof[out_idx, idx_vec_in_split] = row_r.rocof
-                indicator_vector_load_share[out_idx, idx_vec_in_split] = (
-                    row_r.load_share
-                )
+                # indicator_vector_load_share[out_idx, idx_vec_in_split] = (
+                #     row_r.load_share
+                # )
 
             out_idx += 1
 
@@ -230,12 +228,7 @@ def extract_nodal_rocof_and_load_share_in_split_from_old_results(
         with gzip.open(fpath_indi_vec_rocof_out, "wb") as fh_rocof_out:
             pickle.dump((index_tuple_time_split, indicator_vector_rocof), fh_rocof_out)
 
-        with gzip.open(fpath_indi_vec_lshare_out, "wb") as fh_out_lshare:
-            pickle.dump(
-                (index_tuple_time_split, indicator_vector_load_share), fh_out_lshare
-            )
-
-    return index_tuple_time_split, indicator_vector_rocof, indicator_vector_load_share
+    return index_tuple_time_split, indicator_vector_rocof
 
 
 def add_indices_to_indicator_vectors(
@@ -793,9 +786,7 @@ def run_all_co2_lvl_node_based(n_nodes: int, use_sclopf=True) -> None:
     print(f"running node based alternative indicator vectors: {co2_lvl_ls}")
     for co2_r in co2_lvl_ls:
         print(co2_r)
-        extract_nodal_rocof_and_load_share_in_split_from_old_results(
-            co2_r, n_nodes, save_res=True, verbose=True
-        )
+        get_nodal_rocof_vectors(co2_r, n_nodes, save_res=True, verbose=True)
 
     return
 
