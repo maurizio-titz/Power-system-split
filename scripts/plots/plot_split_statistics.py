@@ -4,10 +4,13 @@ Split Statistics Plot - Figure 5: split statistics
 Creates histograms of power imbalance, rotational energy, and loss of load share distributions.
 """
 
+import gzip
+import pickle
 import sys
 import copy
 import os
 import warnings
+
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
@@ -23,6 +26,7 @@ from cycler import cycler
 
 sys.path.append("./")
 
+from utils import config
 from utils.data_handling import get_actual_co2_level, get_co2_levels
 from utils.config import (
     path_to_pypsa_network_sclopf,
@@ -373,7 +377,11 @@ def create_split_statistics_plot(
     plt.show()
 
 
-def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
+def create_blackout_statistics_plot(
+    save_path=path_to_figures_sclopf,
+    same_corridor=None,
+    normalize_by_total_splits=False,
+):
     """
     Create a standalone plot showing only the blackout statistics (Number of System Splits).
 
@@ -381,6 +389,9 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
     ----------
     save_path : str, default path_to_figures_sclopf
         Path where the plot will be saved
+    same_corridor : bool or None, default None
+        If True, only consider splits where both failed lines are in the same corridor. If False, only consider splits where failed lines are in different corridors.
+        If None, consider all splits.
     """
     # Setup
     n_nodes = 600
@@ -399,6 +410,11 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
     split_props["total_weighting"] = (
         split_props["snapshot_weighting"] * split_props["trigger_weighting"]
     )
+    if same_corridor is not None:
+        split_props["same_corridor"] = (
+            split_props.init_failure_0 == split_props.init_failure_1
+        )
+        split_props = split_props[split_props.same_corridor == same_corridor]
 
     # Setup matplotlib styling
     setup_matplotlib_style()
@@ -425,6 +441,45 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
             bins=bins,
         )
         data.append(counts)
+        if normalize_by_total_splits:
+            file_path = (
+                data_handling.path_to_grid_data + f"n_2_failures_co2lvl{co2l}.pklz"
+            )
+            with gzip.open(file_path, "rb") as fh:
+                n_2_failures = pickle.load(fh)
+            network = data_handling.load_pypsa_network(
+                n_nodes=n_nodes,
+                co2lvl=co2l,
+                use_sclopf=True,
+                lopt=config.use_extensions,
+            )
+            if same_corridor is not None:
+                n_2_failures = [
+                    n2_failure
+                    for n2_failure in n_2_failures
+                    if (n2_failure["failures"][0][0] == n2_failure["failures"][1][0])
+                    is same_corridor
+                ]
+                weighted_trigger_count = sum(
+                    [initial_failure["weight"] for initial_failure in n_2_failures]
+                )
+                # incorporating the weighting of the snapshots
+                number_of_simulations = (
+                    weighted_trigger_count
+                    * network.snapshot_weightings.generators.sum()
+                )
+            else:
+                weighted_trigger_count = sum(
+                    [initial_failure["weight"] for initial_failure in n_2_failures]
+                )
+                # incorporating the weighting of the snapshots
+                number_of_simulations = (
+                    weighted_trigger_count
+                    * network.snapshot_weightings.generators.sum()
+                )
+            total_counts = number_of_simulations
+            if total_counts > 0:
+                data[-1] = counts / total_counts
 
     data = np.stack(data)
     data = pd.DataFrame(data, index=co2ls[::-1], columns=bin_centers)
@@ -460,33 +515,142 @@ def create_blackout_statistics_plot(save_path=path_to_figures_sclopf):
         h,
         l,
         title="Share of load not served",
-        loc="center",
+        loc="center left",
+        bbox_to_anchor=(0, 0.5),
         ncols=1,
         columnspacing=0.5,
     )
+    # ax_legend.legend(
+    #     h,
+    #     l,
+    #     title="Share of load not served",
+    #     loc="center",
+    #     ncols=1,
+    #     columnspacing=0.5,
+    # )
+
     ax_legend.axis("off")
 
     plt.tight_layout()
 
     # Save figure
     save_name = "blackout_statistics"
+    if same_corridor is True:
+        save_name += "_same_corridor"
+    elif same_corridor is False:
+        save_name += "_different_corridor"
+    if normalize_by_total_splits:
+        save_name += "_normalized"
     save_figure(fig, save_path, save_name)
+    plt.show()
+
+
+def plot_blackout_size_histograms(save_path=path_to_figures_sclopf, log_scale=True):
+    # load split properties
+    n_nodes = 600
+    split_props = pd.read_hdf(
+        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
+    )
+    split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
+        float
+    )
+    split_props["total_weighting"] = (
+        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    )
+    # setup matplotlib styling
+    setup_matplotlib_style()
+
+    co2ls = get_co2_levels(n_nodes)
+    # create histogram for each co2 level
+    fig, axes = plt.subplots(len(co2ls), 1, figsize=(8, 2 * len(co2ls)), sharex=True)
+
+    bins = np.linspace(0, 100, 101)
+
+    # First pass: collect all histogram data to determine global y-limits
+    all_counts = []
+    for idx, co2l in enumerate(co2ls):
+        vals = (
+            split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
+        )
+        counts, _ = np.histogram(
+            vals,
+            weights=split_props[split_props.co2l == co2l].total_weighting,
+            bins=bins,
+        )
+        all_counts.extend(counts)
+
+    # Determine global y-limits
+    if log_scale:
+        non_zero_counts = [c for c in all_counts if c > 0]
+        ymin = min(non_zero_counts) if non_zero_counts else 0.1
+        ymax = max(all_counts) if all_counts else 1
+    else:
+        ymin = 0
+        ymax = max(all_counts) if all_counts else 1
+
+    # Second pass: plot with consistent y-limits
+    for idx, co2l in enumerate(co2ls):
+        ax = axes[idx] if len(co2ls) > 1 else axes
+        vals = (
+            split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
+        )
+        ax.hist(
+            vals,
+            weights=split_props[split_props.co2l == co2l].total_weighting,
+            bins=bins,
+            alpha=0.7,
+            edgecolor="black",
+            log=log_scale,
+            label=rf"CO$_2$: {get_actual_co2_level(co2l, n_nodes=n_nodes, percent=True)}\%",
+        )
+        if not log_scale:
+            ax.set_ylim(ymin, ymax * 1.1)  # Add 10% padding at top
+        else:
+            ax.set_ylim(ymin, ymax * 10)  # Add padding in log scale
+        ax.set_ylabel("Count", fontsize=AXIS_LABEL_FONTSIZE)
+        ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+        # ax.legend(fontsize=TICK_LABEL_FONTSIZE, loc='upper center')
+        ax.text(
+            0.5,
+            0.85,
+            rf"CO$_2$: {get_actual_co2_level(co2l, n_nodes=n_nodes, percent=True)}\%",
+            transform=ax.transAxes,
+            fontsize=TICK_LABEL_FONTSIZE,
+            horizontalalignment="center",
+            bbox=dict(
+                boxstyle="round,pad=0.3", fc="white", ec="black", lw=0.2, alpha=1
+            ),
+        )
+
+    axes[-1].set_xlabel(r"Share of load not served [\%]", fontsize=AXIS_LABEL_FONTSIZE)
+    # add suptitle
+    plt.suptitle("Blackout Size Distribution", fontsize=PANEL_LABEL_FONTSIZE + 2)
+
+    plt.tight_layout()
+    save_figure(fig, save_path, "blackout_size_histograms")
     plt.show()
 
 
 if __name__ == "__main__":
     # create_split_statistics_plot()
-    for load_norm in [False]:
-        for blackout_stat in [True]:
-            create_split_statistics_plot(
-                load_normalization=load_norm,
-                show_blackout_stats=blackout_stat,
-                secondary_proba_axis=True,
-            )
+    # for load_norm in [False]:
+    #     for blackout_stat in [True]:
+    #         create_split_statistics_plot(
+    #             load_normalization=load_norm,
+    #             show_blackout_stats=blackout_stat,
+    #             secondary_proba_axis=True,
+    #         )
 
     # Create standalone blackout statistics plot
     # create_blackout_statistics_plot()
+    plot_blackout_size_histograms(log_scale=True)
 
-    # Example usage:
-    # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)
-    # create_blackout_statistics_plot()
+    # # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)
+    # for same_corridor_option in [None, True, False]:
+    #     for normalize_option in [False, True]:
+    #         if same_corridor_option is None and not normalize_option:
+    #             continue
+    #         create_blackout_statistics_plot(
+    #             same_corridor=same_corridor_option,
+    #             normalize_by_total_splits=normalize_option,
+    #         )
