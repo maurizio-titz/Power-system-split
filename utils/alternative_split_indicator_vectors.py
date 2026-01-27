@@ -496,7 +496,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(
                 + f"{co2_lvl}_n{n_nodes}.pklz"
             )
         if os.path.exists(fpath_out_edge_base) and not overwrite:
-            raise IOError(
+            raise FileExistsError(
                 "File already exists! Please remove or choose 'overwrite=True'."
             )
         os.makedirs(os.path.dirname(fpath_out_edge_base), exist_ok=True)
@@ -590,9 +590,6 @@ def find_failed_edge_indicator_vector_for_cascade_results(
             by=["time_stamp", "split_number"], inplace=True
         )
         idx_sorted = df_comp_props_sorted.index
-        edge_names_ls = [edge_names_ls[i] for i in idx_sorted]
-        edge_pypsa_index_ls = edge_pypsa_index_ls[idx_sorted]
-        index_tuple_splits = [index_tuple_splits[i] for i in idx_sorted]
         indicator_failed_edges_arr = indicator_failed_edges_arr[idx_sorted]
 
     if save_res:
