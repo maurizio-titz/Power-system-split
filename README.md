@@ -22,7 +22,7 @@ To post message to mattermost, please set the incoming 'mattermost_url' in [util
 The `scripts` folder contains scripts to reproduce the paper results. The `scripts/plots` folder contains a scripts to produce the paper figures from these results. The `utils` folder contains the relevant utilities for cascade simulation and evaluation, as well as functions for visualisation and data handling. 
 
 ## Usage
-
+Start by creating the scenarios by following the workflow outlined in the folder `scenario_generation/Readme.md`.
 The `scripts` contain our workflow:
 - `extract_grid_data.py`: Saves grid props to disk. Run before running `run_cascade_code.py`.
 - `calc_pre_outage_data.py`: Calculate inertia and other properties from the (solved) PyPSA networks.
