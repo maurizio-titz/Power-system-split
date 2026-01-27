@@ -26,7 +26,11 @@ from utils.config import (
     path_to_inertia_mitigation_results_sclopf,
     path_to_pypsa_network_sclopf,
 )
-from utils.data_handling import load_pypsa_network_from_path, load_pypsa_network
+from utils.data_handling import (
+    load_pypsa_network_from_path,
+    load_pypsa_network,
+    load_split_props,
+)
 
 # if use_sclopf:
 #     path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_sclopf
@@ -154,10 +158,16 @@ def greedy_inertia_placement_step(
             and split_r[3] > load_share_threshold
         ):
             idx_node_for_split = split_to_node_list[idx_split]
-            mitigated_load_share_loss_r = split_r[3]
-            mitigate_load_share_loss_node_arr[idx_node_for_split] += (
-                mitigated_load_share_loss_r * split_r[4]
-            )
+            mitigated_load_share_loss_weighted = (
+                split_r[3] * split_r[4]
+            )  # [4] is the total event weighting
+            if len(split_r) > 5:
+                mitigated_load_share_loss_weighted *= split_r[
+                    5
+                ]  # [5] is the mitigation weighting factor
+            mitigate_load_share_loss_node_arr[
+                idx_node_for_split
+            ] += mitigated_load_share_loss_weighted
 
     return mitigate_load_share_loss_node_arr
 
@@ -279,7 +289,7 @@ def run_greedy_inertia_placement(
 
     Returns:
         modified_comp_index, modified_comp_arr,
-        inertia_placed_loss_mitigated_ls,
+        inertia_placed_loss_mitigated_ls, componont_mitigated_step,
         resolve_equality_counter, still_used_random_node_choice
     """
 
@@ -290,7 +300,15 @@ def run_greedy_inertia_placement(
     # Find out significant splits and reduce comp and ind
     cut_idxs = (component_df["rocof"].abs() > rocof_threshold_Hz_s).values
 
+    # load split properties
+    # filter split properties by blackout size threshold
+    # filter component_df by filter
+
     component_df_cut = component_df[cut_idxs]
+    componont_mitigated_step = pd.Series(
+        index=component_df_cut.index, data=-1
+    )  # at which step a component was mitigated
+
     len_cut_df = len(component_df_cut.index)
     indicator_vec_arr_cut = indicator_vec_arr[cut_idxs]
 
@@ -302,8 +320,20 @@ def run_greedy_inertia_placement(
         component_df_cut.trigger_weighting * component_df_cut.snapshot_weighting
     )
     # convert component_df to array
+
+    selected_component_props = [
+        "rot_energy",
+        "power_imbalance",
+        "rocof",
+        "load_share",
+        "total_weighting",
+    ]
+    if "mitigation_weighting" in component_df_cut.columns:
+        selected_component_props.append("mitigation_weighting")
+
     modified_component_df = component_df_cut.loc[
-        :, ["rot_energy", "power_imbalance", "rocof", "load_share", "total_weighting"]
+        :,
+        selected_component_props,
     ].copy()
     loss_share_before_mitigation = modified_component_df["load_share"].sum()
 
@@ -321,6 +351,7 @@ def run_greedy_inertia_placement(
     resolve_equality_counter = 0
     still_used_random_node_choice = 0
     delta_rot_energy_factor = 1.0
+    total_placed_inertia = 0.0
 
     if initial_added_inertia_by_node is None:
         added_inertia_by_node = np.zeros(indicator_vec_arr.shape[1])
@@ -339,7 +370,7 @@ def run_greedy_inertia_placement(
         )
         if idx_step > 1:
             pbar.set_description(
-                f"Bey. thres.: {count_beyond_threshold/ len_cut_df*100:.1f}%, placed: {np.array(inertia_placed_loss_mitigated_ls)[:,2].sum()*delta_rot_energy/1000:.0f}GWs "
+                f"Bey. thres.: {count_beyond_threshold/ len_cut_df*100:.1f}%, placed: {total_placed_inertia/1000:.0f}GWs "
             )
         ch_rot_energy_r = delta_rot_energy_factor * delta_rot_energy
 
@@ -441,6 +472,11 @@ def run_greedy_inertia_placement(
                 / (2 * modified_comp_arr[idx_node_in_split, 0])
             )
             modified_comp_arr[idx_node_in_split, 2] = new_rocof
+            mitigated_components = modified_comp_index[
+                (np.abs(modified_comp_arr[:, 2]) < rocof_threshold_Hz_s)
+                & (componont_mitigated_step == -1)
+            ]
+            componont_mitigated_step.loc[mitigated_components] = idx_step
 
             if revert_change_fac:
                 delta_rot_energy_factor = 1.0
@@ -448,15 +484,17 @@ def run_greedy_inertia_placement(
         # Break when all splits are pushed below rocof threshold
         if count_beyond_threshold == 0:
             break
+        total_placed_inertia += ch_rot_energy_r
 
-        current_loss = modified_comp_arr[modified_comp_arr[:, 2] < -1, 3].sum()
-        mitigated_loss = np.array(inertia_placed_loss_mitigated_ls)[:, 3].sum()
+        # current_loss = modified_comp_arr[modified_comp_arr[:, 2] < -1, 3].sum()
+        # mitigated_loss = np.array(inertia_placed_loss_mitigated_ls)[:, 3].sum()
         # deviation = (loss_share_before_mitigation - mitigated_loss) / current_loss
 
     return (
         modified_comp_index,
         modified_comp_arr,
         inertia_placed_loss_mitigated_ls,
+        componont_mitigated_step,
         resolve_equality_counter,
         still_used_random_node_choice,
     )
@@ -474,6 +512,7 @@ def run_specific_co2lvl_n_size(
     show_progress: bool = True,
     revert_ch_rotE_fac: bool = False,
     use_sclopf: bool = True,
+    blackout_size_threshold: float = 0.0,
 ) -> tuple:
     """Run the inertia placement for an optimized power system that was analyzed by
     running cascade experiments.
@@ -512,6 +551,23 @@ def run_specific_co2lvl_n_size(
         + f"component_properties_Co2L{co2_lvl}_n{nn_nodes}.h5"
     )
     component_df = pd.read_hdf(fpath_component_in, key="df")
+    if blackout_size_threshold > 0.0:
+        component_df.reset_index(inplace=True, drop=False)
+        split_props = load_split_props(
+            n_nodes=nn_nodes, co2l=co2_lvl, use_sclopf=use_sclopf
+        )
+        component_df.reset_index(inplace=True, drop=False)
+        component_df["co2l"] = co2_lvl
+        component_df = component_df.set_index(["co2l", "time_stamp", "split_number"])
+        component_df["mitigation_weighting"] = 0
+        # filter split properties by blackout size threshold
+        catastrophic_splits_idx = split_props[
+            split_props.lost_load_share_blackout > blackout_size_threshold
+        ].index
+        component_df.loc[catastrophic_splits_idx, "mitigation_weighting"] = 1.0
+        component_df.reset_index(inplace=True, drop=False)
+        component_df.index = component_df["index"]
+        component_df = component_df.drop(columns=["index"])
 
     fpath_indicator_vec_in = (
         path_to_evaluation_results
@@ -546,6 +602,8 @@ def run_specific_co2lvl_n_size(
 
         if revert_ch_rotE_fac:
             fpath_out += "_revertfac"
+        if blackout_size_threshold > 0.0:
+            fpath_out += f"_blackoutthres{blackout_size_threshold:g}"
 
         with gzip.open(fpath_out + ".pklz", "wb") as fh_out:
             pickle.dump(res_tuple, fh_out)

@@ -12,7 +12,8 @@ import networkx
 import numpy as np
 import pandas as pd
 
-from utils.data_handling import get_actual_co2_level
+from utils import config
+
 
 matplotlib.rcParams["pgf.texsystem"] = "pdflatex"
 matplotlib.rcParams.update(
@@ -32,6 +33,7 @@ from glob import glob
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
+from utils.data_handling import get_actual_co2_level
 from utils import data_handling
 from utils.config import (
     path_to_cascade_results_sclopf,
@@ -39,6 +41,7 @@ from utils.config import (
     path_to_inertia_mitigation_results_sclopf,
     path_to_line_extension_mitigation_sclopf,
     path_to_pypsa_network_sclopf,
+    path_to_vis_results_sclopf,
 )
 from utils.plot_style import (
     setup_matplotlib_style,
@@ -62,21 +65,15 @@ color_ls = [color1, color2, color3, color4]
 script_path = os.path.dirname(__file__)
 
 
-def plot_inertia_loss_mitigation_curve(
-    resolve_strategy,
-    co2_lvl,
-    nn,
-    max_iter,
-    total_loss_share_rocof_lvl,
-    total_loss_share_rocof_ref,
+def plot_inertia_loss_mitigation_curve_new(
+    mitigation_curve,
+    target_value,
     delta_Erot,
     ax_loss,
     ax_number=None,
     show_step_number=False,
     modified_comp_idx=None,
     inertia_placed_ls=None,
-    rocof_thres=1,
-    l_share=0.0,
     unit="GWs",
     color=None,
     annualized_cost_per_GWs_max=None,
@@ -85,22 +82,6 @@ def plot_inertia_loss_mitigation_curve(
 
     if ax_number is None:
         plot_number_of_splits = False
-
-    if modified_comp_idx is None or inertia_placed_ls is None:
-        fpath_in = (
-            path_to_inertia_mitigation_results_sclopf
-            + f"synthetic_inertia_placement_Co2{co2_lvl:g}"
-            + f"_N{nn}_deltarotE{delta_Erot:g}_rocofthres{rocof_thres:g}"
-            + f"_lshare{l_share:g}_maxiter{max_iter}_{resolve_strategy}.pklz"
-        )
-        with gzip.open(fpath_in) as fh_in:
-            (
-                modified_comp_idx,
-                _,
-                inertia_placed_ls,
-                _,
-                _,
-            ) = pickle.load(fh_in)
 
     ## Plot mitigated lost load and remaining lost splits over time
     total_dangerous_splits = len(modified_comp_idx)
@@ -112,9 +93,7 @@ def plot_inertia_loss_mitigation_curve(
         cumulative_inertia_placed = np.cumsum(inertia_placed_arr[:, 2] * delta_Erot)
         x_vals = cumulative_inertia_placed
 
-    loss_ref_multiple = (
-        total_loss_share_rocof_lvl - np.cumsum(inertia_placed_arr[:, 3])
-    ) / total_loss_share_rocof_ref
+    loss_ref_multiple = (mitigation_curve) / target_value
 
     if unit == "GWs":
         unit_factor = 1e-3
@@ -149,7 +128,7 @@ def plot_inertia_loss_mitigation_curve(
         x_lim_mask = x_vals <= x_val_half_ref_loss
         x_vals = x_vals[x_lim_mask]  # limit x vals to half ref loss for cost plot
         cost_unit_factor = 1e-9  # to billion euros
-        rescale_divider = 0.3
+        rescale_divider = 0.05
         cumulative_annualized_cost = np.cumsum(
             inertia_placed_arr[:, 2]
             * delta_Erot
@@ -223,6 +202,7 @@ def plot_map_inertia_placement_final(
     split_properties=None,
     line_color=None,
     annualized_cost_per_GWs_max=None,
+    blackoutthreshold=0.0,
 ):
     """Plot the results of the inertia placement"""
 
@@ -252,11 +232,19 @@ def plot_map_inertia_placement_final(
         path_to_inertia_mitigation_results
         + f"synthetic_inertia_placement_Co2{co2_lvl:g}"
         + f"_N{nn}_deltarotE{delta_Erot:g}_rocofthres{rocof_thres:g}"
-        + f"_lshare{l_share:g}_maxiter{max_iter}_{resolve_strategy}.pklz"
+        + f"_lshare{l_share:g}_maxiter{max_iter}_{resolve_strategy}"
     )
+    if blackoutthreshold > 0.0:
+        fpath_in += f"_blackoutthres{blackoutthreshold:g}"
+    fpath_in += ".pklz"
+
     if not os.path.exists(fpath_in):
         fnames = os.listdir(path_to_inertia_mitigation_results)
         fnames_lvl = [f for f in fnames if f"Co2{co2_lvl:g}_" in f]
+        if blackoutthreshold > 0.0:
+            fnames_lvl = [
+                f for f in fnames_lvl if f"_blackoutthres{blackoutthreshold:g}" in f
+            ]
         if len(fnames_lvl) == 1:
             fpath_in = path_to_inertia_mitigation_results + fnames_lvl[0]
         else:
@@ -268,6 +256,7 @@ def plot_map_inertia_placement_final(
             modified_comp_idx,
             _,
             inertia_placed_ls,
+            _,
             resolve_counter,
             still_random_counter,
         ) = pickle.load(fh_in)
@@ -281,15 +270,16 @@ def plot_map_inertia_placement_final(
     inertia_placed_res_arr = np.array(inertia_placed_ls)
     # for each opitimization step holds: [idx_step, idx_node, delta_rot_energy_factor, max_change, count_beyond_threshold]
 
-    inertia_node_idx = inertia_placed_res_arr[:, 1:3]
-    # for each opitimization step holds: [idx_node, delta_rot_energy_factor]
-
     # get split properties
     if split_properties is None:
         split_properties = data_handling.load_split_props(nn, co2_lvl, use_sclopf)
     else:
         split_properties = split_properties.copy()
         split_properties = split_properties[split_properties.co2l == co2_lvl]
+    if blackoutthreshold > 0.0:
+        split_properties = split_properties[
+            split_properties.lost_load_share_blackout >= blackoutthreshold
+        ]
 
     total_loss_share_rocof_lvl = (
         split_properties.lost_load_share_blackout * split_properties.total_weighting
@@ -301,14 +291,16 @@ def plot_map_inertia_placement_final(
 
     total_loss_share_rocof_ref_multiple = total_loss_share_rocof_ref * ref_loss_factor
 
-    idx_reached_ref_loss = np.where(
+    idx_reached_target = np.where(
         (total_loss_share_rocof_lvl - np.cumsum(inertia_placed_res_arr[:, 3]))
         < total_loss_share_rocof_ref_multiple
     )[0][0]
 
+    inertia_node_idx = inertia_placed_res_arr[:, 1:3]
+    # for each opitimization step holds: [idx_node, delta_rot_energy_factor]
     inertia_placements_by_node = [0] * len(nx_graph)
     # stepwise sum up inertia placements to get total inertia placed per node
-    for indi_idx_r, indi_count_r in inertia_node_idx[:idx_reached_ref_loss, :]:
+    for indi_idx_r, indi_count_r in inertia_node_idx[:idx_reached_target, :]:
         inertia_placements_by_node[int(indi_idx_r)] += indi_count_r
     inertia_in_map_plot = np.sum(inertia_placements_by_node) * delta_Erot
     print("inertia placed in map: ", inertia_in_map_plot)
@@ -407,26 +399,248 @@ def plot_map_inertia_placement_final(
         fontsize=TICK_LABEL_FONTSIZE,
         c=color,
     )
-    # ax2.text(
-    #     inertia_in_map_plot * unit_factor,
-    #     2,
-    #     "Map scenario",
-    #     fontsize=16,
-    #     horizontalalignment="center",
-    # )
 
-    # Asthetics
-    # for relative_size_r in [0.25, 0.75]:
-    #     ax.plot(
-    #         [],
-    #         [],
-    #         marker="o",
-    #         color=color,
-    #         markersize=np.sqrt(max_node_size * relative_size_r),
-    #         label=f"{int(max_inertia_placements_in_one_node*delta_Erot * relative_size_r*unit_factor)} {unit}",
-    #         label=f"{int(max_inertia_placements_in_one_node*delta_Erot * relative_size_r*unit_factor)} {unit}",
-    #         lw=0,
-    #     )
+    for fact in [1, 0.5]:
+        ax.plot(
+            [],
+            [],
+            marker="o",
+            color=color,
+            markersize=np.sqrt(  # sqrt beause plot and nx.draw scale differently
+                max_node_size * fact
+            ),
+            label=f"{int(delta_Erot * max_inertia_placements_in_one_node*unit_factor*fact)} {unit}",
+            lw=0,
+        )
+    ax.legend(
+        labelspacing=0,
+        handletextpad=0.1,
+        loc="upper left",
+        # bbox_to_anchor=(0.7, 0.975),
+        frameon=False,
+        fontsize=18,
+    )
+
+    ax.axis("off")
+    if show_params:
+        para_text = f"$N={nn}$, CO$_2$-Level $={co2_lvl}$, \n$\\Delta E_0 = {(delta_Erot*unit_factor):.2f}${unit}"
+        fig.text(
+            0.0,
+            0.975,
+            para_text,
+            horizontalalignment="left",
+            verticalalignment="top",
+            fontsize=22,
+            transform=ax.transAxes,
+        )
+    if resolve_strategy == "random":
+        resolve_strategy_str = "Place inertia randomly"
+
+    elif resolve_strategy == "concentrate":
+        resolve_strategy_str = "Concentrate inertia where inertia was placed previously"
+
+    elif resolve_strategy == "hindsight":
+        resolve_strategy_str = "Place inertia where max. lost load in next step."
+
+    elif resolve_strategy == "hindsight_concentrate":
+        resolve_strategy_str = (
+            "Place inertia where max. lost load in next step + concentrate inertia."
+        )
+    else:
+        raise IOError(f"Resolve equality method '{resolve_strategy}' not known!")
+
+    label_text = (
+        f"{resolve_strategy_str}"
+        + f"\n Resolve needed: {(resolve_counter *100/max_iter)}\\%"
+    )
+    if show_params:
+        if resolve_counter > 0:
+            label_text += f", Random Decisions: {(((still_random_counter/resolve_counter)*100)):.2f}\\%"
+        fig.text(
+            0.5,
+            0.05,
+            label_text,
+            horizontalalignment="center",
+            fontsize=16,
+            transform=ax.transAxes,
+        )
+    if show_step_number:
+        ax2.set_xlabel("$t_n$")
+    else:
+        ax2.set_xlabel(f"inertia placed [{unit}]")
+
+    if plot_split_number:
+        ax_twin_number.set_ylabel("$N_{\\textrm{splits mit}}/N_{\\textrm{splits}}$")
+
+    y_label = "$R_{\\textrm{co2string,mit}}/R_{\\textrm{co2refString}}$"
+    y_label = y_label.replace(
+        "co2string", str(int(100 * get_actual_co2_level(co2_lvl))) + "\%"
+    )
+    y_label = y_label.replace(
+        "co2refString", str(int(100 * get_actual_co2_level(co2_lvl_ref))) + "\%"
+    )
+
+    if plot_split_number:
+        y_label = y_label + " (-)"
+    ax2.set_ylabel(y_label)
+
+    if save_fig:
+        fig_path = f"{path_to_inertia_mitigation_results_sclopf}/syn_inertia_map_co2lvl{co2_lvl:g}_nn{nn}_deltaErot{delta_Erot:g}_{resolve_strategy}.png"
+
+        fig.savefig(fig_path, bbox_inches="tight")
+        fig.clear()
+        plt.close(fig)
+
+    else:
+        # plt.show()
+        return fig, ax, ax2, ax_twin_number
+
+    return
+
+
+def plot_map_inertia_placement_new(
+    co2_lvl,
+    idx_reached_target,
+    res_tuple,
+    mitigation_curve,
+    target_value,
+    nn=600,
+    max_iter=10000,
+    max_node_size=200,
+    edge_width=0.2,
+    delta_Erot=10,
+    resolve_strategy="random",
+    show_step_number: bool = False,
+    plot_split_number: bool = False,
+    save_fig=False,
+    co2_lvl_ref: float = 0.6,
+    axes=None,
+    unit="GWs",
+    show_params=False,
+    ref_loss_factor=1,
+    color=color1,
+    plot_curve=True,
+    use_sclopf=True,
+    line_color=None,
+    annualized_cost_per_GWs_max=None,
+):
+    """Plot the results of the inertia placement"""
+
+    if unit == "GWs":
+        unit_factor = 1e-3
+    elif unit == "MWs":
+        unit_factor = 1
+    else:
+        raise ValueError(f"Unit '{unit}' not known!")
+
+    # Load graph
+    pypsa_net = data_handling.load_pypsa_network(co2_lvl, nn, use_sclopf)
+    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index=0)
+    pos_nodes = networkx.get_node_attributes(nx_graph, "pos")
+
+    inertia_placed = res_tuple[2]
+    inertia_node_idx = np.array(inertia_placed)[:, 1:3]
+    modified_comp_idx = res_tuple[0]
+    resolve_counter = res_tuple[4]
+    # for each opitimization step holds: [idx_node, delta_rot_energy_factor]
+    inertia_placements_by_node = [0] * len(nx_graph)
+    # stepwise sum up inertia placements to get total inertia placed per node
+    for indi_idx_r, indi_count_r in inertia_node_idx[:idx_reached_target, :]:
+        inertia_placements_by_node[int(indi_idx_r)] += indi_count_r
+    inertia_in_map_plot = np.sum(inertia_placements_by_node) * delta_Erot
+    print("inertia placed in map: ", inertia_in_map_plot)
+
+    # Plot graph
+    if axes is None:
+        fig, [ax, ax2] = plt.subplots(1, 2, figsize=(18, 10))
+    else:
+        ax, ax2 = axes
+        fig = ax.get_figure()
+    if plot_split_number:
+        ax_twin_number = ax2.twinx()
+    else:
+        ax_twin_number = None
+
+    ## Normalize node_size
+    max_inertia_placements_in_one_node = max(inertia_placements_by_node)
+    # if max_node_size is None:
+    #     max_node_size = 200 * max_inertia_placements_in_one_node / 10
+    node_width_arr = (
+        np.array(inertia_placements_by_node) / max_inertia_placements_in_one_node
+    ) * max_node_size
+
+    networkx.draw_networkx_edges(nx_graph, pos_nodes, width=edge_width, ax=ax)
+    networkx.draw_networkx_nodes(
+        nx_graph, pos_nodes, node_size=node_width_arr, node_color=color, ax=ax
+    )
+
+    ## Plot mitigated lost load and remaining lost splits over time
+    if plot_curve:
+        plot_inertia_loss_mitigation_curve_new(
+            mitigation_curve,
+            target_value,
+            delta_Erot,
+            ax2,
+            ax_number=None,
+            show_step_number=False,
+            modified_comp_idx=modified_comp_idx,
+            inertia_placed_ls=inertia_placed,
+            unit=unit,
+            color=line_color,
+            annualized_cost_per_GWs_max=annualized_cost_per_GWs_max,
+        )
+    ax2.grid(True)
+    ax2.set_ylim(bottom=0)
+    cost_map_plot = (
+        inertia_in_map_plot * unit_factor * annualized_cost_per_GWs_max * 1e-9
+    )
+    ax2_twin = ax2.get_shared_x_axes().get_siblings(ax2)
+    if len(ax2_twin) > 1:
+        ax2_twin = [ax for ax in ax2_twin if ax != ax2][0]
+        ax2_twin.plot(
+            [inertia_in_map_plot * unit_factor, inertia_in_map_plot * unit_factor],
+            [ax2_twin.get_ylim()[0], cost_map_plot / 0.3],  # rescale divider 0.3
+            linestyle="--",
+            c=color,
+            lw=2,
+        )
+    else:
+        ax2.plot(
+            [inertia_in_map_plot * unit_factor, inertia_in_map_plot * unit_factor],
+            [ax2.get_ylim()[0], ref_loss_factor],
+            linestyle="--",
+            c=color,
+            lw=2,
+        )
+    ax2.plot(
+        [0, inertia_in_map_plot * unit_factor],
+        [ref_loss_factor, ref_loss_factor],
+        linestyle="--",
+        c=color,
+        lw=2,
+    )
+    right_xlim = ax2.get_xlim()[1]
+    ax2.text(
+        inertia_in_map_plot * unit_factor + right_xlim / 200 * 5,
+        0.2,
+        f"{int(round(inertia_in_map_plot*unit_factor))} GWs",
+        verticalalignment="bottom",
+        horizontalalignment="left",
+        zorder=np.inf,
+        fontsize=TICK_LABEL_FONTSIZE,
+        c=color,
+    )
+    ax2.text(
+        inertia_in_map_plot * unit_factor + right_xlim / 200 * 5,
+        1.2,
+        f"{cost_map_plot:.2f} bn. €",
+        verticalalignment="bottom",
+        horizontalalignment="left",
+        zorder=np.inf,
+        fontsize=TICK_LABEL_FONTSIZE,
+        c=color,
+    )
+
     for fact in [1, 0.5]:
         ax.plot(
             [],
@@ -560,6 +774,7 @@ def plot_map_inertia_placement(
             modified_comp_idx,
             _,
             inertia_placed_ls,
+            _,
             resolve_counter,
             still_random_counter,
         ) = pickle.load(fh_in)
@@ -739,7 +954,7 @@ def plot_mitigate_load_loss_n_splits_over_time_diff_E0(
                 + f"_maxiter{max_iter}_{resolve_method}.pklz"
             )
             with gzip.open(fpath_in) as fh_in:
-                modified_comp_idx, _, inertia_placed_ls, _, _ = pickle.load(fh_in)
+                modified_comp_idx, _, inertia_placed_ls, _, _, _ = pickle.load(fh_in)
 
             inertia_placed_arr = np.array(inertia_placed_ls)
 
@@ -817,6 +1032,328 @@ def plot_all_syn_inertia_over_time():
 
 
 def calc_inertia_placement_ref_loss(
+    n_nodes=600,
+    co2_lvl_ref=0.6,
+    ref_loss_factor=1,
+    target="total_loss",
+    max_iter=10000,
+    delta_Erot=5000,
+    rocof_thres=1,
+    l_share=0.0,
+    resolve_strategy="random",
+    co2_lvls=(0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0),
+    use_sclopf=True,
+    split_properties=None,
+    blackoutthreshold=0.0,
+):
+    """calculates the synthetic inertia needed to reach the reference loss level for different CO2 levels.
+
+    Args:
+        n_nodes (int, optional): _description_. Defaults to 400.
+        co2_lvl_ref (float, optional): _description_. Defaults to 0.6.
+        ref_loss_factor (int, optional): _description_. Defaults to 1.
+        max_iter (int, optional): _description_. Defaults to 10000.
+        delta_Erot (int, optional): _description_. Defaults to 5000.
+        rocof_thres (int, optional): _description_. Defaults to -1.
+        l_share (float, optional): _description_. Defaults to 0.0.
+        resolve_strategy (str, optional): _description_. Defaults to "random".
+        co2_lvls (list, optional): _description_. Defaults to [0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0].
+
+    Returns:
+
+    """
+
+    if split_properties is None:
+        split_properties = data_handling.load_split_props(n_nodes, None, use_sclopf)
+
+    split_properties_ref = split_properties[split_properties.co2l == co2_lvl_ref]
+
+    if target == "total_loss":
+        target_value = (
+            split_properties_ref.lost_load_share_blackout
+            * split_properties_ref.total_weighting
+        ).sum() * ref_loss_factor
+    elif target == "num_GSS":
+        target_value = (
+            (split_properties_ref.lost_load_share_blackout > blackoutthreshold)
+            * split_properties_ref.total_weighting
+        ).sum() * ref_loss_factor
+        component_properties = pd.read_hdf(
+            config.path_to_vis_results_sclopf
+            + f"component_properties_all_n{n_nodes}.h5",
+            index_col=0,
+        )
+    elif target == "lost_load_GSS":
+        target_value = (
+            (
+                split_properties_ref.lost_load_share_blackout[
+                    split_properties_ref.lost_load_share_blackout > blackoutthreshold
+                ]
+            )
+            * split_properties_ref.total_weighting.sum()
+            * ref_loss_factor
+        ).sum()
+        component_properties = pd.read_hdf(
+            config.path_to_vis_results_sclopf
+            + f"component_properties_all_n{n_nodes}.h5",
+            index_col=0,
+        )
+    else:
+        raise ValueError(f"Target '{target}' not known!")
+
+    inertia_to_reach_target_by_lvl = {}
+    steps_to_reach_target_by_lvl = {}
+    res_tuples_by_lvl = {}
+    mitigation_curve_by_lvl = {}
+
+    path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_sclopf
+    for co2_lvl in co2_lvls:
+        if co2_lvl == co2_lvl_ref:
+            continue
+        # Load synthetic inertia placement
+        delta_Erot_saved, res_tuple = load_inertia_placement_results(
+            n_nodes,
+            max_iter,
+            delta_Erot,
+            rocof_thres,
+            l_share,
+            resolve_strategy,
+            blackoutthreshold,
+            path_to_inertia_mitigation_results,
+            co2_lvl,
+        )
+
+        (
+            modified_comp_idx,
+            _,
+            inertia_placed_ls,
+            componont_mitigated_step,
+            resolve_counter,
+            still_random_counter,
+        ) = res_tuple
+
+        res_tuples_by_lvl[co2_lvl] = res_tuple
+
+        if delta_Erot_saved != delta_Erot:
+            print(
+                "Correcting delta_Erot factor from", delta_Erot, "to", delta_Erot_saved
+            )
+            delta_Erot = delta_Erot_saved
+
+        if target == "total_loss":
+            mitigation_curve, idx_reached_ref_loss = get_idx_ref_loss_reached(
+                split_properties,
+                blackoutthreshold,
+                target_value,
+                co2_lvl,
+                inertia_placed_ls,
+            )
+        else:
+            split_properties_lvl = split_properties[split_properties.co2l == co2_lvl]
+            component_properties_lvl = component_properties[
+                component_properties.co2l == co2_lvl
+            ]
+            mitigation_curve, idx_reached_ref_loss = get_idx_ref_reached_GSS(
+                split_properties_lvl,
+                component_properties_lvl,
+                componont_mitigated_step,
+                target_value=target_value,
+                blackout_threshold=blackoutthreshold,
+                target=target,
+            )
+
+        total_placed_inertia = np.sum(
+            np.array(inertia_placed_ls)[:idx_reached_ref_loss, 2] * delta_Erot
+        )
+
+        inertia_to_reach_target_by_lvl[co2_lvl] = total_placed_inertia
+        steps_to_reach_target_by_lvl[co2_lvl] = idx_reached_ref_loss
+        mitigation_curve_by_lvl[co2_lvl] = mitigation_curve
+
+    return (
+        res_tuples_by_lvl,
+        mitigation_curve_by_lvl,
+        inertia_to_reach_target_by_lvl,
+        steps_to_reach_target_by_lvl,
+    )
+
+
+def get_idx_ref_loss_reached(
+    split_properties,
+    blackoutthreshold,
+    total_loss_share_rocof_ref,
+    co2_lvl,
+    inertia_placed_ls,
+):
+    inertia_placed_res_arr = np.array(inertia_placed_ls)
+
+    split_properties_lvl = split_properties[split_properties.co2l == co2_lvl]
+    if blackoutthreshold > 0.0:
+        split_properties_lvl = split_properties_lvl[
+            split_properties_lvl.lost_load_share_blackout >= blackoutthreshold
+        ]
+    total_loss_share_rocof_lvl = (
+        split_properties_lvl.lost_load_share_blackout
+        * split_properties_lvl.total_weighting
+    ).sum()
+
+    loss_mitigation_curve = total_loss_share_rocof_lvl - np.cumsum(
+        inertia_placed_res_arr[:, 3]
+    )
+    idx_reached_ref_loss = np.where(
+        (loss_mitigation_curve) < total_loss_share_rocof_ref
+    )[0][0]
+
+    return loss_mitigation_curve, idx_reached_ref_loss
+
+
+def load_inertia_placement_results(
+    n_nodes,
+    max_iter,
+    delta_Erot,
+    rocof_thres,
+    l_share,
+    resolve_strategy,
+    blackoutthreshold,
+    path_to_inertia_mitigation_results,
+    co2_lvl,
+):
+    fpath_in = (
+        path_to_inertia_mitigation_results
+        + f"synthetic_inertia_placement_Co2{co2_lvl:g}"
+        + f"_N{n_nodes}_deltarotE{delta_Erot:g}_rocofthres{rocof_thres:g}"
+        + f"_lshare{l_share:g}_maxiter{max_iter}_{resolve_strategy}.pklz"
+    )
+    if not os.path.exists(fpath_in):
+        fnames = os.listdir(path_to_inertia_mitigation_results)
+        fnames_lvl = [f for f in fnames if f"Co2{co2_lvl:g}_" in f]
+        if blackoutthreshold > 0.0:
+            fnames_lvl = [
+                f for f in fnames_lvl if f"blackoutthres{blackoutthreshold:g}" in f
+            ]
+        if len(fnames_lvl) == 1:
+            fpath_in = path_to_inertia_mitigation_results + fnames_lvl[0]
+
+        else:
+            raise FileNotFoundError(
+                f"No unique inertia placement results for CO2 level {co2_lvl} found. Skipping."
+            )
+
+        # correcting delta_Erot factor if saved with different one
+    delta_Erot_saved = int(fpath_in.split("deltarotE")[1].split("_rocofthres")[0])
+
+    with gzip.open(fpath_in) as fh_in:
+        res_tuple = pickle.load(fh_in)
+
+    return delta_Erot_saved, res_tuple
+
+
+def get_idx_ref_reached_GSS(
+    split_properties_lvl,
+    component_properties_lvl,
+    componont_mitigated_step,
+    target_value: float,
+    blackout_threshold=0.8,
+    target: str = "num_GSS",
+):
+    """calculates the number of steps needed to reach the target number of GSS (globally severe split) or total lost load in GSS.
+    Args:
+        split_properties_lvl (pd.DataFrame)
+        component_properties_lvl (pd.DataFrame)
+        componont_mitigated_step (pd.Series): Series with index matching component_properties_lvl index filtered for critical components. holds the step number in which the component was mitigated.
+        target_value (float): target value to reach (number of GSS or total lost load)
+        blackout_threshold (float, optional): threshold to consider a split as GSS. Defaults to 0.8.
+        target (str, optional): "num_GSS" or "lost_load_GSS". Defaults to "num_GSS".
+    Returns:
+        tuple: (mitigation curve: weighted number of GSS or weighted lost load per step, int: number of steps needed to reach the target)
+    """
+    component_properties_lvl.reset_index(drop=True, inplace=True)
+    # consider only components with rocof > 1 Hz/s
+    component_properties_lvl = component_properties_lvl[
+        component_properties_lvl.rocof.abs() > 1
+    ]
+    if not "split_props_idx" in component_properties_lvl.columns:
+        component_properties_lvl["split_props_idx"] = component_properties_lvl[
+            ["co2l", "time_stamp", "split_number"]
+        ].apply(tuple, axis=1)
+    component_properties_lvl["mitigated_in_step"] = componont_mitigated_step
+
+    n_steps = componont_mitigated_step.max()
+    split_properties_steps = split_properties_lvl[
+        ["lost_load_share_blackout", "total_weighting"]
+    ].copy()
+
+    # Prepare all columns at once
+    step_columns = {}
+    step_columns[f"lost_load_share_blackout_step-1"] = split_properties_steps[
+        "lost_load_share_blackout"
+    ]
+    step_names = component_properties_lvl.mitigated_in_step.unique()
+    # sort values
+    step_names = np.sort(
+        step_names[step_names >= 0]
+    )  # contains -1 if components are never safed
+    for step, step_name in enumerate(step_names):
+        comp_idxs_in_step = component_properties_lvl[
+            component_properties_lvl.mitigated_in_step == step_name
+        ].index
+        if len(comp_idxs_in_step) == 0:
+            raise ValueError(
+                f"Warning: No components mitigated in step {step}. Check component mitigation steps."
+            )
+        split_props_idxs_in_step = component_properties_lvl.loc[
+            comp_idxs_in_step, "split_props_idx"
+        ]
+
+        # Create new column based on previous step
+        prev_col = step_columns[f"lost_load_share_blackout_step{step-1}"]
+        new_col = prev_col.copy()
+        new_col.loc[split_props_idxs_in_step] -= (
+            component_properties_lvl.loc[comp_idxs_in_step, "load_share"]
+        ).values
+        step_columns[f"lost_load_share_blackout_step{step}"] = new_col
+
+        if new_col.equals(prev_col):
+            raise ValueError(
+                f"Warning: No change in lost load share in step {step}. Check if any components were mitigated in this step."
+            )
+            # Warning(
+            #     f"Warning: No change in lost load share in step {step}. Check if any components were mitigated in this step."
+            # )
+
+    # Remove the step-1 column and concatenate all at once
+    del step_columns[f"lost_load_share_blackout_step-1"]
+    split_properties_steps = pd.concat(
+        [split_properties_steps, pd.DataFrame(step_columns)], axis=1
+    )
+
+    if target == "num_GSS":
+        weighted_number_of_GSS = (
+            split_properties_steps["total_weighting"].values
+            @ (
+                split_properties_steps[
+                    [col for col in split_properties_steps.columns if "step" in col]
+                ]
+                > blackout_threshold
+            ).values
+        )
+        steps_needed = np.argmax(weighted_number_of_GSS <= target_value)
+        return weighted_number_of_GSS, steps_needed
+
+    elif target == "lost_load_GSS":
+        weighted_loss = (
+            split_properties_steps["total_weighting"].values
+            @ split_properties_steps[
+                [col for col in split_properties_steps.columns if "step" in col]
+            ].values
+        )
+        steps_needed = np.argmax(weighted_loss <= target_value)
+        return weighted_loss, steps_needed
+    else:
+        raise ValueError("Target must be 'num_GSS' or 'lost_load_GSS'")
+
+
+def calc_post_inertia_split_props(
     n_nodes=400,
     co2_lvl_ref=0.6,
     ref_loss_factor=1,
@@ -848,13 +1385,18 @@ def calc_inertia_placement_ref_loss(
 
     if split_properties is None:
         split_properties = data_handling.load_split_props(n_nodes, None, use_sclopf)
+    if total_loss_share_rocof_ref is None:
+        split_properties_ref = split_properties[split_properties.co2l == co2_lvl_ref]
 
-    split_properties_ref = split_properties[split_properties.co2l == co2_lvl_ref]
-
-    total_loss_share_rocof_ref = (
-        split_properties_ref.lost_load_share_blackout
-        * split_properties_ref.total_weighting
-    ).sum() * ref_loss_factor
+        total_loss_share_rocof_ref = (
+            split_properties_ref.lost_load_share_blackout
+            * split_properties_ref.total_weighting
+        ).sum() * ref_loss_factor
+    if "component_props" not in locals():
+        component_props = pd.read_hdf(
+            path_to_vis_results_sclopf + f"component_properties_all_n{n_nodes}.h5",
+            key="df",
+        )
 
     inertia_at_ref_loss_by_lvl = {}
 
@@ -888,6 +1430,7 @@ def calc_inertia_placement_ref_loss(
                 modified_comp_idx,
                 _,
                 inertia_placed_ls,
+                _,
                 resolve_counter,
                 still_random_counter,
             ) = pickle.load(fh_in)
