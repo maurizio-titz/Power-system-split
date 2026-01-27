@@ -144,13 +144,12 @@ if __name__ == "__main__":
         #     "calc_silhouette": True,
         # },
     }
-    co2l_clustering = [
-        [col2] for col2 in co2l_list
-    ]  # +[co2l_list]  # cluster individually and all together
+    co2l_clustering = [co2l_list]
+    # co2l_clustering = [[col2] for col2 in co2l_list] + [
+    #     co2l_list
+    # ]  # cluster individually and all together
     # %%
     for co2l_iter in co2l_clustering:
-        if co2l_iter[0] > 0.05:
-            continue
         print(f"\n\n=== Clustering for CO2 levels: {co2l_iter} ===\n\n")
         # Initialize clustering object
         cl = Clustering(
@@ -158,7 +157,7 @@ if __name__ == "__main__":
             co2l_iter,
             indicator_type="rocof",
             transformation="blackout",
-            blackout_size_threshold=0.05,
+            blackout_size_threshold=0.99,
             distance_metric_kwargs=distance_metric_kwargs,
             clustering_params=clustering_params,
             distance_matrix_dtype=np.float16,
@@ -174,11 +173,7 @@ if __name__ == "__main__":
         cl.get_distance_matrix()
         # # # # %%
         cl.fit_clusters()
-        # %%prun -s cumulative -q -l 10 -T prun0
-        # We profile the cell, sort the report by "cumulative
-        # time", limit it to 10 lines, and save it to a file
-        # named "prun0".
-        # cl.create_clustering_results_index()
+        cl.create_clustering_results_index()
         cl.plot_cluster_multiple(
             n_best=1, average_over_classes=False, algorithm="agg", sort_by="frequency"
         )

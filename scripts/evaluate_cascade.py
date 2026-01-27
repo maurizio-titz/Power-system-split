@@ -1190,13 +1190,16 @@ if __name__ == "__main__":
             )
             print(60 * "_")
             try:
-                evaluate_cascade(
+                evaluate_cascade_parallel(
                     co2l_in,
                     n_nodes_in,
                     use_sclopf=True,
                     eval_indicator_vectors=True,
                     overrwrite=False,
-                    # end_time_str="2013-01-02 00:00",
+                    load_inertia=True,
+                    n_jobs=30,
+                    verbose=True,
+                    # end_time_str="2013-01-03 00:00",
                 )
             except FileExistsError as e:
                 print(

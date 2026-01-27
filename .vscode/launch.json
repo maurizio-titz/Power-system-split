@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [{
             "name": "Python: Current File with profiler",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "cProfile",
             "args": [
@@ -13,8 +13,28 @@
             ]
         },
         {
+            "name": "Python: no load inertia",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "env": {
+                "POWER_SYSTEM_DATASET": "no_load_inertia"
+            }
+        },
+        {
+            "name": "Python: current",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "env": {
+                "POWER_SYSTEM_DATASET": "current"
+            }
+        },
+        {
             "name": "Python: Current File",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"
