@@ -58,7 +58,7 @@ def evaluate_cascade(
     verbose: bool = False,
     show_progress: bool = True,
     use_sclopf=True,
-    overrwrite: bool = False,
+    overwrite: bool = False,
     calc_split_indicator_vectors: bool = True,
     load_inertia: bool = True,
     show_progress_2: bool = False,
@@ -123,7 +123,7 @@ def evaluate_cascade(
 
     save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
     if os.path.exists(save_df_path + ".h5"):
-        if not overrwrite:
+        if not overwrite:
             raise FileExistsError(
                 f"Results already exist at {save_df_path}.h5, skipping evaluation."
             )
@@ -759,7 +759,7 @@ def evaluate_cascade_parallel(
     verbose: bool = False,
     show_progress: bool = True,
     use_sclopf=True,
-    overrwrite: bool = False,
+    overwrite: bool = False,
     calc_split_indicator_vectors: bool = True,
     load_inertia: bool = True,
     show_progress_2: bool = False,
@@ -825,7 +825,7 @@ def evaluate_cascade_parallel(
 
     save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
     if os.path.exists(save_df_path + ".h5"):
-        if not overrwrite:
+        if not overwrite:
             raise FileExistsError(
                 f"Results already exist at {save_df_path}.h5, skipping evaluation."
             )
@@ -1035,6 +1035,66 @@ def evaluate_cascade_parallel(
     return component_props
 
 
+def evaluate_cascade_wrapper(
+    co2l: float,
+    n_nodes: int,
+    snet_index: int = 0,
+    start_time_str=None,
+    end_time_str=None,
+    eval_indicator_vectors: bool = True,
+    verbose: bool = False,
+    show_progress: bool = True,
+    use_sclopf=True,
+    overwrite: bool = False,
+    calc_split_indicator_vectors: bool = True,
+    load_inertia: bool = True,
+    show_progress_2: bool = False,
+    sort_cascades: bool = True,
+    parallel: bool = False,
+    n_jobs: int = 8,
+):
+    """Wrapper to run parallel or serial evaluation.
+
+    Set `parallel=True` to use `evaluate_cascade_parallel`, otherwise the
+    serial `evaluate_cascade` is used.
+    """
+    if parallel:
+        return evaluate_cascade_parallel(
+            co2l=co2l,
+            n_nodes=n_nodes,
+            snet_index=snet_index,
+            start_time_str=start_time_str,
+            end_time_str=end_time_str,
+            eval_indicator_vectors=eval_indicator_vectors,
+            verbose=verbose,
+            show_progress=show_progress,
+            use_sclopf=use_sclopf,
+            overwrite=overwrite,
+            calc_split_indicator_vectors=calc_split_indicator_vectors,
+            load_inertia=load_inertia,
+            show_progress_2=show_progress_2,
+            sort_cascades=sort_cascades,
+            n_jobs=n_jobs,
+        )
+
+    return evaluate_cascade(
+        co2l=co2l,
+        n_nodes=n_nodes,
+        snet_index=snet_index,
+        start_time_str=start_time_str,
+        end_time_str=end_time_str,
+        eval_indicator_vectors=eval_indicator_vectors,
+        verbose=verbose,
+        show_progress=show_progress,
+        use_sclopf=use_sclopf,
+        overwrite=overwrite,
+        calc_split_indicator_vectors=calc_split_indicator_vectors,
+        load_inertia=load_inertia,
+        show_progress_2=show_progress_2,
+        sort_cascades=sort_cascades,
+    )
+
+
 def sort_comps_and_ind_vecs(co2l, n_nodes=600):
     """if component properties are not sorted by time stamp and split number, sort them
     and save sorted versions of component properties and indicator vectors, while
@@ -1133,15 +1193,16 @@ if __name__ == "__main__":
         print(f"Evaluating cascade for CO2 level {co2l_in} and n_nodes {n_nodes_in}")
         print(60 * "_")
         try:
-            evaluate_cascade_parallel(
+            evaluate_cascade_wrapper(
                 co2l_in,
                 n_nodes_in,
                 use_sclopf=True,
                 eval_indicator_vectors=True,
-                overrwrite=False,
+                overwrite=False,
                 load_inertia=True,
                 n_jobs=30,
                 verbose=True,
+                parallel=False,
                 # end_time_str="2013-01-03 00:00",
             )
         except FileExistsError as e:
@@ -1190,15 +1251,16 @@ if __name__ == "__main__":
             )
             print(60 * "_")
             try:
-                evaluate_cascade_parallel(
+                evaluate_cascade_wrapper(
                     co2l_in,
                     n_nodes_in,
                     use_sclopf=True,
                     eval_indicator_vectors=True,
-                    overrwrite=False,
+                    overwrite=False,
                     load_inertia=True,
                     n_jobs=30,
                     verbose=True,
+                    parallel=True,
                     # end_time_str="2013-01-03 00:00",
                 )
             except FileExistsError as e:
