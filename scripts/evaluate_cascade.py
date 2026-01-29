@@ -506,8 +506,10 @@ def process_timestamp_chunk(
                     rocof_updated = (
                         50 * power_imbalance / ((rot_energy_total + 1e-8) * 2)
                     )
-                    observables_single_component[3] = rocof_updated
-                    rocof = rocof_updated
+                    observables_single_component[3] = (
+                        rocof  # rocof without load inertia for validating with old results
+                    )
+                    rocof = rocof_updated  # rocof with load inertia
 
                 if load != 0:
                     load_shedded = abs(min(0, power_imbalance)) / load * load_share
@@ -1202,7 +1204,7 @@ if __name__ == "__main__":
                 load_inertia=True,
                 n_jobs=30,
                 verbose=True,
-                parallel=False,
+                parallel=True,
                 # end_time_str="2013-01-03 00:00",
             )
         except FileExistsError as e:
