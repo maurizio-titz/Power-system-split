@@ -32,6 +32,7 @@ The `scripts` contain our workflow:
 - `calc_inertia_placement.py` : Determine optimal inertia placement to mitigate the impact of system splits. Run only after `prepare_split_visualization.py` has finished.
 - `calculate_distance_matrix.py`: calculates the distance matrix for clustering blackouts. Run only after `prepare_split_visualization.py` has finished.
 - `run_clustering_parallel.py`: applies clustering algorithms to the distance matrix. Run only after `calculate_distance_matrix.py` has finished.
+- Create plots by running the scripts in `scripts/plotting` individually or run the bash script `generate_all_plots.sh` to generate all plots in one go.
 
 All code assume that your PYTHONPATH contains the repository directory and the code is executed in there, too. 
 
