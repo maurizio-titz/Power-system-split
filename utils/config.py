@@ -4,7 +4,7 @@ import os
 use_extensions = False  # legacy, do not use
 
 # Read dataset selection from environment variable, default to "no_extensions"
-DATASET = os.getenv("POWER_SYSTEM_DATASET")
+DATASET = os.getenv("POWER_SYSTEM_DATASET", "current")
 
 # Base paths configuration for different datasets
 root_path = "/srv/data/jlange/power-system-split/no_extensions/"
