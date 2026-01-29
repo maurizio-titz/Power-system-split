@@ -168,6 +168,7 @@ def evaluate_cascade(
                 "init_failure_1",
                 "num_par_failure_1",
                 "split_number",
+                "component_number",
                 "rot_energy_gen",
                 "power_imbalance",
                 "load",
@@ -189,6 +190,7 @@ def evaluate_cascade(
                 "init_failure_1",
                 "num_par_failure_1",
                 "split_number",
+                "component_number",
                 "rot_energy",
                 "power_imbalance",
                 "load",
@@ -203,6 +205,7 @@ def evaluate_cascade(
             "time_stamp",
             "init_failure",
             "split_number",
+            "component_number",
             "rot_energy",
             "power_imbalance",
             "load",
@@ -259,7 +262,7 @@ def evaluate_cascade(
         # flows = solve_lpf(P_0, B_d, I_m)
         # flows_dict = dict(zip(networkx.get_edge_attributes(nx_graph, "orientation").values(), flows))
 
-        for component_number, (init_failures, cascade_weight_tuple) in enumerate(
+        for split_number, (init_failures, cascade_weight_tuple) in enumerate(
             tqdm(splits.items(), leave=False, disable=not show_progress_2)
         ):
             split_number_total += 1
@@ -283,7 +286,9 @@ def evaluate_cascade(
             )
             # each entry holds: [rot_energy, power_imbalance, load, rocof, load_share]
 
-            for observables_single_component in observables_split_components:
+            for comp_number, observables_single_component in enumerate(
+                observables_split_components
+            ):
                 rot_energy_gen = observables_single_component[0]
                 power_imbalance = observables_single_component[1]
                 load = observables_single_component[2]
@@ -323,7 +328,8 @@ def evaluate_cascade(
                             num_par_failure0,
                             trigger1,
                             num_par_failure1,
-                            component_number,
+                            split_number,
+                            comp_number,
                             *observables_single_component,
                             load_inertia,
                             rot_energy_total,
@@ -340,7 +346,8 @@ def evaluate_cascade(
                             num_par_failure0,
                             trigger1,
                             num_par_failure1,
-                            component_number,
+                            split_number,
+                            comp_number,
                             *observables_single_component,
                             load_shedded,
                             blackout_load_loss,
@@ -350,7 +357,8 @@ def evaluate_cascade(
                     dict_out_ele = [
                         timestamp,
                         init_failures,
-                        component_number,
+                        split_number,
+                        comp_number,
                         *observables_single_component,
                         load_shedded,
                         blackout_load_loss,
@@ -359,7 +367,7 @@ def evaluate_cascade(
                 component_props_dict[out_dict_key] = dict_out_ele
                 if np.isnan(np.array(dict_out_ele[1:])).any():
                     print(
-                        f"Warning: NaN values found in component properties for CO2 level {co2l}, timestamp {timestamp}, component number {component_number}."
+                        f"Warning: NaN values found in component properties for CO2 level {co2l}, timestamp {timestamp}, component number {split_number}."
                     )
                 out_dict_key += 1
 
@@ -378,9 +386,9 @@ def evaluate_cascade(
             # Split-wise indicator vectors
             if calc_split_indicator_vectors:
                 rocof_vector = np.empty(nx_graph.number_of_nodes(), dtype=float)
-                for component_number, component_indicator_vec in enumerate(indi_vec_r):
+                for split_number, component_indicator_vec in enumerate(indi_vec_r):
                     rocof_vector[component_indicator_vec.astype(bool)] = (
-                        observables_split_components[component_number][3]
+                        observables_split_components[split_number][3]
                     )
                 rocof_indicator_vectors_ls.append(rocof_vector)
 
@@ -447,6 +455,7 @@ def process_timestamp_chunk(
     eval_indicator_vectors,
     calc_split_indicator_vectors,
     use_sclopf,
+    test_mode=False,
 ):
     """Process a chunk of timestamps. Module-level function for pickling.
 
@@ -469,8 +478,10 @@ def process_timestamp_chunk(
         rocof_indicator_vectors_list = []
         split_numbers_local = []
         split_number_local = 0
+        if test_mode & (split_number_local >= 10):
+            break
 
-        for component_number, (init_failures, cascade_weight_tuple) in enumerate(
+        for split_number, (init_failures, cascade_weight_tuple) in enumerate(
             splits.items()
         ):
             split_number_local += 1
@@ -493,7 +504,9 @@ def process_timestamp_chunk(
                 )
             )
 
-            for observables_single_component in observables_split_components:
+            for comp_number, observables_single_component in enumerate(
+                observables_split_components
+            ):
                 rot_energy_gen = observables_single_component[0]
                 power_imbalance = observables_single_component[1]
                 load = observables_single_component[2]
@@ -528,7 +541,8 @@ def process_timestamp_chunk(
                             num_par_failure0,
                             trigger1,
                             num_par_failure1,
-                            component_number,
+                            split_number,
+                            comp_number,
                             *observables_single_component,
                             load_inertia_val,
                             rot_energy_total,
@@ -545,7 +559,8 @@ def process_timestamp_chunk(
                             num_par_failure0,
                             trigger1,
                             num_par_failure1,
-                            component_number,
+                            split_number,
+                            comp_number,
                             *observables_single_component,
                             load_shedded,
                             blackout_load_loss,
@@ -555,7 +570,8 @@ def process_timestamp_chunk(
                     dict_out_ele = [
                         timestamp,
                         init_failures,
-                        component_number,
+                        split_number,
+                        comp_number,
                         *observables_single_component,
                         load_shedded,
                         blackout_load_loss,
@@ -565,7 +581,7 @@ def process_timestamp_chunk(
                 if np.isnan(np.array(dict_out_ele[1:])).any():
                     print(
                         f"Warning: NaN values in CO2 level {co2l}, timestamp {timestamp}, "
-                        f"component {component_number}."
+                        f"component {split_number}."
                     )
 
                 component_props_list.append(dict_out_ele)
@@ -596,157 +612,9 @@ def process_timestamp_chunk(
 
     return {
         "component_props": all_component_props,
-        "split_numbers": all_split_numbers,
+        "split_numbers_snapshot": all_split_numbers,
         "component_indicator_vectors": all_component_indicator_vectors,
         "rocof_indicator_vectors": all_rocof_indicator_vectors,
-    }
-
-
-def process_timestamp_splits(
-    timestamp,
-    splits,
-    co2l,
-    n_nodes,
-    snet_index,
-    comp_cols,
-    load_inertia,
-    load_inertia_constant,
-    eval_indicator_vectors,
-    calc_split_indicator_vectors,
-    use_sclopf,
-):
-    """Process all splits for a single timestamp. Module-level function for pickling.
-
-    Loads network and nx_graph inside the worker to avoid pickling large objects.
-    """
-    # Load objects inside worker instead of passing them
-    network = data_handling.load_pypsa_network(co2l, n_nodes, use_sclopf)
-    nx_graph = data_handling.load_networkx_graph(snet_index=snet_index, co2lvl=co2l)
-
-    component_props_list = []
-    component_indicator_vectors_list = []
-    rocof_indicator_vectors_list = []
-    split_numbers_local = []
-    split_number_local = 0
-
-    for component_number, (init_failures, cascade_weight_tuple) in enumerate(
-        splits.items()
-    ):
-        split_number_local += 1
-
-        trigger0 = init_failures[0][0]
-        num_par_failure0 = init_failures[0][1]
-        trigger1 = init_failures[1][0]
-        num_par_failure1 = init_failures[1][1]
-
-        cascade = cascade_weight_tuple[0]
-        weight = cascade_weight_tuple[1]
-
-        subgraphs = data_handling.get_subgraphs_from_edges(cascade, nx_graph)
-
-        observables_split_components = (
-            subgraph_evaluation.evaluate_observables_for_subgraphs(
-                subgraphs=subgraphs,
-                network=network,
-                timestamp=timestamp,
-            )
-        )
-
-        for observables_single_component in observables_split_components:
-            rot_energy_gen = observables_single_component[0]
-            power_imbalance = observables_single_component[1]
-            load = observables_single_component[2]
-            rocof = observables_single_component[3]
-            load_share = observables_single_component[4]
-
-            if load_inertia:
-                load_inertia_val = load * load_inertia_constant
-                rot_energy_total = rot_energy_gen + load_inertia_val
-                rocof_updated = 50 * power_imbalance / ((rot_energy_total + 1e-8) * 2)
-                observables_single_component[3] = rocof_updated
-                rocof = rocof_updated
-
-            if load != 0:
-                load_shedded = abs(min(0, power_imbalance)) / load * load_share
-            else:
-                load_shedded = 0
-
-            blackout_load_loss = int(abs(rocof) > 1) * load_share
-            total_load_loss_share = max(load_shedded, blackout_load_loss)
-
-            if use_sclopf:
-                if load_inertia:
-                    dict_out_ele = [
-                        timestamp,
-                        weight,
-                        trigger0,
-                        num_par_failure0,
-                        trigger1,
-                        num_par_failure1,
-                        component_number,
-                        *observables_single_component,
-                        load_inertia_val,
-                        rot_energy_total,
-                        rocof,
-                        load_shedded,
-                        blackout_load_loss,
-                        total_load_loss_share,
-                    ]
-                else:
-                    dict_out_ele = [
-                        timestamp,
-                        weight,
-                        trigger0,
-                        num_par_failure0,
-                        trigger1,
-                        num_par_failure1,
-                        component_number,
-                        *observables_single_component,
-                        load_shedded,
-                        blackout_load_loss,
-                        total_load_loss_share,
-                    ]
-            else:
-                dict_out_ele = [
-                    timestamp,
-                    init_failures,
-                    component_number,
-                    *observables_single_component,
-                    load_shedded,
-                    blackout_load_loss,
-                    total_load_loss_share,
-                ]
-
-            if np.isnan(np.array(dict_out_ele[1:])).any():
-                print(
-                    f"Warning: NaN values in CO2 level {co2l}, timestamp {timestamp}, "
-                    f"component {component_number}."
-                )
-
-            component_props_list.append(dict_out_ele)
-            split_numbers_local.append(split_number_local)
-
-        # Indicator vectors
-        if eval_indicator_vectors:
-            indi_vec_r = subgraph_evaluation.get_indicator_vectors_of_subgraphs(
-                subgraphs, nx_graph
-            )
-            component_indicator_vectors_list.extend(indi_vec_r)
-
-            if calc_split_indicator_vectors:
-                rocof_vector = np.empty(nx_graph.number_of_nodes(), dtype=float)
-                for idx, component_indicator_vec in enumerate(indi_vec_r):
-                    rocof_vector[component_indicator_vec.astype(bool)] = (
-                        observables_split_components[idx][3]
-                    )
-                rocof_indicator_vectors_list.append(rocof_vector)
-
-    return {
-        "timestamp": timestamp,
-        "component_props": component_props_list,
-        "split_numbers": split_numbers_local,
-        "component_indicator_vectors": component_indicator_vectors_list,
-        "rocof_indicator_vectors": rocof_indicator_vectors_list,
     }
 
 
@@ -767,6 +635,7 @@ def evaluate_cascade_parallel(
     show_progress_2: bool = False,
     sort_cascades: bool = True,
     n_jobs: int = 8,
+    test_mode: bool = False,
 ):
     """Parallel version of evaluate_cascade that parallelizes over timestamps.
 
@@ -871,6 +740,7 @@ def evaluate_cascade_parallel(
                 "init_failure_1",
                 "num_par_failure_1",
                 "split_number",
+                "component_number",
                 "rot_energy_gen",
                 "power_imbalance",
                 "load",
@@ -892,6 +762,7 @@ def evaluate_cascade_parallel(
                 "init_failure_1",
                 "num_par_failure_1",
                 "split_number",
+                "component_number",
                 "rot_energy",
                 "power_imbalance",
                 "load",
@@ -906,6 +777,7 @@ def evaluate_cascade_parallel(
             "time_stamp",
             "init_failure",
             "split_number",
+            "component_number",
             "rot_energy",
             "power_imbalance",
             "load",
@@ -961,6 +833,7 @@ def evaluate_cascade_parallel(
             eval_indicator_vectors,
             calc_split_indicator_vectors,
             use_sclopf,
+            test_mode,
         )
         for chunk in tqdm(
             timestamp_chunks, desc="Processing chunks", disable=not show_progress
@@ -971,22 +844,15 @@ def evaluate_cascade_parallel(
     component_props_dict = {}
     component_indicator_vectors_ls = []
     rocof_indicator_vectors_ls = []
-    split_numbers = []
+    split_numbers_snapshot = []
     out_dict_key = 0
-    split_number_offset = 0
 
     for result in results_list:
         for props in result["component_props"]:
             component_props_dict[out_dict_key] = props
             out_dict_key += 1
 
-        # Renumber split numbers to be globally sequential with offset
-        offset_local_splits = [s + split_number_offset for s in result["split_numbers"]]
-        split_numbers.extend(offset_local_splits)
-
-        # Update offset for next chunk: add the max split number from this chunk
-        if result["split_numbers"]:
-            split_number_offset += max(result["split_numbers"])
+        split_numbers_snapshot.extend(result["split_numbers_snapshot"])
 
         if eval_indicator_vectors:
             component_indicator_vectors_ls.extend(result["component_indicator_vectors"])
@@ -1025,7 +891,24 @@ def evaluate_cascade_parallel(
     component_props["snapshot_weighting"] = network.snapshot_weightings.generators.loc[
         component_props.time_stamp
     ].values
-    component_props["split_number"] = split_numbers
+    component_props["split_number_snapshot"] = split_numbers_snapshot
+    idxs_last_in_snapshot = [
+        component_props.index[component_props.time_stamp == ts][-1]
+        for ts in component_props.time_stamp.unique()
+    ]
+    split_number_per_snapshot = component_props.loc[
+        idxs_last_in_snapshot, "split_number_snapshot"
+    ].values
+    component_props.loc[:, "split_number"] = component_props[
+        "split_number_snapshot"
+    ].copy()
+    for i, ts in enumerate(component_props.time_stamp.unique()):
+        if i == 0:
+            continue
+        mask_ts = component_props.time_stamp == ts
+        component_props.loc[mask_ts, "split_number"] = component_props.loc[
+            mask_ts, "split_number_snapshot"
+        ] + sum(split_number_per_snapshot[:i])
 
     save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
     component_props.to_hdf(save_df_path + ".h5", key="df", mode="w")
@@ -1054,6 +937,7 @@ def evaluate_cascade_wrapper(
     sort_cascades: bool = True,
     parallel: bool = False,
     n_jobs: int = 8,
+    test_mode: bool = False,
 ):
     """Wrapper to run parallel or serial evaluation.
 
@@ -1077,6 +961,7 @@ def evaluate_cascade_wrapper(
             show_progress_2=show_progress_2,
             sort_cascades=sort_cascades,
             n_jobs=n_jobs,
+            test_mode=test_mode,
         )
 
     return evaluate_cascade(
@@ -1264,6 +1149,7 @@ if __name__ == "__main__":
                     verbose=True,
                     parallel=True,
                     # end_time_str="2013-01-03 00:00",
+                    # test_mode=True,
                 )
             except FileExistsError as e:
                 print(
