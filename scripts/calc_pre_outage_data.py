@@ -197,11 +197,7 @@ import numpy as np
 
 from utils.config import (
     path_to_pypsa_network_sclopf,
-    path_to_cascade_results_sclopf,
-    path_to_vis_results_sclopf,
     path_to_pre_outage_sclopf,
-    path_to_evaluation_results_sclopf,
-    path_to_figures_sclopf,
     path_to_sclopf_results,
 )
 
