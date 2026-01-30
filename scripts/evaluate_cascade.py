@@ -809,15 +809,15 @@ def evaluate_cascade_parallel(
         )
 
     # Chunk timestamps to match number of workers
-    chunk_size = max(1, len(timestamp_list) // n_jobs)
-    timestamp_chunks = [
-        timestamp_list[i : i + chunk_size]
-        for i in range(0, len(timestamp_list), chunk_size)
-    ]
+    # Use array_split to ensure exactly n_jobs chunks
+    timestamp_chunks = np.array_split(timestamp_list, n_jobs)
+    # Filter out empty chunks (can happen if n_jobs > len(timestamp_list))
+    timestamp_chunks = [chunk for chunk in timestamp_chunks if len(chunk) > 0]
+    n_chunks = len(timestamp_chunks)
 
     if verbose:
         print(
-            f"Split into {len(timestamp_chunks)} chunks of ~{chunk_size} timestamps each"
+            f"Split into {n_chunks} chunks with ~{len(timestamp_list) // n_chunks} timestamps each"
         )
 
     # Use tqdm for progress tracking
