@@ -16,7 +16,6 @@ from utils import config
 import pypsa
 #%%
 co2_lvls = data_handling.get_co2_levels(600)
-co2_lvls = [0.0]
 for co2l in co2_lvls:
     print(60*"_")
     print(f"Validating results for CO2 level: {co2l}")
@@ -82,10 +81,11 @@ for co2l in co2_lvls:
     # #%%
 
 #%%
-co2l = 0.5
+co2l = 0.6
 n_nodes = 600
 fpath = config.path_to_evaluation_results_sclopf + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
 comp_props_new = pd.read_hdf(fpath, key="df")
+#%%
 comp_props_old = pd.read_hdf(fpath.replace("/results/", "/results_no_load_inertia/"), key="df")
 #%%
 import gzip
@@ -121,3 +121,207 @@ comp_props_new[comp_props_new.rocof==0].head()
 # %%
 from utils.alternative_split_indicator_vectors import validate_rocofVec_splitProps_match
 validate_rocofVec_splitProps_match(n_nodes, co2l, test_mode=True)
+#%%
+splits_per_snapshot = [comp_props_new[comp_props_new.time_stamp==ts].split_number.iloc[-1] for ts in comp_props_new.time_stamp.unique()]
+#%%
+split_num_offset = [comp_props_new[comp_props_new.time_stamp==ts].split_number.iloc[0] for ts in comp_props_new.time_stamp.unique()]
+
+# %%
+sum(splits_per_snapshot)
+#%%
+from matplotlib import pyplot as plt
+plt.plot(splits_per_snapshot)
+#%%
+comp_props_new.split_number
+#%%
+plt.plot(split_num_offset)
+#%%
+
+idxs_first_in_snapshot = [comp_props_new.index[comp_props_new.time_stamp==ts][0] for ts in comp_props_new.time_stamp.unique()]
+# %%
+offset = comp_props_new.split_number[idxs_first_in_snapshot]
+# %%
+import numpy as np
+
+comp_props_new["offset"] = np.NaN
+comp_props_new.loc[idxs_first_in_snapshot, "offset"] = offset
+comp_props_new["offset"] = comp_props_new["offset"].fillna(method="ffill")
+# %%
+comp_props_new["split_number_corrected"] = comp_props_new["split_number"] - comp_props_new["offset"] + 1
+# %%
+comp_props_new.split_number_corrected.value_counts().hist()
+#%%
+split_num_offset_corrected = [comp_props_new[comp_props_new.time_stamp==ts].split_number_corrected.iloc[0] for ts in comp_props_new.time_stamp.unique()]
+plt.plot(split_num_offset_corrected)
+#%%
+
+(comp_props_new.split_number_corrected.shift(-1) - comp_props_new.split_number_corrected).dropna().value_counts().values[2:].sum()
+# %%
+total_splits = comp_props_new.split_number_corrected.shift(-1)[(comp_props_new.split_number_corrected.shift(-1).fillna(0) > comp_props_new.split_number_corrected)].sum()# + comp_props_new.split_number_corrected.iloc[-1]
+total_splits
+#%%
+total_splits = comp_props_new.split_number_corrected.shift(1)[(comp_props_new.split_number_corrected.shift(1).fillna(0) > comp_props_new.split_number_corrected)].sum() + comp_props_new.split_number_corrected.iloc[-1]
+total_splits
+# %%
+
+
+
+
+
+
+
+#%%
+print(1+1)
+import numpy as np
+def correct_split_numbers(comp_props_new):
+    comp_props_new = comp_props_new.copy()
+    # get indices of first occurrence of each unique time_stamp
+    idxs_first_in_snapshot = [comp_props_new.index[comp_props_new.time_stamp==ts][0] for ts in comp_props_new.time_stamp.unique()]
+    assert np.equal(comp_props_new.index, np.arange(len(comp_props_new))).all(), "Index of comp_props_new is not a simple range index."
+    idxs_last_in_snapshot = sorted(comp_props_new.index[(np.array(idxs_first_in_snapshot) -1)])
+    # get corresponding split_number values, which should be 1, i.e. here we get the incorrect offsets
+    offset = comp_props_new.split_number[idxs_first_in_snapshot]
+
+    comp_props_new["offset"] = np.NaN
+    comp_props_new.loc[idxs_first_in_snapshot, "offset"] = offset
+    comp_props_new["offset"] = comp_props_new["offset"].fillna(method="ffill")
+
+    comp_props_new["split_number_snapshot"] = comp_props_new["split_number"] - comp_props_new["offset"] + 1
+    comp_props_new = comp_props_new.drop(columns=["offset"])
+    
+    splits_per_snapshot = comp_props_new.split_number[idxs_last_in_snapshot]
+    assert len(splits_per_snapshot) == len(comp_props_new.time_stamp.unique()), "Number of detected snapshot splits does not match number of unique time_stamps."
+    comp_props_new["total_splits_offset"] = np.NaN
+    comp_props_new.loc[splits_per_snapshot.index, "total_splits_offset"] = splits_per_snapshot.cumsum()
+    comp_props_new.total_splits_offset = comp_props_new.total_splits_offset.fillna(method="ffill").fillna(0).astype(int)
+    comp_props_new["split_number"] = comp_props_new["split_number_snapshot"] + comp_props_new["total_splits_offset"]
+    comp_props_new = comp_props_new.drop(columns=["total_splits_offset"])
+    
+    return comp_props_new
+
+def calculate_total_splits(comp_props_new):
+    total_splits = comp_props_new.split_number.shift(1)[(comp_props_new.split_number.shift(1).fillna(0) > comp_props_new.split_number)].sum() + comp_props_new.split_number.iloc[-1] # get the last split number of each snapshot and add the last of the dataframe manually
+    return total_splits
+# # %%
+# comp_props_new = correct_split_numbers(comp_props_new)
+# total_splits = calculate_total_splits(comp_props_new)
+# print(f"Total splits after correction: {total_splits}")
+# #%%
+
+
+co2_lvls = data_handling.get_co2_levels(600)
+for co2l in co2_lvls:
+    print(60*"_")
+    print(f"Validating results for CO2 level: {co2l}")
+    n_nodes = 600
+    fpath = config.path_to_evaluation_results_sclopf + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
+    # copy to a separate file for safekeeping
+    backup_path = fpath.replace("/evaluation_results/", "/evaluation_results_backup/")
+    if not os.path.exists(backup_path):
+        shutil.move(fpath, backup_path)
+    comp_props_new = pd.read_hdf(
+                backup_path
+    )
+    comp_props_new = correct_split_numbers(comp_props_new)
+    # total_splits = calculate_total_splits(comp_props_new)
+    
+    
+    component_ind_vectors_fpath = (
+        config.path_to_evaluation_results_sclopf
+        + f"rocof_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
+    )
+    import gzip
+    import pickle
+    with gzip.open(component_ind_vectors_fpath, "rb") as fh_in_indi:
+        indicator_vectors = pickle.load(fh_in_indi)
+    num_splits_from_vecs = indicator_vectors.shape[0]
+    
+    if total_splits != num_splits_from_vecs:
+        raise ValueError(f"After correction, total_splits {total_splits} does not match number of indicator vectors {num_splits_from_vecs} for Co2L {co2l}.")
+
+    comp_props_new.to_hdf(fpath, key="df", mode="w")
+    
+#%%
+# fname = "rocof_indicator_vectors_Co2L"
+# indicator_vectors_file_path = (
+#         config.path_to_evaluation_results_sclopf + f"{fname}{co2l}_n{n_nodes}.pklz"
+#     )
+# with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
+#     indicator_vector_rocof = pickle.load(fh_in_indi)
+# # %%
+# indicator_vector_rocof.shape
+# get indices of first occurrence of each unique time_stamp
+#%%
+co2l = 0.0
+fpath = config.path_to_evaluation_results_sclopf + "to2013-01-03 00:00/"+ f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
+comp_props_new = pd.read_hdf(
+            fpath
+)
+#%%
+idxs_first_in_snapshot = [comp_props_new.index[comp_props_new.time_stamp==ts][0] for ts in comp_props_new.time_stamp.unique()]
+assert np.equal(comp_props_new.index, np.arange(len(comp_props_new))).all(), "Index of comp_props_new is not a simple range index."
+#%%
+idxs_last_in_snapshot = sorted(comp_props_new.index[(np.array(idxs_first_in_snapshot) -1)])
+# get corresponding split_number values, which should be 1, i.e. here we get the incorrect offsets
+offset = comp_props_new.split_number[idxs_first_in_snapshot]
+
+comp_props_new["offset"] = np.NaN
+comp_props_new.loc[idxs_first_in_snapshot, "offset"] = offset
+comp_props_new["offset"] = comp_props_new["offset"].fillna(method="ffill")
+
+comp_props_new["split_number_snapshot"] = comp_props_new["split_number"] - comp_props_new["offset"] + 1
+comp_props_new = comp_props_new.drop(columns=["offset"])
+assert comp_props_new.split_number_snapshot[idxs_first_in_snapshot].unique().astype(int)==1, "After correction, first split_number_snapshot in each snapshot is not 1."
+
+splits_per_snapshot = comp_props_new.split_number_snapshot[idxs_last_in_snapshot]
+assert len(splits_per_snapshot) == len(comp_props_new.time_stamp.unique()), "Number of detected snapshot splits does not match number of unique time_stamps."
+comp_props_new["total_splits_offset"] = np.NaN
+comp_props_new.loc[splits_per_snapshot.index, "total_splits_offset"] = splits_per_snapshot.cumsum()
+comp_props_new.total_splits_offset = comp_props_new.total_splits_offset.fillna(method="ffill").fillna(0).astype(int)
+#%%
+comp_props_new["split_number"] = comp_props_new["split_number_snapshot"] + comp_props_new["total_splits_offset"]
+comp_props_new = comp_props_new.drop(columns=["total_splits_offset"])
+
+
+# %%
+increments = (comp_props_new["split_number_snapshot"]- comp_props_new["split_number_snapshot"].shift(1).fillna(0))
+#%%
+increments[idxs_last_in_snapshot]=0
+increments.value_counts()
+# %%
+increments = (comp_props_new["split_number"]- comp_props_new["split_number"].shift(1).fillna(0))
+# increments[idxs_last_in_snapshot]=0
+increments.value_counts()
+
+#%%
+comp_props_new.split_number[1562147-3:1562147+3]
+#%%
+
+comp_props_new.head()
+
+
+#%%
+np.equal(comp_props_new[["split_number"]][comp_props_new.component_number==0].values.squeeze(), np.arange((comp_props_new.component_number==0).sum())+1).all()
+#%%
+comp_props_new[["split_number_snapshot"]][comp_props_new.component_number==0].values == np.arange(len(comp_props_new))[comp_props_new.component_number==0][:, None]
+#%%
+comp_props_new[["split_number"]][comp_props_new.component_number==0].values.squeeze()
+
+
+#%%
+n_jobs = 30
+timestamp_list = comp_props_new.time_stamp.unique().tolist()
+chunk_size = max(1, 2920 // n_jobs)
+timestamp_chunks = [
+    timestamp_list[i : i + chunk_size]
+    for i in range(0, 2920, chunk_size)
+]
+len(timestamp_chunks)
+# %%
+timestamp_list = np.arange(2920).tolist()
+timestamp_chunks = np.array_split(timestamp_list, n_jobs)
+# Filter out empty chunks (can happen if n_jobs > len(timestamp_list))
+timestamp_chunks = [chunk for chunk in timestamp_chunks if len(chunk) > 0]
+n_chunks = len(timestamp_chunks)
+n_chunks
+# %%
