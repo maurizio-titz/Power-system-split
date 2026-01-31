@@ -510,19 +510,14 @@ def process_timestamp_chunk(
                 rot_energy_gen = observables_single_component[0]
                 power_imbalance = observables_single_component[1]
                 load = observables_single_component[2]
-                rocof = observables_single_component[3]
+                # rocof = observables_single_component[3] # this is the old rocof without load inertia
                 load_share = observables_single_component[4]
 
-                if load_inertia:
-                    load_inertia_val = load * load_inertia_constant
-                    rot_energy_total = rot_energy_gen + load_inertia_val
-                    rocof_updated = (
-                        50 * power_imbalance / ((rot_energy_total + 1e-8) * 2)
-                    )
-                    observables_single_component[3] = (
-                        rocof  # rocof without load inertia for validating with old results
-                    )
-                    rocof = rocof_updated  # rocof with load inertia
+                load_inertia_val = load * load_inertia_constant
+                rot_energy_total = rot_energy_gen + load_inertia_val
+                rocof = (
+                    50 * power_imbalance / ((rot_energy_total + 1e-8) * 2)
+                )  # rocof with load inertia
 
                 if load != 0:
                     load_shedded = abs(min(0, power_imbalance)) / load * load_share
