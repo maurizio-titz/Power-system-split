@@ -24,6 +24,7 @@ sys.path.append("./")
 from utils.alternative_split_indicator_vectors import (
     add_indices_to_indicator_vectors,
     find_failed_edge_indicator_vector_for_cascade_results,
+    get_nodal_rocof_vectors,
     sort_failed_edge_indicator_vector,
     validate_rocofVec_splitProps_match,
 )
@@ -170,15 +171,23 @@ else:
 
 ### add indices to indicator vectors for backward compatibility ###
 for co2l in co2l_list:
-    print(f"\n### Adding indices to indicator vectors for Co2L {co2l} ###\n")
-    add_indices_to_indicator_vectors(
+    # print(f"\n### Adding indices to indicator vectors for Co2L {co2l} ###\n")
+    print(f"\n### Getting rocof vectors for Co2L {co2l} ###\n")
+    get_nodal_rocof_vectors(
         co2_lvl=co2l,
         n_nodes=n_nodes,
         save_res=True,
         verbose=True,
         overwrite=True,
-        use_sclopf=use_sclopf,
     )
+    # add_indices_to_indicator_vectors(
+    #     co2_lvl=co2l,
+    #     n_nodes=n_nodes,
+    #     save_res=True,
+    #     verbose=True,
+    #     overwrite=True,
+    #     use_sclopf=use_sclopf,
+    # )
     # sort_failed_edge_indicator_vector(
     #     co2_lvl=co2l,
     #     n_nodes=n_nodes,
@@ -188,7 +197,7 @@ for co2l in co2l_list:
     #     overwrite=True,
     #     use_sclopf=use_sclopf,
     # )
-    validate_rocofVec_splitProps_match(n_nodes, co2l)
+    # validate_rocofVec_splitProps_match(n_nodes, co2l)
 
 # # for co2l in co2l_list:
 # #     print(f"\n### Extracting indicator vectors for Co2L {co2l} ###\n")

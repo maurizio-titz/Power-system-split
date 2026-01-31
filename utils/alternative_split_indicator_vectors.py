@@ -143,7 +143,9 @@ def get_nodal_rocof_vectors(
             ),
             key="df",
         )
-    if comp_props.time_stamp.values != comp_props.time_stamp.sort_values().values:
+    if (
+        comp_props.time_stamp.values != comp_props.time_stamp.sort_values().values
+    ).any():
         raise ValueError("Component properties are not sorted by time stamp!")
 
     if verbose:
