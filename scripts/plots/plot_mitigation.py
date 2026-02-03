@@ -20,6 +20,7 @@ import pypsa
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+from matplotlib.ticker import MaxNLocator
 
 sys.path.append("./")
 
@@ -77,6 +78,7 @@ def calculate_line_extension(
     ref_network,
     n_nodes=600,
     build_380kV_only=False,
+    target="num_GSS",
     blackoutthreshold=0.0,
 ):
 
@@ -125,16 +127,14 @@ def calculate_line_extension(
         for co2l in co2ls:
             if co2l == 0.6:
                 continue
-            if annualized_costs:
-                f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2l}_n{n_nodes}.pkl"
-            else:
-                f_name = f"heuristic_costMin_loss_mitigation_Co2L{co2l}_n{n_nodes}.pkl"
-            if build_380kV_only:
-                f_name = f_name.replace(".pkl", "_380kVonly.pkl")
-            if blackoutthreshold > 0.0:
-                f_name = f_name.replace(
-                    ".pkl", f"_blackoutthres{blackoutthreshold}.pkl"
-                )
+            f_name = create_gridExt_mitigation_filename(
+                n_nodes,
+                build_380kV_only,
+                target,
+                blackoutthreshold,
+                annualized_costs,
+                co2l,
+            )
             split_props_lvl = split_properties[split_properties.co2l == co2l].copy()
             split_props_lvl.lost_load_share_blackout = (
                 split_props_lvl.lost_load_share_blackout.astype(float)
@@ -143,7 +143,13 @@ def calculate_line_extension(
                 split_props_lvl.lost_load_share_blackout > blackoutthreshold
             ]
             remaining_splits = remaining_splits.loc[
-                :, ["lost_load_share_blackout", "init_failure_0", "init_failure_1"]
+                :,
+                [
+                    "lost_load_share_blackout",
+                    "init_failure_0",
+                    "init_failure_1",
+                    "total_weighting",
+                ],
             ]
             costs_ = ref_network.lines.loc[
                 :,
@@ -188,16 +194,25 @@ def calculate_line_extension(
                     * costs_.length
                 )
 
-            loss_with_mitigation = [split_props_lvl.lost_load_share_blackout.sum()]
+            loss_with_mitigation = [
+                (
+                    split_props_lvl.lost_load_share_blackout
+                    * split_props_lvl.total_weighting
+                ).sum()
+            ]
             reinforced_lines = []
             cost = []
-            num_blackouts = [remaining_splits.shape[0]]
+            num_blackouts_with_mitigation = [remaining_splits.total_weighting.sum()]
 
             while remaining_splits.shape[0] > 0:
                 trigger0 = (
                     remaining_splits.loc[
                         :,
-                        ["lost_load_share_blackout", "init_failure_0"],
+                        [
+                            "lost_load_share_blackout",
+                            "init_failure_0",
+                            "total_weighting",
+                        ],
                     ]
                     .groupby("init_failure_0")
                     .sum()
@@ -205,40 +220,77 @@ def calculate_line_extension(
                 trigger1 = (
                     remaining_splits.loc[
                         :,
-                        ["lost_load_share_blackout", "init_failure_1"],
+                        [
+                            "lost_load_share_blackout",
+                            "init_failure_1",
+                            "total_weighting",
+                        ],
                     ]
                     .groupby("init_failure_1")
                     .sum()
                 )
                 trigger1.rename_axis("trigger", inplace=True)
                 trigger0.rename_axis("trigger", inplace=True)
-                loss_by_trigger = pd.Series(index=list(range(n_lines)), data=0)
-                loss_by_trigger.rename_axis("trigger", inplace=True)
-                loss_by_trigger = loss_by_trigger.add(
-                    trigger0.lost_load_share_blackout, fill_value=0
+                mitigated_loss_by_trigger = pd.Series(
+                    index=list(range(n_lines)), data=0
                 )
-                loss_by_trigger = loss_by_trigger.add(
-                    trigger1.lost_load_share_blackout, fill_value=0
+                mitigated_loss_by_trigger.rename_axis("trigger", inplace=True)
+                mitigated_loss_by_trigger = mitigated_loss_by_trigger.add(
+                    trigger0.lost_load_share_blackout * trigger0.total_weighting,
+                    fill_value=0,
                 )
-                loss_per_dollar = loss_by_trigger / costs_[
+                mitigated_loss_by_trigger = mitigated_loss_by_trigger.add(
+                    trigger1.lost_load_share_blackout * trigger1.total_weighting,
+                    fill_value=0,
+                )
+                mitigated_loss_per_dollar = mitigated_loss_by_trigger / costs_[
                     "extension_cost"
                 ].reset_index(drop=True)
 
-                trigger = loss_per_dollar.idxmax()
+                mitigated_splits_by_trigger = pd.Series(
+                    index=list(range(n_lines)), data=0
+                )
+                mitigated_splits_by_trigger.rename_axis("trigger", inplace=True)
+                mitigated_splits_by_trigger = mitigated_splits_by_trigger.add(
+                    trigger0.total_weighting, fill_value=0
+                )
+                mitigated_splits_by_trigger = mitigated_splits_by_trigger.add(
+                    trigger1.total_weighting, fill_value=0
+                )
+                mitigated_splits_per_dollar = mitigated_splits_by_trigger / costs_[
+                    "extension_cost"
+                ].reset_index(drop=True)
+
+                if target == "num_GSS":
+                    trigger = mitigated_splits_per_dollar.idxmax()
+                else:
+                    trigger = mitigated_loss_per_dollar.idxmax()
+
                 cost.append(costs_["extension_cost"][int(trigger)])
                 remaining_splits = remaining_splits[
                     (remaining_splits.init_failure_1 != trigger)
                     & (remaining_splits.init_failure_0 != trigger)
                 ]
                 loss_with_mitigation.append(
-                    remaining_splits.lost_load_share_blackout.sum()
+                    (
+                        remaining_splits.lost_load_share_blackout
+                        * remaining_splits.total_weighting
+                    ).sum()
                 )
                 reinforced_lines.append(trigger)
-                num_blackouts.append(remaining_splits.shape[0])
+                num_blackouts_with_mitigation.append(
+                    remaining_splits.total_weighting.sum()
+                )
 
             with open(path_to_line_extension_mitigation_sclopf + f_name, "wb") as f:
                 pickle.dump(
-                    (reinforced_lines, loss_with_mitigation, num_blackouts, cost), f
+                    (
+                        reinforced_lines,
+                        loss_with_mitigation,
+                        num_blackouts_with_mitigation,
+                        cost,
+                    ),
+                    f,
                 )
 
             # num_lines_to_reach_ref_loss = np.where(
@@ -252,9 +304,34 @@ def calculate_line_extension(
             #     cost[:num_lines_to_reach_double_ref_loss]
             # )
     if len(co2ls) == 1:
-        return reinforced_lines, loss_with_mitigation, num_blackouts, cost
+        return (
+            reinforced_lines,
+            loss_with_mitigation,
+            num_blackouts_with_mitigation,
+            cost,
+        )
     else:
         return None
+
+
+def create_gridExt_mitigation_filename(
+    n_nodes, build_380kV_only, target, blackoutthreshold, annualized_costs, co2l
+):
+    f_name = "heuristic_costMin"
+    if target == "num_GSS":
+        f_name += "_GSS_mitigation"
+    else:
+        f_name += "_loss_mitigation"
+    if annualized_costs:
+        f_name = f_name + f"_annualized_Co2L{co2l}_n{n_nodes}.pkl"
+    else:
+        f_name = f_name + f"_Co2L{co2l}_n{n_nodes}.pkl"
+    if build_380kV_only:
+        f_name = f_name.replace(".pkl", "_380kVonly.pkl")
+    if blackoutthreshold > 0.0:
+        f_name = f_name.replace(".pkl", f"_blackoutthres{blackoutthreshold}.pkl")
+
+    return f_name
 
 
 def create_combined_mitigation_plot(
@@ -419,25 +496,33 @@ def create_combined_mitigation_plot(
             if co2l == 0.6:
                 continue
 
-            if use_annualized_costs:
-                f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2l}_n{n_nodes}.pkl"
-            else:
-                f_name = f"heuristic_costMin_loss_mitigation_Co2L{co2l}_n{n_nodes}.pkl"
-            if build_380kV_only:
-                f_name = f_name.replace(".pkl", "_380kVonly.pkl")
-            if blackoutthreshold > 0.0:
-                f_name = f_name.replace(
-                    ".pkl", f"_blackoutthres{blackoutthreshold}.pkl"
-                )
+            # if use_annualized_costs:
+            #     f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2l}_n{n_nodes}.pkl"
+            # else:
+            #     f_name = f"heuristic_costMin_loss_mitigation_Co2L{co2l}_n{n_nodes}.pkl"
+            # if build_380kV_only:
+            #     f_name = f_name.replace(".pkl", "_380kVonly.pkl")
+            # if blackoutthreshold > 0.0:
+            #     f_name = f_name.replace(
+            #         ".pkl", f"_blackoutthres{blackoutthreshold}.pkl"
+            #     )
+            f_name = create_gridExt_mitigation_filename(
+                n_nodes,
+                build_380kV_only,
+                target,
+                blackoutthreshold,
+                use_annualized_costs,
+                co2l,
+            )
 
             try:
-                reinforced_lines, loss_with_mitigation, num_blackouts, cost = (
+                reinforced_lines, post_mitigation_value, num_blackouts, cost = (
                     pickle.load(
                         open(path_to_line_extension_mitigation_sclopf + f_name, "rb")
                     )
                 )
             except FileNotFoundError as e:
-                reinforced_lines, loss_with_mitigation, num_blackouts, cost = (
+                reinforced_lines, post_mitigation_value, num_blackouts, cost = (
                     calculate_line_extension(
                         split_properties,
                         nx_graph,
@@ -446,6 +531,7 @@ def create_combined_mitigation_plot(
                         n_nodes=600,
                         build_380kV_only=build_380kV_only,
                         blackoutthreshold=blackoutthreshold,
+                        target=target,
                     )
                 )
 
@@ -456,7 +542,7 @@ def create_combined_mitigation_plot(
                 )[0][0]
             else:
                 num_lines_to_reach_ref_loss = np.where(
-                    np.array(loss_with_mitigation) < target_value
+                    np.array(post_mitigation_value) < target_value
                 )[0][0]
 
             cost_to_reach_ref_loss[co2l] = sum(cost[:num_lines_to_reach_ref_loss])
@@ -480,12 +566,17 @@ def create_combined_mitigation_plot(
 
     co2_ref_percent = get_actual_co2_level(co2l_ref, percent=True)
     co2_lvl_map_percent = get_actual_co2_level(co2_lvl_map, percent=True)
+
+    if target == "num_GSS":
+        target_symbol = "N^{\\text{GSS}}"
+    else:
+        target_symbol = "R"
     if target == "total_loss":
-        loss_axis_label = rf"Expected loss of load [$\textrm{{R}}_{{{int(round(co2_lvl_map_percent))}\%}}/\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$]"
+        loss_axis_label = rf"Expected loss of load [${target_symbol}_{{{int(round(co2_lvl_map_percent))}\%}}/{target_symbol}_{{{int(round(co2_ref_percent))}\%}}$]"
     elif target == "num_GSS":
-        loss_axis_label = rf"Globally Severe Splits [$\textrm{{\#}}_{{{int(round(co2_lvl_map_percent))}\%}}/\textrm{{\#}}_{{{int(round(co2_ref_percent))}\%}}$]"
+        loss_axis_label = rf"Globally Severe Splits [${target_symbol}_{{{int(round(co2_lvl_map_percent))}\%}}/{target_symbol}_{{{int(round(co2_ref_percent))}\%}}$]"
     elif target == "lost_load_GSS":
-        loss_axis_label = rf"Expected lost load in GSS [$\textrm{{R}}_{{{int(round(co2_lvl_map_percent))}\%}}/\textrm{{R}}_{{{int(round(co2_ref_percent))}\%}}$]"
+        loss_axis_label = rf"Expected lost load in GSS [${target_symbol}_{{{int(round(co2_lvl_map_percent))}\%}}/{target_symbol}_{{{int(round(co2_ref_percent))}\%}}$]"
 
     # === CREATE SUBPLOTS BASED ON plot_rows ===
     if plot_rows in ["both", "inertia"]:
@@ -647,12 +738,8 @@ def create_combined_mitigation_plot(
         ax_inertia_loss.grid(True, alpha=0.3)
 
         # Set map title with appropriate symbol based on target
-        if target == "num_GSS":
-            target_symbol = "\\#"
-        else:
-            target_symbol = "R"
         ax_inertia_map.set_title(
-            rf"Synthetic inertia to reach $\textrm{{{target_symbol}}}_{{{int(round(co2_ref_percent))}\%}}$"
+            rf"Synthetic inertia to reach ${target_symbol}_{{{int(round(co2_ref_percent))}\%}}$"
             + "\n"
             + rf"CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\%",
             fontsize=TITLE_FONTSIZE,
@@ -667,38 +754,52 @@ def create_combined_mitigation_plot(
             color_loss_curve = "black"
 
         # Load specific data for the map level
-        if use_annualized_costs:
-            f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2_lvl_map}_n{n_nodes}.pkl"
-        else:
-            f_name = (
-                f"heuristic_costMin_loss_mitigation_Co2L{co2_lvl_map}_n{n_nodes}.pkl"
-            )
-        if build_380kV_only:
-            f_name = f_name.replace(".pkl", "_380kVonly.pkl")
+        f_name = create_gridExt_mitigation_filename(
+            n_nodes,
+            build_380kV_only,
+            target,
+            blackoutthreshold,
+            use_annualized_costs,
+            co2_lvl_map,
+        )
+        # if use_annualized_costs:
+        #     f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2_lvl_map}_n{n_nodes}.pkl"
+        # else:
+        #     f_name = (
+        #         f"heuristic_costMin_loss_mitigation_Co2L{co2_lvl_map}_n{n_nodes}.pkl"
+        #     )
+        # if build_380kV_only:
+        #     f_name = f_name.replace(".pkl", "_380kVonly.pkl")
 
         reinforced_lines, loss_with_mitigation, num_blackouts, cost = pickle.load(
             open(path_to_line_extension_mitigation_sclopf + f_name, "rb")
         )
+        if target == "num_GSS":
+            post_mitigation_value = num_blackouts
+        elif target == "total_loss" or target == "lost_load_GSS":
+            post_mitigation_value = loss_with_mitigation
 
         num_lines_to_reach_ref_loss = np.where(
-            np.array(loss_with_mitigation) < target_value
+            np.array(post_mitigation_value) < target_value
         )[0][0]
-        cost_to_reach_ref_loss_lvl = sum(cost[:num_lines_to_reach_ref_loss])
+        cost_to_reach_ref_loss_lvl = sum(cost[: num_lines_to_reach_ref_loss + 1])
 
         # Line extension: Loss reduction curve
         ax_line_loss.plot(
-            np.arange(len(loss_with_mitigation)),
-            np.array(loss_with_mitigation) / target_value,
+            np.arange(len(post_mitigation_value)),
+            np.array(post_mitigation_value) / target_value,
             color=color_loss_curve,
             linewidth=2,
             label="Loss reduction",
         )
 
-        right_xlim = np.where(np.array(loss_with_mitigation) / target_value < 0.5)[0][0]
+        right_xlim = np.where(np.array(post_mitigation_value) / target_value < 0.5)[0][
+            0
+        ]
 
         # Add secondary y-axis for cost
         if use_annualized_costs:
-            rescale_factor = 1 / 0.1
+            rescale_factor = 1 / 0.01
         else:
             rescale_factor = 1 / 1
         cost_rescaled = np.cumsum(cost) * rescale_factor / 1e9
@@ -723,6 +824,7 @@ def create_combined_mitigation_plot(
 
         ax_line_loss.set_xlim(0, right_xlim)
         ax_line_loss.set_ylim(bottom=0)
+        ax_line_loss.xaxis.set_major_locator(MaxNLocator(integer=True))
         ticks_primary = ax_line_loss.get_yticks()
         ax2_line_cost.set_yticks(ticks_primary)[:-1]
         ticks_labels_secondary = ticks_primary / rescale_factor
@@ -730,7 +832,14 @@ def create_combined_mitigation_plot(
             ticks_labels_secondary = ticks_labels_secondary.astype(int)
         ax2_line_cost.set_yticklabels(ticks_labels_secondary)
 
+        # Adjust y-limits if cost exceeds primary y-axis limits
         primary_lims = ax_line_loss.get_ylim()
+        if cost_rescaled[num_lines_to_reach_ref_loss + 1] > primary_lims[1]:
+            primary_lims = (
+                primary_lims[0],
+                cost_rescaled[num_lines_to_reach_ref_loss] * 1.1,
+            )
+            ax_line_loss.set_ylim(primary_lims)
         ax2_line_cost.set_ylim(primary_lims)
 
         # Add reference line for line number
@@ -748,7 +857,7 @@ def create_combined_mitigation_plot(
         )
         ax_line_loss.text(
             num_lines_to_reach_ref_loss + right_xlim / 200 * 5,
-            0.2,
+            1.1,
             f"{num_lines_to_reach_ref_loss} lines",
             verticalalignment="bottom",
             horizontalalignment="left",
@@ -765,11 +874,11 @@ def create_combined_mitigation_plot(
             c=color_reference_loss,
         )
         ax2_line_cost.text(
-            num_lines_to_reach_ref_loss + right_xlim / 200 * 6,
-            cost_to_reach_ref_loss_lvl * rescale_factor / 1e9,
+            num_lines_to_reach_ref_loss - right_xlim / 200 * 2.5,
+            cost_to_reach_ref_loss_lvl * rescale_factor / 1e9 + primary_lims[1] / 50,
             f"{cost_to_reach_ref_loss_lvl/ 1e9:.2f} bn. €",
             verticalalignment="center",
-            horizontalalignment="left",
+            horizontalalignment="right",
             zorder=np.inf,
             fontsize=TICK_LABELSIZE,
             c=color_reference_loss,
@@ -791,7 +900,7 @@ def create_combined_mitigation_plot(
         ax_line_loss.legend(
             lines1 + lines2,
             labels1 + labels2,
-            loc="upper center",
+            loc="upper left",
             fontsize=LEGEND_FONTSIZE,
         )
 
@@ -801,8 +910,8 @@ def create_combined_mitigation_plot(
         lines_not_extended = np.setdiff1d(np.arange(n_lines), reinforced_lines_selected)
         mitigated_loss = np.array(
             [
-                loss_with_mitigation[i] - loss_with_mitigation[i + 1]
-                for i in range(len(loss_with_mitigation) - 1)
+                post_mitigation_value[i] - post_mitigation_value[i + 1]
+                for i in range(len(post_mitigation_value) - 1)
             ]
         )
         mitigated_loss = np.concatenate(
@@ -838,9 +947,7 @@ def create_combined_mitigation_plot(
         ax_line_map_legend = f.add_axes(
             (bbox.x0 + bbox.width * 0.1, bbox.y0 - 0.01, bbox.width * 0.8, 0.03)
         )
-        y_label_line = "$\\Delta \\textrm{R}_{{\\ell}}/\\textrm{R}_{\\textrm{{co2_ref_str}}\\%}$".replace(
-            "co2_ref_str", str(int(round(co2_ref_percent)))
-        )
+        y_label_line = f"$\\Delta {target_symbol}_{{\\ell}}/{target_symbol}_{{{int(round(co2_ref_percent))}\\%}}$"
         cbar_line = plt.colorbar(
             edges,
             ax=ax_line_map,
@@ -854,12 +961,8 @@ def create_combined_mitigation_plot(
 
         ax_line_map.axis("off")
         # Set map title with appropriate symbol based on target
-        if target == "num_GSS":
-            target_symbol = "\\#"
-        else:
-            target_symbol = "R"
         ax_line_map.set_title(
-            rf"Grid extension to reach $\textrm{{{target_symbol}}}_{{{int(round(co2_ref_percent))}\%}}$"
+            rf"Grid extension to reach ${target_symbol}_{{{int(round(co2_ref_percent))}\%}}$"
             + "\n"
             + rf"CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\%",
             fontsize=TITLE_FONTSIZE,
@@ -889,7 +992,7 @@ def create_combined_mitigation_plot(
 
             # Add secondary y-axis for cost
             if use_annualized_costs:
-                rescale_factor = 20 / 0.2
+                rescale_factor = 1 / 0.01
             else:
                 rescale_factor = 20 / 2
             cost_rescaled = (
@@ -1006,9 +1109,9 @@ def create_combined_mitigation_plot(
     if plot_rows == "both":
         f_name = "combined"
     elif plot_rows == "inertia":
-        f_name = "inertia_"
+        f_name = "inertia"
     else:  # line_extension
-        f_name = "lineExtension_"
+        f_name = "lineExtension"
     f_name += f"_mitigation_plot"
     f_name += f"_{co2_lvl_map}"
     if use_annualized_costs:
@@ -1028,36 +1131,45 @@ def create_combined_mitigation_plot(
 
 
 if __name__ == "__main__":
-    blackoutthreshold = 0.8
-    # Example 1: Plot both rows (original behavior)
-    # create_combined_mitigation_plot(use_annualized_costs=False)
+    params = [
+        {"blackoutthreshold": 0.0, "target": "total_loss"},
+        {"blackoutthreshold": 0.8, "target": "num_GSS"},
+    ]
+    for param in params:
+        blackoutthreshold = param["blackoutthreshold"]
+        target = param["target"]
+        # Example 1: Plot both rows (original behavior)
+        # create_combined_mitigation_plot(use_annualized_costs=False)
 
-    # # Example 2: Plot both rows with all options
-    # create_combined_mitigation_plot(
-    #     use_annualized_costs=True,
-    #     co2_lvl_map=0.2,
-    #     build_380kV_only=True,
-    #     plot_intertia_cost=True,
-    #     recalc_cost=True,
-    #     blackoutthreshold=blackoutthreshold,
-    #     plot_rows="both",  # Options: "both", "inertia", "line_extension"
-    # )
+        # Example 2: Plot both rows with all options
+        create_combined_mitigation_plot(
+            use_annualized_costs=True,
+            co2_lvl_map=0.2,
+            build_380kV_only=True,
+            plot_intertia_cost=True,
+            recalc_cost=True,
+            blackoutthreshold=blackoutthreshold,
+            plot_rows="both",  # Options: "both", "inertia", "line_extension"
+            target=target,
+        )
 
-    # Example 3: Plot only synthetic inertia row
-    create_combined_mitigation_plot(
-        use_annualized_costs=True,
-        co2_lvl_map=0.2,
-        build_380kV_only=True,
-        plot_intertia_cost=True,
-        blackoutthreshold=blackoutthreshold,
-        plot_rows="inertia",
-    )
+        # Example 3: Plot only synthetic inertia row
+        create_combined_mitigation_plot(
+            use_annualized_costs=True,
+            co2_lvl_map=0.2,
+            build_380kV_only=True,
+            plot_intertia_cost=True,
+            blackoutthreshold=blackoutthreshold,
+            plot_rows="inertia",
+            target=target,
+        )
 
-    # Example 4: Plot only line extension row
-    # create_combined_mitigation_plot(
-    #     use_annualized_costs=True,
-    #     co2_lvl_map=0.2,
-    #     build_380kV_only=True,
-    #     blackoutthreshold=blackoutthreshold,
-    #     plot_rows="line_extension",
-    # )
+        # Example 4: Plot only line extension row
+        create_combined_mitigation_plot(
+            use_annualized_costs=True,
+            co2_lvl_map=0.2,
+            build_380kV_only=True,
+            blackoutthreshold=blackoutthreshold,
+            plot_rows="line_extension",
+            target=target,
+        )
