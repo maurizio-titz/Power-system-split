@@ -1,38 +1,59 @@
 #!/usr/bin/env bash
 # Generate all plots with specified style configuration
-# Usage: bash generate_all_plots.sh [lowercase|uppercase] [dpi]
-# Examples:
-#   bash generate_all_plots.sh lowercase     # lowercase labels, DPI 300
-#   bash generate_all_plots.sh uppercase 600 # uppercase labels, DPI 600
 
-# Get the directory where this script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PLOTS_DIR="$SCRIPT_DIR/plots"
+# Default configuration
+PLOT_PANEL_LOWERCASE="false"
+PLOT_DPI="300"
+PLOTS_DIR="scripts/plots"
 
-# Configuration from arguments
-PANEL_CASE=${1:-"lowercase"}  # Default to lowercase
-DPI=${2:-"300"}               # Default to 300
+# Parse named arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --lowercase)
+            PLOT_PANEL_LOWERCASE="$2"
+            shift 2
+            ;;
+        --dpi)
+            PLOT_DPI="$2"
+            shift 2
+            ;;
+        --help)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --lowercase true|false    Use lowercase panel labels (default: true)"
+            echo "  --dpi NUM                 Set figure DPI (default: 300)"
+            echo "  --help                    Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  $0 --lowercase false --dpi 600"
+            echo "  $0 --lowercase true"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
 
-# Set environment variables based on configuration
-if [ "$PANEL_CASE" = "lowercase" ]; then
-    export PLOT_PANEL_LOWERCASE="true"
-    LABEL_STYLE="lowercase"
-elif [ "$PANEL_CASE" = "uppercase" ]; then
-    export PLOT_PANEL_LOWERCASE="false"
-    LABEL_STYLE="UPPERCASE"
-else
-    echo "Error: First argument must be 'lowercase' or 'uppercase'"
-    echo "Usage: bash generate_all_plots.sh [lowercase|uppercase] [dpi]"
-    exit 1
-fi
-
-export PLOT_DPI="$DPI"
+# Export environment variables
+export PLOT_PANEL_LOWERCASE
+export PLOT_DPI
 export PLOT_SAVE_WITH_CONFIG="true"
+
+# Determine panel label style for display
+if [ "$PLOT_PANEL_LOWERCASE" = "true" ]; then
+    LABEL_STYLE="lowercase"
+else
+    LABEL_STYLE="UPPERCASE"
+fi
 
 echo "========================================="
 echo "Generating all plots with configuration:"
 echo "  Panel labels: $LABEL_STYLE"
-echo "  DPI: $DPI"
+echo "  DPI: $PLOT_DPI"
 echo "  Config suffix: enabled"
 echo "========================================="
 
@@ -42,61 +63,42 @@ if [ ! -d "$PLOTS_DIR" ]; then
     exit 1
 fi
 
-# Find all Python scripts in plots directory
-PLOT_SCRIPTS=($(find "$PLOTS_DIR" -maxdepth 1 -name "*.py" -type f | sort))
+# Counter for tracking progress
+total_scripts=0
+successful=0
+failed=0
 
-if [ ${#PLOT_SCRIPTS[@]} -eq 0 ]; then
-    echo "Error: No Python scripts found in $PLOTS_DIR"
-    exit 1
-fi
-
-echo "Found ${#PLOT_SCRIPTS[@]} plotting scripts"
-echo ""
-
-# Counter for statistics
-SUCCESS_COUNT=0
-FAILURE_COUNT=0
-FAILED_SCRIPTS=()
-
-# Execute each plotting script
-for script in "${PLOT_SCRIPTS[@]}"; do
+# Find and execute all Python scripts in plots directory
+while IFS= read -r script; do
+    total_scripts=$((total_scripts + 1))
     script_name=$(basename "$script")
-    echo "----------------------------------------"
-    echo "Running: $script_name"
-    echo "----------------------------------------"
     
-    # Run the script and capture the exit code
+    echo ""
+    echo "[$total_scripts] Running: $script_name"
     python "$script"
-    EXIT_CODE=$?
     
-    if [ $EXIT_CODE -eq 0 ]; then
-        echo "✓ Completed: $script_name"
-        ((SUCCESS_COUNT++))
+    if [ $? -eq 0 ]; then
+        echo "    ✓ Completed"
+        successful=$((successful + 1))
     else
-        echo "✗ Failed: $script_name (exit code: $EXIT_CODE)"
-        ((FAILURE_COUNT++))
-        FAILED_SCRIPTS+=("$script_name")
+        echo "    ✗ Failed"
+        failed=$((failed + 1))
     fi
-    echo ""
-done
+done < <(find "$PLOTS_DIR" -maxdepth 1 -name "*.py" -type f | sort)
 
-# Print summary
+# Summary
+echo ""
 echo "========================================="
-echo "Summary:"
-echo "  Total scripts: ${#PLOT_SCRIPTS[@]}"
-echo "  Successful: $SUCCESS_COUNT"
-echo "  Failed: $FAILURE_COUNT"
-if [ $FAILURE_COUNT -gt 0 ]; then
-    echo ""
-    echo "Failed scripts:"
-    for failed in "${FAILED_SCRIPTS[@]}"; do
-        echo "  - $failed"
-    done
-    echo "========================================="
-    exit 1
-else
-    echo "========================================="
+echo "Plot generation summary:"
+echo "  Total scripts: $total_scripts"
+echo "  Successful: $successful"
+echo "  Failed: $failed"
+echo "========================================="
+
+if [ $failed -eq 0 ]; then
     echo "All plots generated successfully!"
-    echo "========================================="
     exit 0
+else
+    echo "Some plots failed to generate."
+    exit 1
 fi

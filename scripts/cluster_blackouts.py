@@ -157,7 +157,7 @@ if __name__ == "__main__":
             co2l_iter,
             indicator_type="rocof",
             transformation="blackout",
-            blackout_size_threshold=0.99,
+            blackout_size_threshold=0.1,
             distance_metric_kwargs=distance_metric_kwargs,
             clustering_params=clustering_params,
             distance_matrix_dtype=np.float16,

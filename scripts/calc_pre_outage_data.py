@@ -18,6 +18,7 @@ from utils.config import (
     path_to_sclopf_data,
     use_extensions,
 )
+from scripts.evaluate_cascade import load_inertia_constant
 
 n_nodes = 600
 co2l_list = get_co2_levels(n_nodes)
@@ -35,52 +36,63 @@ os.makedirs(path_to_pre_outage, exist_ok=True)
 # For our data set, "0" indicates the Continental European AC grid.
 snet_index = 0
 
-# # Get number of time steps and graph
-# network = data_handling.load_pypsa_network(0.0, n_nodes, use_sclopf=use_sclopf)
-# nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
-# n_time_steps = network.snapshots.shape[0]
+# Get number of time steps and graph
+network = data_handling.load_pypsa_network(0.0, n_nodes, use_sclopf=use_sclopf)
+nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+n_time_steps = network.snapshots.shape[0]
 
-# ### Extract pre-outage inertia data ##### not used anymore
+### Extract pre-outage inertia data ##### not used anymore
 
-# inertia_time_series = np.zeros((len(co2l_list), n_time_steps))
-# nodal_inertia_min_max = np.zeros((len(co2l_list), 2, nx_graph.number_of_nodes()))
+inertia_time_series = np.zeros((len(co2l_list), n_time_steps))
+nodal_inertia_min_max = np.zeros((len(co2l_list), 2, nx_graph.number_of_nodes()))
 
-# for i, co2l in enumerate(co2l_list):
-#     print("Co2 level %.2f" % co2l)
+for i, co2l in enumerate(co2l_list):
+    print("Co2 level %.2f" % co2l)
 
-#     network = data_handling.load_pypsa_network(co2l, n_nodes, use_sclopf=use_sclopf)
-#     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    network = data_handling.load_pypsa_network(co2l, n_nodes, use_sclopf=use_sclopf)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 
-#     for t_count, timestamp in enumerate(network.snapshots):
-#         obs = subgraph_evaluation.evaluate_observables_for_subgraphs(
-#             [nx_graph], network, timestamp, snet=0
-#         )
-#         assert obs.shape[0] == 1, "Expected one subgraph"
-#         inertia_time_series[i, t_count] = obs[0, 0]
+    for t_count, timestamp in enumerate(network.snapshots):
+        obs = subgraph_evaluation.evaluate_observables_for_subgraphs(
+            [nx_graph], network, timestamp, snet=0
+        )
+        current_load = network.loads_t.p.loc[timestamp].sum()
+        load_inertia = current_load * load_inertia_constant
+        assert obs.shape[0] == 1, "Expected one subgraph"
+        inertia_time_series[i, t_count] = obs[0, 0]
 
-#     # Select timestamps with min and max total inertia
-#     t_largest = network.snapshots[np.argmax(inertia_time_series[i])]
-#     t_smallest = network.snapshots[np.argmin(inertia_time_series[i])]
+    # Select timestamps with min and max total inertia
+    t_largest = network.snapshots[np.argmax(inertia_time_series[i])]
+    t_smallest = network.snapshots[np.argmin(inertia_time_series[i])]
 
-#     for t_count, timestamp in enumerate([t_smallest, t_largest]):
-#         for nodecount, node in enumerate(nx_graph.nodes()):
-#             subgraph = nx.Graph()
-#             subgraph.add_node(node)
-#             obs = subgraph_evaluation.evaluate_observables_for_subgraphs(
-#                 [subgraph], network, timestamp, snet=0
-#             )
+    for t_count, timestamp in enumerate([t_smallest, t_largest]):
+        for nodecount, node in enumerate(nx_graph.nodes()):
+            subgraph = nx.Graph()
+            subgraph.add_node(node)
+            obs = subgraph_evaluation.evaluate_observables_for_subgraphs(
+                [subgraph], network, timestamp, snet=0
+            )
 
-#             nodal_inertia_min_max[i, t_count, nodecount] = obs[:, 0]
+            nodal_inertia_min_max[i, t_count, nodecount] = obs[:, 0]
 
-# np.save(
-#     path_to_pre_outage + f"inertia_time_series_all_co2ls_{n_nodes}.npy",
-#     inertia_time_series,
-# )
-# np.save(
-#     path_to_pre_outage + f"min_max_nodal_inertia_generation_all_co2ls_{n_nodes}.npy",
-#     nodal_inertia_min_max,
-# )
+inertia_time_series_file_path = (
+    path_to_pre_outage + f"inertia_time_series_all_co2ls_{n_nodes}.npy"
+)
+np.save(
+    inertia_time_series_file_path,
+    inertia_time_series,
+)
+print(f"Saved inertia time series to {inertia_time_series_file_path}")
+nodal_inertia_min_max_file_path = (
+    path_to_pre_outage + f"min_max_nodal_inertia_generation_all_co2ls_{n_nodes}.npy"
+)
+np.save(
+    nodal_inertia_min_max_file_path,
+    nodal_inertia_min_max,
+)
+print(f"Saved min/max nodal inertia generation to {nodal_inertia_min_max_file_path}")
 
+exit()
 
 # #### Calculate dipole vectors ####
 

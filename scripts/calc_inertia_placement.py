@@ -51,44 +51,20 @@ def main(single_co2=None):
     for co2_lvl in co2l_list:
         print(f"Running for co2_lvl: {co2_lvl}")
         delta_rot = delta_rot_dict.get(co2_lvl, 1000)
-        # not used because we decided to only run random placement
-        # run_different_parameters_for_co2lvl(
-        #     co2_lvl,
-        #     n_nodes,
-        #     use_sclopf,
-        #     delta_rot_ls,
-        #     max_iter=10000,
-        #     nr_processes=len(co2l_list),
-        #     revert_chrotE_fac=False,
-        #     resolve_equality_method_ls=resolve_strategies,
-        # )
-        run_specific_co2lvl_n_size(
-            co2_lvl,
-            nn_nodes=n_nodes,
-            delta_rot_energy=delta_rot,
-            show_progress=True,
-            save_it=True,
-            max_iter=max_iter,
-            resolve_equality_method=resolve_strategy,
-            revert_ch_rotE_fac=False,
-            use_sclopf=use_sclopf,
-            blackout_size_threshold=0.8,
-        )
-        # try:
-        #     plot_map_inertia_placement_final(
-        #         co2_lvl,
-        #         nn=n_nodes,
-        #         max_iter=10000,
-        #         max_node_size=800,
-        #         edge_width=0.2,
-        #         delta_Erot=delta_rot,
-        #         resolve_strategy=resolve_strategy,
-        #         save_fig=True,
-        #         use_sclopf=use_sclopf,
-        #     )
-        # except ZeroDivisionError:
-        #     # plotting can fail for trivial reasons; ignore so the batch keeps running
-        #     pass
+        # for blackout_size_threshold in [0, 0.8]:
+        for blackout_size_threshold in [0]:
+            run_specific_co2lvl_n_size(
+                co2_lvl,
+                nn_nodes=n_nodes,
+                delta_rot_energy=delta_rot,
+                show_progress=True,
+                save_it=True,
+                max_iter=max_iter,
+                resolve_equality_method=resolve_strategy,
+                revert_ch_rotE_fac=False,
+                use_sclopf=use_sclopf,
+                blackout_size_threshold=blackout_size_threshold,
+            )
 
 
 if __name__ == "__main__":

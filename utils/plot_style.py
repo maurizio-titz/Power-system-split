@@ -124,7 +124,7 @@ PANEL_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]
 def get_plot_config():
     """Get plot configuration from environment variables."""
     config = {
-        "panel_lowercase": os.getenv("PLOT_PANEL_LOWERCASE", "true").lower() == "true",
+        "panel_lowercase": os.getenv("PLOT_PANEL_LOWERCASE", "false").lower() == "true",
         "save_with_config": os.getenv("PLOT_SAVE_WITH_CONFIG", "false").lower()
         == "true",
         "dpi": int(os.getenv("PLOT_DPI", "300")),
