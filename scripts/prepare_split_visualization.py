@@ -173,21 +173,21 @@ else:
 for co2l in co2l_list:
     # print(f"\n### Adding indices to indicator vectors for Co2L {co2l} ###\n")
     print(f"\n### Getting rocof vectors for Co2L {co2l} ###\n")
-    get_nodal_rocof_vectors(
-        co2_lvl=co2l,
-        n_nodes=n_nodes,
-        save_res=True,
-        verbose=True,
-        overwrite=True,
-    )
-    # add_indices_to_indicator_vectors(
+    # get_nodal_rocof_vectors(
     #     co2_lvl=co2l,
     #     n_nodes=n_nodes,
     #     save_res=True,
     #     verbose=True,
     #     overwrite=True,
-    #     use_sclopf=use_sclopf,
     # )
+    add_indices_to_indicator_vectors(
+        co2_lvl=co2l,
+        n_nodes=n_nodes,
+        save_res=True,
+        verbose=True,
+        overwrite=False,
+        use_sclopf=use_sclopf,
+    )
     # sort_failed_edge_indicator_vector(
     #     co2_lvl=co2l,
     #     n_nodes=n_nodes,
