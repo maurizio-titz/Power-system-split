@@ -4,7 +4,10 @@
 #%%
 import os
 import sys
+import gzip
+import pickle
 import shutil
+import numpy as np
 os.environ["POWER_SYSTEM_DATASET"] = "current"
 
 import pandas as pd
@@ -252,11 +255,20 @@ for co2l in co2_lvls:
 # indicator_vector_rocof.shape
 # get indices of first occurrence of each unique time_stamp
 #%%
-co2l = 0.0
-fpath = config.path_to_evaluation_results_sclopf + "to2013-01-03 00:00/"+ f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
+co2l = 0.6
+n_nodes = 600
+fpath = config.path_to_evaluation_results_sclopf + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
 comp_props_new = pd.read_hdf(
             fpath
 )
+#%%
+
+fname = "rocof_indicator_vectors_Co2L"
+indicator_vectors_file_path = (
+        config.path_to_evaluation_results_sclopf + f"{fname}{co2l}_n{n_nodes}.pklz"
+    )
+with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
+    indicator_vector_rocof = pickle.load(fh_in_indi)
 #%%
 idxs_first_in_snapshot = [comp_props_new.index[comp_props_new.time_stamp==ts][0] for ts in comp_props_new.time_stamp.unique()]
 assert np.equal(comp_props_new.index, np.arange(len(comp_props_new))).all(), "Index of comp_props_new is not a simple range index."
@@ -325,3 +337,16 @@ timestamp_chunks = [chunk for chunk in timestamp_chunks if len(chunk) > 0]
 n_chunks = len(timestamp_chunks)
 n_chunks
 # %%
+
+rocof_vec = pd.DataFrame(indicator_vector_rocof)
+# %%
+rocof_vec.unique()
+#%%
+comp_props_new.rocof
+
+#%%
+test_inds = 1000
+rocofs_vecs = [np.unique(indicator_vector_rocof[i,:].round(5)) for i in range(test_inds)]
+rocofs_props = [comp_props_new.rocof[comp_props_new.split_number==i].unique() for i in range(test_inds)]
+# %%
+rocofs_vecs[:10], rocofs_props[:10]
