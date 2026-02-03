@@ -43,7 +43,11 @@ from utils.clustering.boundary import (
     neighborhood_homo_batch,
 )
 from utils.clustering.visualization import prepare_clusters_for_analysis
-from utils.config import path_to_indicator_vectors_sclopf, path_to_vis_results_sclopf
+from utils.config import (
+    path_to_indicator_vectors_sclopf,
+    path_to_vis_results_sclopf,
+    path_to_evaluation_results_sclopf,
+)
 
 # Preprocessing method registry
 PREPROCESSING_METHODS = {
@@ -218,7 +222,7 @@ class Clustering(object):
         if not "vectors" in self.__dict__:
             vectors_per_lvl = {}
             for co2lvl in self.co2l_list:
-                file_name = f"indicator_vector_{self.indicator_type}_Co2L{co2lvl}_n{self.n_nodes}.pklz"
+                file_name = f"{self.indicator_type}_indicator_vectors_Co2L{co2lvl}_n{self.n_nodes}.pklz"
                 with gzip.open(
                     path_to_indicator_vectors_sclopf + "/" + file_name, "rb"
                 ) as out:

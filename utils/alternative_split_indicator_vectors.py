@@ -92,7 +92,7 @@ def get_nodal_rocof_vectors(
     if save_res:
         fpath_indi_vec_rocof_out = (
             path_to_evaluation_results
-            + "/indicator_vector_rocof_Co2L_old"
+            + "/indicator_vector_rocof_Co2L"
             + f"{co2_lvl}_n{n_nodes}.pklz"
         )
         print(fpath_indi_vec_rocof_out)
@@ -266,10 +266,10 @@ def add_indices_to_indicator_vectors(
         print(fpath_indi_vec_rocof_out)
 
         if (os.path.exists(fpath_indi_vec_rocof_out)) and not overwrite:
-            raise IOError(
-                "Output was written previously. "
-                + "Please move or delete the previous results, or chose 'overwrite=True'."
+            print(
+                "Results file already exists, skipping computation.",
             )
+            return
 
     if verbose:
         print(
@@ -281,8 +281,16 @@ def add_indices_to_indicator_vectors(
     indicator_vectors_file_path = (
         path_to_evaluation_results + f"{fname}{co2_lvl}_n{n_nodes}.pklz"
     )
-    with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
-        indicator_vector_rocof = pickle.load(fh_in_indi)
+    if os.path.exists(indicator_vectors_file_path):
+        with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
+            indicator_vector_rocof = pickle.load(fh_in_indi)
+    else:
+        indicator_vectors_file_path = (
+            path_to_evaluation_results
+            + f"indicator_vector_rocof_Co2L{co2_lvl}_n{n_nodes}_old.pklz"
+        )
+        with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
+            indicator_vector_rocof = pickle.load(fh_in_indi)[-1]
 
     df_comp_props = pd.read_hdf(
         path_to_evaluation_results
@@ -713,6 +721,9 @@ def sort_failed_edge_indicator_vector(
         idx_sorted = df_comp_props_sorted.index
         index_tuple_splits = [index_tuple_splits[i] for i in idx_sorted]
         indicator_failed_edges_arr = indicator_failed_edges_arr[idx_sorted]
+    else:
+        print("Component properties already sorted correctly.")
+        return
 
     if save_res:
         with gzip.open(fpath_out_edge_base, "wb") as fh_out_edges:
