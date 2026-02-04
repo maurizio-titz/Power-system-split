@@ -128,7 +128,7 @@ def plot_inertia_loss_mitigation_curve_new(
         x_lim_mask = x_vals <= x_val_half_ref_loss
         x_vals = x_vals[x_lim_mask]  # limit x vals to half ref loss for cost plot
         cost_unit_factor = 1e-9  # to billion euros
-        rescale_divider = 0.05
+        rescale_divider = 0.015
         cumulative_annualized_cost = np.cumsum(
             inertia_placed_arr[:, 2]
             * delta_Erot
@@ -1188,7 +1188,7 @@ def get_idx_ref_loss_reached(
     inertia_placed_res_arr = np.array(inertia_placed_ls)
 
     split_properties_lvl = split_properties[split_properties.co2l == co2_lvl]
-    if blackoutthreshold > 0.0:
+    if blackoutthreshold is not None and blackoutthreshold > 0.0:
         split_properties_lvl = split_properties_lvl[
             split_properties_lvl.lost_load_share_blackout >= blackoutthreshold
         ]
@@ -1227,10 +1227,14 @@ def load_inertia_placement_results(
     if not os.path.exists(fpath_in):
         fnames = os.listdir(path_to_inertia_mitigation_results)
         fnames_lvl = [f for f in fnames if f"Co2{co2_lvl:g}_" in f]
-        if blackoutthreshold > 0.0:
+        if blackoutthreshold is not None and blackoutthreshold > 0.0:
             fnames_lvl = [
                 f for f in fnames_lvl if f"blackoutthres{blackoutthreshold:g}" in f
             ]
+        else:
+            fnames_lvl = [
+                f for f in fnames_lvl if "blackoutthres" not in f
+            ]  # select only files without blackout threshold
         if len(fnames_lvl) == 1:
             fpath_in = path_to_inertia_mitigation_results + fnames_lvl[0]
 

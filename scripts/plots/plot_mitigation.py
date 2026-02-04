@@ -139,9 +139,12 @@ def calculate_line_extension(
             split_props_lvl.lost_load_share_blackout = (
                 split_props_lvl.lost_load_share_blackout.astype(float)
             )
-            remaining_splits = split_props_lvl[
-                split_props_lvl.lost_load_share_blackout > blackoutthreshold
-            ]
+            if blackoutthreshold is not None and blackoutthreshold > 0.0:
+                remaining_splits = split_props_lvl[
+                    split_props_lvl.lost_load_share_blackout > blackoutthreshold
+                ]
+            else:
+                remaining_splits = split_props_lvl
             remaining_splits = remaining_splits.loc[
                 :,
                 [
@@ -328,7 +331,7 @@ def create_gridExt_mitigation_filename(
         f_name = f_name + f"_Co2L{co2l}_n{n_nodes}.pkl"
     if build_380kV_only:
         f_name = f_name.replace(".pkl", "_380kVonly.pkl")
-    if blackoutthreshold > 0.0:
+    if blackoutthreshold is not None and blackoutthreshold > 0.0:
         f_name = f_name.replace(".pkl", f"_blackoutthres{blackoutthreshold}.pkl")
 
     return f_name
@@ -496,16 +499,6 @@ def create_combined_mitigation_plot(
             if co2l == 0.6:
                 continue
 
-            # if use_annualized_costs:
-            #     f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2l}_n{n_nodes}.pkl"
-            # else:
-            #     f_name = f"heuristic_costMin_loss_mitigation_Co2L{co2l}_n{n_nodes}.pkl"
-            # if build_380kV_only:
-            #     f_name = f_name.replace(".pkl", "_380kVonly.pkl")
-            # if blackoutthreshold > 0.0:
-            #     f_name = f_name.replace(
-            #         ".pkl", f"_blackoutthres{blackoutthreshold}.pkl"
-            #     )
             f_name = create_gridExt_mitigation_filename(
                 n_nodes,
                 build_380kV_only,
@@ -671,18 +664,6 @@ def create_combined_mitigation_plot(
                 )
                 ax_inertia_all_cost.set_ylim(ax_inertia_all.get_ylim())
                 ax_inertia_all_cost.grid(False)
-
-                # ax_inertia_all_cost.plot(
-                #     np.array(
-                #         get_actual_co2_level(
-                #             list(inertia_at_ref_loss_by_lvl.keys()), percent=True
-                #         )
-                #     ),
-                #     np.array(list(inertia_at_ref_loss_by_lvl.values()))
-                #     * unit_factor
-                #     * annualized_cost_per_MWs_max,
-                #     linestyle="dotted",
-                # )
 
         ax_inertia_all.invert_xaxis()
         ax_inertia_all.set_ylabel(f"Inertia placed [{unit}]", fontsize=AXIS_LABELSIZE)
@@ -1120,7 +1101,7 @@ def create_combined_mitigation_plot(
         f_name = f_name + "_380kVonly"
     if plot_intertia_cost:
         f_name = f_name + "_inertiaCost"
-    if blackoutthreshold > 0.0:
+    if blackoutthreshold is not None and blackoutthreshold > 0.0:
         f_name = f_name + f"_blackoutThres{blackoutthreshold}"
     f_name = f_name + f"_{target}"
     if plot_rows != "both":
@@ -1132,8 +1113,8 @@ def create_combined_mitigation_plot(
 
 if __name__ == "__main__":
     params = [
-        {"blackoutthreshold": 0.0, "target": "total_loss"},
-        {"blackoutthreshold": 0.8, "target": "num_GSS"},
+        {"blackoutthreshold": None, "target": "total_loss"},
+        # {"blackoutthreshold": 0.8, "target": "num_GSS"},
     ]
     for param in params:
         blackoutthreshold = param["blackoutthreshold"]
