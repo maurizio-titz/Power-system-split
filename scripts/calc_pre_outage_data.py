@@ -56,7 +56,7 @@ for i, co2l in enumerate(co2l_list):
         obs = subgraph_evaluation.evaluate_observables_for_subgraphs(
             [nx_graph], network, timestamp, snet=0
         )
-        load_inertia = obs[0, 2] * load_inertia_constant
+        load_inertia = float(obs[0, 2]) * load_inertia_constant
         assert obs.shape[0] == 1, "Expected one subgraph"
         inertia_time_series[i, t_count] = obs[0, 0] + load_inertia
 
@@ -71,9 +71,9 @@ for i, co2l in enumerate(co2l_list):
             obs = subgraph_evaluation.evaluate_observables_for_subgraphs(
                 [subgraph], network, timestamp, snet=0
             )
-            load_inertia = obs[:, 2] * load_inertia_constant
+            load_inertia = float(obs[0, 2]) * load_inertia_constant
 
-            nodal_inertia_min_max[i, t_count, nodecount] = obs[:, 0] + load_inertia
+            nodal_inertia_min_max[i, t_count, nodecount] = obs[0, 0] + load_inertia
 
 inertia_time_series_file_path = (
     path_to_pre_outage + f"inertia_time_series_all_co2ls_{n_nodes}.npy"
