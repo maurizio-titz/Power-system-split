@@ -390,6 +390,7 @@ def create_clustering_analysis_plot(
             )
 
             ax.axis("off")
+            ax.set_aspect('equal')
 
             # Add cluster information
             cluster_label = (

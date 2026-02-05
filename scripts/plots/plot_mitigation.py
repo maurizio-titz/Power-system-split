@@ -576,7 +576,7 @@ def create_combined_mitigation_plot(
         # Inertia mitigation section
         subplot_idx = 0 if plot_rows == "both" else 0
         gs_inertia = GridSpecFromSubplotSpec(
-            1, 3, subplot_spec=gs_main[subplot_idx], wspace=0.15
+            1, 3, subplot_spec=gs_main[subplot_idx], wspace=0.15, width_ratios=[1, 0.85, 1]
         )
         ax_inertia_loss = f.add_subplot(gs_inertia[0])  # Loss reduction curve
         ax_inertia_map = f.add_subplot(gs_inertia[1])  # Map
@@ -586,7 +586,7 @@ def create_combined_mitigation_plot(
         # Line extension section
         subplot_idx = 1 if plot_rows == "both" else 0
         gs_line = GridSpecFromSubplotSpec(
-            1, 3, subplot_spec=gs_main[subplot_idx], wspace=0.15
+            1, 3, subplot_spec=gs_main[subplot_idx], wspace=0.15, width_ratios=[1, 0.85, 1]
         )
         ax_line_loss = f.add_subplot(gs_line[0])  # Loss reduction curve
         ax_line_map = f.add_subplot(gs_line[1])  # Map
@@ -941,6 +941,7 @@ def create_combined_mitigation_plot(
         cbar_line.ax.set_xlabel(y_label_line, fontsize=AXIS_LABELSIZE)
 
         ax_line_map.axis("off")
+        ax_line_map.set_aspect("equal")
         # Set map title with appropriate symbol based on target
         ax_line_map.set_title(
             rf"Grid extension to reach ${target_symbol}_{{{int(round(co2_ref_percent))}\%}}$"
@@ -1113,8 +1114,8 @@ def create_combined_mitigation_plot(
 
 if __name__ == "__main__":
     params = [
+        {"blackoutthreshold": 0.8, "target": "num_GSS"},
         {"blackoutthreshold": None, "target": "total_loss"},
-        # {"blackoutthreshold": 0.8, "target": "num_GSS"},
     ]
     for param in params:
         blackoutthreshold = param["blackoutthreshold"]

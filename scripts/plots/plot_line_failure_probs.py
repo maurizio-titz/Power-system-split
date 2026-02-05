@@ -348,6 +348,7 @@ def create_line_failure_plot_linear():
         )
 
         axs_primary[count].axis("off")
+        axs_primary[count].set_aspect('equal')
 
         # Individual colorbar for this primary subplot
         sm = plt.cm.ScalarMappable(
@@ -405,6 +406,7 @@ def create_line_failure_plot_linear():
         )
 
         axs_secondary[count].axis("off")
+        axs_secondary[count].set_aspect('equal')
 
         # Individual colorbar for this secondary subplot
         sm = plt.cm.ScalarMappable(
@@ -538,6 +540,7 @@ def create_secondary_line_failure_plot():
         )
 
         axs_secondary[count].axis("off")
+        axs_secondary[count].set_aspect('equal')
 
         # Individual colorbar for this secondary subplot
         sm = plt.cm.ScalarMappable(
@@ -757,6 +760,7 @@ def create_total_line_failure_plot(
         )
 
         axs_secondary[count].axis("off")
+        axs_secondary[count].set_aspect('equal')
 
         # Add individual colorbar if not using unified colorbar
         if not unified_colorbar:
