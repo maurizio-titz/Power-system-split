@@ -278,6 +278,9 @@ class Clustering(object):
                 ]
             ),
         )
+        print(
+            f"Number of unique vectors after filtering: {len(self.unique_vector_to_idxs_and_weights)}"
+        )
         self.unique_vecs = np.array(list(self.unique_vector_to_idxs_and_weights.keys()))
         # self.weights_filtered = np.array(
         #     [d["weight"] for d in self.unique_vector_to_idxs_and_weights.values()]
@@ -897,6 +900,7 @@ class Clustering(object):
         self,
         result_filenames: List[str] = [],
         n_best: int = None,
+        relative_score_threshold: float = None,
         algorithm: str = None,
         **plot_kwargs,
     ):
@@ -907,9 +911,13 @@ class Clustering(object):
             n_best: Number of best results to plot based on silhouette score.
                 If None, plots all results for the specified algorithm(s).
             algorithm: Filter results by algorithm name (e.g., 'agg', 'dbscan', 'optics').
+            relative_score_threshold: If provided, only plots results with silhouette score within this fraction of the best score.
                 If None, plots n_best from each algorithm separately.
             **plot_kwargs: Additional arguments passed to plotting function
         """
+        if n_best is not None and relative_score_threshold is not None:
+            raise ValueError("Cannot specify both n_best and relative_score_threshold.")
+
         # Load all results index
         if not result_filenames:
             all_results = self.load_clustering_results_index()
@@ -941,6 +949,19 @@ class Clustering(object):
                     print(f"Plotting top {len(sorted_results)} results for {algorithm}")
                 else:
                     print(f"Plotting all {len(sorted_results)} results for {algorithm}")
+
+                # Apply relative score threshold if specified
+                if relative_score_threshold is not None:
+                    best_score = sorted_results[0].get("silhouette_score", 0)
+                    threshold_score = best_score * (1 - relative_score_threshold)
+                    sorted_results = [
+                        res
+                        for res in sorted_results
+                        if res.get("silhouette_score", 0) >= threshold_score
+                    ]
+                    print(
+                        f"Applying relative score threshold: {relative_score_threshold:.2%} of best score ({best_score:.4f}), resulting in {len(sorted_results)} results to plot."
+                    )
 
                 result_filenames = [res["filename"] for res in sorted_results]
             else:
