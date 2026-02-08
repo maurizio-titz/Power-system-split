@@ -340,6 +340,7 @@ def plot_centroid_with_failures(
     radius=0.5,
     pie_nodes=True,
     edge_log_scale=True,
+    plot_order=None,
 ):
     if len(centroid.shape) > 1:
         if colors_classes is None:
@@ -351,7 +352,11 @@ def plot_centroid_with_failures(
         #     for class_ind, proba in zip(majority_class, probs_majority_class)
         # ]
         if pie_nodes:
-            for i_node, node in enumerate(nx_graph.nodes()):
+            nodes = np.array(list(nx_graph.nodes()))
+            if plot_order is None:
+                plot_order = np.arange(len(nodes))
+            for i_node in plot_order:
+                node = nodes[i_node]
                 ax.pie(
                     centroid[i_node, :],
                     colors=colors_classes,
