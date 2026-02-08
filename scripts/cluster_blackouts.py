@@ -63,6 +63,69 @@ def _fit_clustering_worker_script(
     return model, silhouette_avg
 
 
+n_jobs_distance = 32
+n_jobs_clustering = 32
+distance_metric_kwargs = {
+    "name": "composite",
+    "metrics": [
+        {
+            "name": "hamming",
+            # "preprocessing": {
+            #     "method": "low_weight_boundary_field",
+            #     "target": "weights",  # Use as weights
+            #     "alpha": 0.4,
+            #     "steps": 3,
+            # },
+            "n_jobs": n_jobs_distance,
+        },
+        {
+            "name": "cosine_distance",
+            "preprocessing": {
+                "method": "boundary_field",
+                "target": "classes",  # Transform classes
+                "alpha": 0.4,
+                "steps": 3,
+            },
+            "n_jobs": n_jobs_distance,
+        },
+    ],
+    "combiner": geometric_mean,
+    "cache_components": True,
+}
+
+n_clusters_list = np.arange(32, 1025, step=32).tolist()
+# n_clusters_list = [16, 32, 64, 80]
+clustering_params = {
+    "agg": {
+        "n_iter": 1e4,
+        "n_jobs": n_jobs_clustering,
+        "HPs": {
+            "n_clusters": n_clusters_list,
+            "linkage": [
+                "average",
+                "complete",
+                # "single",
+            ],  # "single" is not used as it leads to bad results
+            "metric": ["precomputed"],
+        },
+        "calc_silhouette": True,
+    },
+    ## HDBSCAN didnÄt work well.
+    # "hdbscan": {
+    #     "n_iter": 128,
+    #     "n_jobs": n_jobs_clustering,
+    #     "HPs": {
+    #         "min_cluster_size": np.arange(5, 1000),
+    #         "min_samples": np.arange(10, 1000),
+    #         "cluster_selection_epsilon": loguniform(0.005, 0.1),
+    #         "metric": ["precomputed"],
+    #         "cluster_selection_method": ["eom", "leaf"],
+    #         "core_dist_n_jobs": [32 // n_jobs_clustering],
+    #     },
+    #     "calc_silhouette": True,
+    # },
+}
+
 # %%
 if __name__ == "__main__":
     # parse arguments
@@ -83,68 +146,6 @@ if __name__ == "__main__":
         co2l_list = list(get_co2_levels(n_nodes))
         random_subsample_size = None
 
-    n_jobs_distance = 32
-    n_jobs_clustering = 2
-    distance_metric_kwargs = {
-        "name": "composite",
-        "metrics": [
-            {
-                "name": "hamming",
-                # "preprocessing": {
-                #     "method": "low_weight_boundary_field",
-                #     "target": "weights",  # Use as weights
-                #     "alpha": 0.4,
-                #     "steps": 3,
-                # },
-                "n_jobs": n_jobs_distance,
-            },
-            {
-                "name": "cosine_distance",
-                "preprocessing": {
-                    "method": "boundary_field",
-                    "target": "classes",  # Transform classes
-                    "alpha": 0.4,
-                    "steps": 3,
-                },
-                "n_jobs": n_jobs_distance,
-            },
-        ],
-        "combiner": geometric_mean,
-        "cache_components": True,
-    }
-
-    n_clusters_list = np.arange(32, 1025, step=32).tolist()
-    # n_clusters_list = [16, 32, 64, 80]
-    clustering_params = {
-        "agg": {
-            "n_iter": 1e4,
-            "n_jobs": n_jobs_clustering,
-            "HPs": {
-                "n_clusters": n_clusters_list,
-                "linkage": [
-                    "average",
-                    "complete",
-                    # "single",
-                ],  # "single" is not used as it leads to bad results
-                "metric": ["precomputed"],
-            },
-            "calc_silhouette": True,
-        },
-        ## HDBSCAN didnÄt work well.
-        # "hdbscan": {
-        #     "n_iter": 128,
-        #     "n_jobs": n_jobs_clustering,
-        #     "HPs": {
-        #         "min_cluster_size": np.arange(5, 1000),
-        #         "min_samples": np.arange(10, 1000),
-        #         "cluster_selection_epsilon": loguniform(0.005, 0.1),
-        #         "metric": ["precomputed"],
-        #         "cluster_selection_method": ["eom", "leaf"],
-        #         "core_dist_n_jobs": [32 // n_jobs_clustering],
-        #     },
-        #     "calc_silhouette": True,
-        # },
-    }
     co2l_clustering = [co2l_list]
     # %%
     for co2l_iter in co2l_clustering:
@@ -155,7 +156,7 @@ if __name__ == "__main__":
             co2l_iter,
             indicator_type="rocof",
             transformation="blackout",
-            blackout_size_threshold=0.1,
+            blackout_size_threshold=0.99,
             distance_metric_kwargs=distance_metric_kwargs,
             clustering_params=clustering_params,
             distance_matrix_dtype=np.float16,
@@ -164,16 +165,25 @@ if __name__ == "__main__":
         )
         cl.load_data()
         cl.filter_data()
-        ############### comment out if you only want to plots >>>>
         cl.transform_vectors()
-        cl.get_distance_matrix()
-        cl.fit_clusters()
-        ############### comment out if you only want to plots <<<<
+        # ############### comment out if you only want to plots >>>>
+        # cl.get_distance_matrix()
+        # cl.fit_clusters()
+        # ############### comment out if you only want to plots <<<<
         cl.create_clustering_results_index()
         cl.plot_cluster_multiple(
-            n_best=1, average_over_classes=False, algorithm="agg", sort_by="frequency"
+            # relative_score_threshold=0.1,
+            n_best=4,
+            average_over_classes=False,
+            algorithm="agg",
+            sort_by="frequency",
         )
-        cl.plot_cluster_multiple(n_best=1, average_over_classes=False, algorithm="agg")
+        cl.plot_cluster_multiple(
+            n_best=4,
+            # relative_score_threshold=0.1,
+            average_over_classes=False,
+            algorithm="agg",
+        )
         # cl.plot_cluster_multiple(
         #     n_best=4,
         #     average_over_classes=False,
