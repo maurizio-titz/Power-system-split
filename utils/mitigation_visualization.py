@@ -77,6 +77,7 @@ def plot_inertia_loss_mitigation_curve_new(
     unit="GWs",
     color=None,
     annualized_cost_per_GWs_max=None,
+    cost_rescale_factor=0.06,
 ):
     # unit = "MWs"
 
@@ -128,7 +129,6 @@ def plot_inertia_loss_mitigation_curve_new(
         x_lim_mask = x_vals <= x_val_half_ref_loss
         x_vals = x_vals[x_lim_mask]  # limit x vals to half ref loss for cost plot
         cost_unit_factor = 1e-9  # to billion euros
-        rescale_divider = 0.015
         cumulative_annualized_cost = np.cumsum(
             inertia_placed_arr[:, 2]
             * delta_Erot
@@ -137,7 +137,7 @@ def plot_inertia_loss_mitigation_curve_new(
             * annualized_cost_per_GWs_max
         )[x_lim_mask]
         cumulative_annualized_cost_rescaled = (
-            cumulative_annualized_cost / rescale_divider
+            cumulative_annualized_cost / cost_rescale_factor
         )
 
         ax_loss_twin = ax_loss.twinx()
@@ -155,7 +155,7 @@ def plot_inertia_loss_mitigation_curve_new(
 
         ticks_primary = ax_loss.get_yticks()
         ax_loss_twin.set_yticks(ticks_primary)[:-1]
-        ticks_labels_secondary = np.round(ticks_primary * rescale_divider, 2)
+        ticks_labels_secondary = np.round(ticks_primary * cost_rescale_factor, 2)
         if all(ticks_labels_secondary % 1 == 0):
             ticks_labels_secondary = ticks_labels_secondary.astype(int)
         ax_loss_twin.set_yticklabels(ticks_labels_secondary)
@@ -575,6 +575,7 @@ def plot_map_inertia_placement_new(
     )
 
     ## Plot mitigated lost load and remaining lost splits over time
+    cost_rescale_factor = 0.04
     if plot_curve:
         plot_inertia_loss_mitigation_curve_new(
             mitigation_curve,
@@ -588,6 +589,7 @@ def plot_map_inertia_placement_new(
             unit=unit,
             color=line_color,
             annualized_cost_per_GWs_max=annualized_cost_per_GWs_max,
+            cost_rescale_factor=cost_rescale_factor,
         )
     ax2.grid(True)
     ax2.set_ylim(bottom=0)
@@ -599,7 +601,10 @@ def plot_map_inertia_placement_new(
         ax2_twin = [ax for ax in ax2_twin if ax != ax2][0]
         ax2_twin.plot(
             [inertia_in_map_plot * unit_factor, inertia_in_map_plot * unit_factor],
-            [ax2_twin.get_ylim()[0], cost_map_plot / 0.3],  # rescale divider 0.3
+            [
+                ax2_twin.get_ylim()[0],
+                cost_map_plot / cost_rescale_factor,
+            ],
             linestyle="--",
             c=color,
             lw=2,
@@ -620,9 +625,10 @@ def plot_map_inertia_placement_new(
         lw=2,
     )
     right_xlim = ax2.get_xlim()[1]
+    top_ylim = ax2.get_ylim()[1]
     ax2.text(
         inertia_in_map_plot * unit_factor + right_xlim / 200 * 5,
-        0.2,
+        1.1,
         f"{int(round(inertia_in_map_plot*unit_factor))} GWs",
         verticalalignment="bottom",
         horizontalalignment="left",
@@ -632,9 +638,9 @@ def plot_map_inertia_placement_new(
     )
     ax2.text(
         inertia_in_map_plot * unit_factor + right_xlim / 200 * 5,
-        1.2,
+        cost_map_plot / cost_rescale_factor * 0.98,
         f"{cost_map_plot:.2f} bn. €",
-        verticalalignment="bottom",
+        verticalalignment="center",
         horizontalalignment="left",
         zorder=np.inf,
         fontsize=TICK_LABEL_FONTSIZE,
@@ -1105,6 +1111,7 @@ def calc_inertia_placement_ref_loss(
     steps_to_reach_target_by_lvl = {}
     res_tuples_by_lvl = {}
     mitigation_curve_by_lvl = {}
+    delta_Erot_by_lvl = {}
 
     path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_sclopf
     for co2_lvl in co2_lvls:
@@ -1169,12 +1176,14 @@ def calc_inertia_placement_ref_loss(
         inertia_to_reach_target_by_lvl[co2_lvl] = total_placed_inertia
         steps_to_reach_target_by_lvl[co2_lvl] = idx_reached_ref_loss
         mitigation_curve_by_lvl[co2_lvl] = mitigation_curve
+        delta_Erot_by_lvl[co2_lvl] = delta_Erot
 
     return (
         res_tuples_by_lvl,
         mitigation_curve_by_lvl,
         inertia_to_reach_target_by_lvl,
         steps_to_reach_target_by_lvl,
+        delta_Erot_by_lvl,
     )
 
 

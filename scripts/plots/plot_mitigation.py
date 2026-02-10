@@ -416,6 +416,7 @@ def create_combined_mitigation_plot(
                     inertia_needed_by_ref_loss,
                     mitigation_curves_by_ref_loss,
                     steps_to_reach_target_by_ref_loss,
+                    delta_Erot_by_lvl,
                 ) = pickle.load(f)
         except FileNotFoundError:
             # Calculate inertia needed by level
@@ -428,6 +429,7 @@ def create_combined_mitigation_plot(
                     mitigation_curve,
                     inertia_at_ref_loss_by_lvl,
                     steps_to_reach_target_by_lvl,
+                    delta_Erot_by_lvl,
                 ) = calc_inertia_placement_ref_loss(
                     n_nodes=600,
                     delta_Erot=1000,
@@ -455,6 +457,7 @@ def create_combined_mitigation_plot(
                         inertia_needed_by_ref_loss,
                         mitigation_curves_by_ref_loss,
                         steps_to_reach_target_by_ref_loss,
+                        delta_Erot_by_lvl,
                     ),
                     f,
                 )
@@ -576,7 +579,11 @@ def create_combined_mitigation_plot(
         # Inertia mitigation section
         subplot_idx = 0 if plot_rows == "both" else 0
         gs_inertia = GridSpecFromSubplotSpec(
-            1, 3, subplot_spec=gs_main[subplot_idx], wspace=0.15, width_ratios=[1, 0.85, 1]
+            1,
+            3,
+            subplot_spec=gs_main[subplot_idx],
+            wspace=0.1,
+            width_ratios=[1.5, 2.2, 1],
         )
         ax_inertia_loss = f.add_subplot(gs_inertia[0])  # Loss reduction curve
         ax_inertia_map = f.add_subplot(gs_inertia[1])  # Map
@@ -586,7 +593,11 @@ def create_combined_mitigation_plot(
         # Line extension section
         subplot_idx = 1 if plot_rows == "both" else 0
         gs_line = GridSpecFromSubplotSpec(
-            1, 3, subplot_spec=gs_main[subplot_idx], wspace=0.15, width_ratios=[1, 0.85, 1]
+            1,
+            3,
+            subplot_spec=gs_main[subplot_idx],
+            wspace=0.1,
+            width_ratios=[1.5, 2.2, 1],
         )
         ax_line_loss = f.add_subplot(gs_line[0])  # Loss reduction curve
         ax_line_map = f.add_subplot(gs_line[1])  # Map
@@ -633,7 +644,8 @@ def create_combined_mitigation_plot(
                     get_actual_co2_level(
                         list(inertia_at_ref_loss_by_lvl.keys()), percent=True
                     )
-                )[2],
+                )[0]
+                / 2,
                 median_inertia_ref,
                 f"Median inertia at {get_actual_co2_level(co2l_ref, percent=True)}\\%",
                 color="black",
@@ -665,6 +677,7 @@ def create_combined_mitigation_plot(
                 ax_inertia_all_cost.set_ylim(ax_inertia_all.get_ylim())
                 ax_inertia_all_cost.grid(False)
 
+        ax_inertia_all.set_ylim(top=median_inertia_ref * 1.1)
         ax_inertia_all.invert_xaxis()
         ax_inertia_all.set_ylabel(f"Inertia placed [{unit}]", fontsize=AXIS_LABELSIZE)
         ax_inertia_all.set_xlabel("CO$_2$ level [\\% of 1990]", fontsize=AXIS_LABELSIZE)
@@ -690,7 +703,7 @@ def create_combined_mitigation_plot(
                 max_iter=10000,
                 max_node_size=100,
                 edge_width=0.2,
-                delta_Erot=1000,
+                delta_Erot=delta_Erot_by_lvl[co2_lvl_map],
                 resolve_strategy="random",
                 show_step_number=False,
                 plot_split_number=False,
@@ -718,6 +731,7 @@ def create_combined_mitigation_plot(
         ax_inertia_loss.set_ylabel(loss_axis_label, fontsize=AXIS_LABELSIZE)
         ax_inertia_loss.grid(True, alpha=0.3)
 
+        ax_inertia_map.set_aspect("equal")
         # Set map title with appropriate symbol based on target
         ax_inertia_map.set_title(
             rf"Synthetic inertia to reach ${target_symbol}_{{{int(round(co2_ref_percent))}\%}}$"
@@ -965,7 +979,7 @@ def create_combined_mitigation_plot(
             ax_line_all.plot(
                 get_actual_co2_level(lines_df.index, percent=True),
                 lines_df.lines_needed,
-                label="Number of reinforced lines",
+                label="Num. lines",
                 color=color_reference_loss,
                 linewidth=2,
             )
@@ -1062,8 +1076,28 @@ def create_combined_mitigation_plot(
             ax_line_all,
         ]
 
-    for i, ax in enumerate(axes_all):
-        add_panel_label(ax, i, x_offset=-0.10, y_offset=0.1)
+    # Align panel labels to a consistent height per row
+    if plot_rows == "both":
+        axes_rows = [
+            [ax_inertia_loss, ax_inertia_map, ax_inertia_all],
+            [ax_line_loss, ax_line_map, ax_line_all],
+        ]
+    else:
+        axes_rows = [axes_all]
+
+    label_index = 0
+    default_y_offset = 0.13
+    for row_axes in axes_rows:
+        row_positions = [ax.get_position() for ax in row_axes]
+        row_max_y = max(pos.y1 for pos in row_positions)
+        row_max_h = max(pos.height for pos in row_positions)
+        y_target = row_max_y + default_y_offset * row_max_h
+
+        for ax in row_axes:
+            pos = ax.get_position()
+            y_offset = (y_target - pos.y1) / pos.height
+            add_panel_label(ax, label_index, x_offset=-0.10, y_offset=y_offset)
+            label_index += 1
 
     # === APPLY CONSISTENT STYLING TO ALL AXES ===
     # Apply consistent font styling to all text elements
@@ -1114,7 +1148,7 @@ def create_combined_mitigation_plot(
 
 if __name__ == "__main__":
     params = [
-        {"blackoutthreshold": 0.8, "target": "num_GSS"},
+        # {"blackoutthreshold": 0.8, "target": "num_GSS"},
         {"blackoutthreshold": None, "target": "total_loss"},
     ]
     for param in params:
@@ -1123,17 +1157,17 @@ if __name__ == "__main__":
         # Example 1: Plot both rows (original behavior)
         # create_combined_mitigation_plot(use_annualized_costs=False)
 
-        # Example 2: Plot both rows with all options
-        create_combined_mitigation_plot(
-            use_annualized_costs=True,
-            co2_lvl_map=0.2,
-            build_380kV_only=True,
-            plot_intertia_cost=True,
-            recalc_cost=True,
-            blackoutthreshold=blackoutthreshold,
-            plot_rows="both",  # Options: "both", "inertia", "line_extension"
-            target=target,
-        )
+        # # Example 2: Plot both rows with all options
+        # create_combined_mitigation_plot(
+        #     use_annualized_costs=True,
+        #     co2_lvl_map=0.2,
+        #     build_380kV_only=True,
+        #     plot_intertia_cost=True,
+        #     recalc_cost=True,
+        #     blackoutthreshold=blackoutthreshold,
+        #     plot_rows="both",  # Options: "both", "inertia", "line_extension"
+        #     target=target,
+        # )
 
         # Example 3: Plot only synthetic inertia row
         create_combined_mitigation_plot(
@@ -1146,12 +1180,12 @@ if __name__ == "__main__":
             target=target,
         )
 
-        # Example 4: Plot only line extension row
-        create_combined_mitigation_plot(
-            use_annualized_costs=True,
-            co2_lvl_map=0.2,
-            build_380kV_only=True,
-            blackoutthreshold=blackoutthreshold,
-            plot_rows="line_extension",
-            target=target,
-        )
+        # # Example 4: Plot only line extension row
+        # create_combined_mitigation_plot(
+        #     use_annualized_costs=True,
+        #     co2_lvl_map=0.2,
+        #     build_380kV_only=True,
+        #     blackoutthreshold=blackoutthreshold,
+        #     plot_rows="line_extension",
+        #     target=target,
+        # )
