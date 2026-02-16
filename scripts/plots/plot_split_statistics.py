@@ -11,7 +11,6 @@ import copy
 import os
 import warnings
 
-
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 import networkx as nx
@@ -228,8 +227,9 @@ def create_split_statistics_plot(
             ax3_num_splits_legend.legend(
                 h,
                 l,
-                title="Share of load not served",
-                loc="center right",
+                title="Share of load\n not served",
+                loc="center left",
+                bbox_to_anchor=(0.1, 0.5),
                 ncols=1,
                 columnspacing=0.5,
             )
@@ -237,7 +237,7 @@ def create_split_statistics_plot(
             ax3_num_splits_legend.legend(
                 h,
                 l,
-                title="Share of load not served",
+                title="Share of load\n not served",
                 loc="center",
                 ncols=1,
                 columnspacing=0.5,
@@ -545,7 +545,9 @@ def create_blackout_statistics_plot(
     plt.show()
 
 
-def plot_blackout_size_histograms(save_path=path_to_figures_sclopf, log_scale=True):
+def plot_blackout_size_histograms(
+    save_path=path_to_figures_sclopf, log_scale=True, n_cols=1
+):
     # load split properties
     n_nodes = 600
     split_props = pd.read_hdf(
@@ -562,7 +564,16 @@ def plot_blackout_size_histograms(save_path=path_to_figures_sclopf, log_scale=Tr
 
     co2ls = get_co2_levels(n_nodes)
     # create histogram for each co2 level
-    fig, axes = plt.subplots(len(co2ls), 1, figsize=(8, 2 * len(co2ls)), sharex=True)
+    n_cols = max(1, int(n_cols))
+    n_rows = int(np.ceil(len(co2ls) / n_cols))
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(8, 2 * n_rows),
+        sharex=True,
+        sharey=True,
+    )
+    axes = np.atleast_1d(axes).flatten()
 
     bins = np.linspace(0, 100, 101)
 
@@ -590,7 +601,7 @@ def plot_blackout_size_histograms(save_path=path_to_figures_sclopf, log_scale=Tr
 
     # Second pass: plot with consistent y-limits
     for idx, co2l in enumerate(co2ls):
-        ax = axes[idx] if len(co2ls) > 1 else axes
+        ax = axes[idx]
         vals = (
             split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
         )
@@ -607,8 +618,18 @@ def plot_blackout_size_histograms(save_path=path_to_figures_sclopf, log_scale=Tr
             ax.set_ylim(ymin, ymax * 1.1)  # Add 10% padding at top
         else:
             ax.set_ylim(ymin, ymax * 10)  # Add padding in log scale
-        ax.set_ylabel("Count", fontsize=AXIS_LABEL_FONTSIZE)
-        ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+        col_idx = idx % n_cols
+        if col_idx == 0:
+            ax.set_ylabel("Count", fontsize=AXIS_LABEL_FONTSIZE)
+            ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+        else:
+            ax.set_ylabel("")
+            ax.tick_params(
+                axis="y",
+                which="both",
+                labelleft=False,
+            )
+            ax.tick_params(axis="x", which="both", labelsize=TICK_LABEL_FONTSIZE)
         # ax.legend(fontsize=TICK_LABEL_FONTSIZE, loc='upper center')
         ax.text(
             0.5,
@@ -622,7 +643,16 @@ def plot_blackout_size_histograms(save_path=path_to_figures_sclopf, log_scale=Tr
             ),
         )
 
-    axes[-1].set_xlabel(r"Share of load not served [\%]", fontsize=AXIS_LABEL_FONTSIZE)
+    # hide any unused axes
+    for ax in axes[len(co2ls) :]:
+        ax.axis("off")
+
+    # set x-labels for bottom row axes only
+    for ax in axes[(n_rows - 1) * n_cols : n_rows * n_cols]:
+        if ax.get_visible():
+            ax.set_xlabel(
+                r"Share of load not served [\%]", fontsize=AXIS_LABEL_FONTSIZE
+            )
     # add suptitle
     plt.suptitle("Blackout Size Distribution", fontsize=PANEL_LABEL_FONTSIZE + 2)
 
@@ -631,23 +661,81 @@ def plot_blackout_size_histograms(save_path=path_to_figures_sclopf, log_scale=Tr
     plt.show()
 
 
-if __name__ == "__main__":
-    create_split_statistics_plot()
-    for load_norm in [False]:
-        for blackout_stat in [True]:
-            create_split_statistics_plot(
-                load_normalization=load_norm,
-                show_blackout_stats=blackout_stat,
-                secondary_proba_axis=True,
+def plot_component_number_vs_blackout_size(
+    split_properties=None, save_dir=path_to_figures_sclopf
+):
+    if split_properties is None:
+        split_properties = pd.read_hdf(
+            path_to_vis_results_sclopf + f"split_properties_all_n600.h5", index_col=0
+        )
+    lls = split_properties["lost_load_share_blackout"].to_numpy()
+    n_comp = split_properties["n_components"].to_numpy()
+
+    # bins
+    lls_bins = np.linspace(0, 1, 11)
+    n_comp_min = int(np.nanmin(n_comp))
+    n_comp_max = int(np.nanmax(n_comp))
+    n_comp_bins = np.logspace(
+        np.log10(np.nanmin(n_comp)), np.log10(np.nanmax(n_comp)), 11
+    )
+
+    # histogram and column normalization (per lost_load_share_blackout bin)
+    hist2d, x_edges, y_edges = np.histogram2d(lls, n_comp, bins=[lls_bins, n_comp_bins])
+    col_sums = hist2d.sum(axis=1, keepdims=True)
+    hist2d_norm = np.divide(
+        hist2d, col_sums, out=np.zeros_like(hist2d), where=col_sums != 0
+    )
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    mesh = ax.pcolormesh(
+        x_edges,
+        y_edges,
+        hist2d_norm.T,
+        cmap="viridis",
+        shading="auto",
+    )
+    ax.set_yscale("log")
+    import matplotlib.ticker as mticker
+
+    yticks = np.unique(
+        np.round(
+            np.logspace(
+                np.log10(n_comp_min),
+                np.log10(n_comp_max),
+                num=6,
             )
+        ).astype(int)
+    )
+    yticks = yticks[(yticks >= n_comp_min) & (yticks <= n_comp_max)]
+    ax.set_yticks(yticks)
+    ax.yaxis.set_major_formatter(mticker.ScalarFormatter())
+    ax.yaxis.set_minor_formatter(mticker.NullFormatter())
+    fig.colorbar(mesh, ax=ax, label="Relative Frequency")
+    ax.set_xlabel("Blackout size")
+    ax.set_ylabel("Number of Components")
+    ax.set_title("Column-Normalized 2D Histogram")
+    f_name = "lls_vs_n_components_colnorm"
+    save_figure(fig, save_dir, f_name)
+
+
+if __name__ == "__main__":
+    # create_split_statistics_plot()
+    # for load_norm in [False]:
+    #     for blackout_stat in [True]:
+    #         create_split_statistics_plot(
+    #             load_normalization=load_norm,
+    #             show_blackout_stats=blackout_stat,
+    #             secondary_proba_axis=True,
+    #         )
 
     # Create standalone blackout statistics plot
-    plot_blackout_size_histograms(log_scale=True)
+    # plot_blackout_size_histograms(log_scale=True, n_cols=2)
 
-    # # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)
-    for same_corridor_option in [None, True, False]:
-        for normalize_option in [False, True]:
-            create_blackout_statistics_plot(
-                same_corridor=same_corridor_option,
-                normalize_by_total_splits=normalize_option,
-            )
+    # # # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)
+    # for same_corridor_option in [None, True, False]:
+    #     for normalize_option in [False, True]:
+    #         create_blackout_statistics_plot(
+    #             same_corridor=same_corridor_option,
+    #             normalize_by_total_splits=normalize_option,
+    #         )
+    plot_component_number_vs_blackout_size()
