@@ -19,21 +19,25 @@ from utils import plot_style
 %load_ext autoreload
 %autoreload 2
 
-cluster_number = 10
+cluster_number = 12
+# sort_by = "n_samples"
+sort_by = "weighted_lost_load"
+
 save_dir = f"{config.path_to_figures_sclopf}./analysis_cluster_{cluster_number}/"
 #%%
-with gzip.open("/srv/data/jlange/power-system-split/no_extensions/results/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/clustering_results_index.pklz", "rb") as f:
-# with gzip.open("/srv/data/jlange/power-system-split/no_extensions/results_no_load_inertia/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.05/clustering_results/clustering_results_index.pklz", "rb") as f:
-    df = pickle.load(f)
-df = pd.DataFrame(df)
-df.sort_values(by="silhouette_score", ascending=False)
+# with gzip.open("/srv/data/jlange/power-system-split/no_extensions/results/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/clustering_results_index.pklz", "rb") as f:
+# # with gzip.open("/srv/data/jlange/power-system-split/no_extensions/results_no_load_inertia/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.05/clustering_results/clustering_results_index.pklz", "rb") as f:
+#     df = pickle.load(f)
+# df = pd.DataFrame(df)
+# df.sort_values(by="silhouette_score", ascending=False)
 #%%
-fpath = "/srv/data/jlange/power-system-split/no_extensions/results/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/agg_params_68e9bdc7.pklz"
+fpath = "/srv/data/jlange/power-system-split/no_extensions/results/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/agg_params_01bf408e.pklz"
 with gzip.open(fpath, "rb") as f:
     res = pickle.load(f)
+
+with gzip.open(fpath.replace(".pklz", "_centroid_res.pklz"), "rb") as f:
+    cluster_res = pickle.load(f)
 #%%
-m = res["model"]
-m.labels_.shape
 #%% load clustering results
 n_nodes = 600
 co2l_list = list(get_co2_levels(n_nodes))
@@ -90,20 +94,23 @@ cl = Clustering(
     clustering_params=clustering_params,
     distance_matrix_dtype=np.float16,
 )
-
+#%% load distance matrix
+# cl.get_distance_matrix()
 # load clustering results
-res = cl.load_clustering_results_index()
-res = pd.DataFrame(res).sort_values(by=["silhouette_score"], ascending=False).reset_index(drop=True)
+# res = cl.load_clustering_results_index()
+# res = pd.DataFrame(res).sort_values(by=["silhouette_score"], ascending=False).reset_index(drop=True)
 
-with gzip.open(res.loc[0, "filepath"].replace(".pklz", "_centroid_res.pklz"), "rb") as f:
-    cluster_res = pickle.load(f)
+# with gzip.open(res.loc[0, "filepath"].replace(".pklz", "_centroid_res.pklz"), "rb") as f:
+#     cluster_res = pickle.load(f)
+#%%
+# cl.distance_matrix.shape
 # %% select cluster to analyse
-cluster_idx = cluster_res["centroids_df"].sort_values(by="n_samples", ascending=False).iloc[cluster_number,:].name
+cluster_idx = cluster_res["centroids_df"].sort_values(by=sort_by, ascending=False).iloc[cluster_number-1,:].name
 centroid = cluster_res["centroids"][cluster_idx]
 edge_centroids = cluster_res["edge_centroids"][cluster_idx]
 failed_edges_prob = edge_centroids.copy()
 # plot centroid
-plot_cluster = True
+plot_cluster = False
 edge_log_scale = False
 if edge_log_scale:
     vmin_edge = 1e-3
@@ -175,28 +182,28 @@ if plot_cluster:
         sm_edge = plt.cm.ScalarMappable(
             cmap=edge_cmap, norm=mplcolors.Normalize(vmin=vmin_edge_orig, vmax=vmax_edge_orig)
         )
-    cb_edge = fig.colorbar(sm_edge, ax=ax)
+    cb_edge = f.colorbar(sm_edge, ax=ax)
     # plt.colorbar(sm_edges, ax=ax, label="Edge failure probability")
     
 #%%
-from utils.clustering_visualisation import plot_centroid_with_failures
-f, ax = plt.subplots(figsize=(8, 8))
-plot_order = np.argsort(centroid[:, 2])  # Sort by the value of the third class
-nx_graph = data_handling.load_networkx_graph(snet_index=0, co2lvl=0.0)
-pos = nx.get_node_attributes(nx_graph, "pos")
-plot_centroid_with_failures(
-    nx_graph,
-    pos,
-    cmap,
-    edge_cmap,
-    vmax,
-    vmin,
-    vmin_edge,
-    vmax_edge,
-    centroid,
-    failed_edges_prob,
-    ax,
-)
+# from utils.clustering_visualisation import plot_centroid_with_failures
+# f, ax = plt.subplots(figsize=(8, 8))
+# plot_order = np.argsort(centroid[:, 2])  # Sort by the value of the third class
+# nx_graph = data_handling.load_networkx_graph(snet_index=0, co2lvl=0.0)
+# pos = nx.get_node_attributes(nx_graph, "pos")
+# plot_centroid_with_failures(
+#     nx_graph,
+#     pos,
+#     cmap,
+#     edge_cmap,
+#     vmax,
+#     vmin,
+#     vmin_edge,
+#     vmax_edge,
+#     centroid,
+#     failed_edges_prob,
+#     ax,
+# )
 # %%
 node_idxs_red = np.where(centroid[:,2]>0.5)
 nx_graph = data_handling.load_networkx_graph(snet_index=0, co2lvl=0.0)
@@ -229,14 +236,36 @@ largest_component_df = component_df_cluster.loc[idx]
 import matplotlib.pyplot as plt
 fig, axs = plt.subplots(2, 2, figsize=(12, 10))
 
-largest_component_df.load_share.hist(bins=30, log=True, ax=axs[0,0])
-(largest_component_df.power_imbalance/1000).hist(bins=30, log=True, ax=axs[0,1])
-(largest_component_df.rot_energy/1000).hist(bins=30, log=True, ax=axs[1,0])
-largest_component_df.rocof.hist(bins=30, log=True, ax=axs[1,1])
-axs[0,0].set_title("Load Share Distribution")
-axs[0,1].set_title("Power Imbalance Distribution [GW]")
-axs[1,0].set_title("Rotational Energy Distribution [GWs]")
-axs[1,1].set_title("RoCoF Distribution [Hz/s]")
+largest_component_df.load_share.hist(
+    bins=30,
+    log=True,
+    ax=axs[0, 0],
+    weights=np.ones(len(largest_component_df)) / len(largest_component_df),
+)
+(largest_component_df.power_imbalance / 1000).hist(
+    bins=30,
+    log=True,
+    ax=axs[0, 1],
+    weights=np.ones(len(largest_component_df)) / len(largest_component_df),
+)
+(largest_component_df.rot_energy / 1000).hist(
+    bins=30,
+    log=True,
+    ax=axs[1, 0],
+    weights=np.ones(len(largest_component_df)) / len(largest_component_df),
+)
+largest_component_df.rocof.hist(
+    bins=30,
+    log=True,
+    ax=axs[1, 1],
+    weights=np.ones(len(largest_component_df)) / len(largest_component_df),
+)
+axs[0, 0].set_title("Load Share Distribution")
+axs[0, 1].set_title("Power Imbalance Distribution [GW]")
+axs[1, 0].set_title("Rotational Energy Distribution [GWs]")
+axs[1, 1].set_title("RoCoF Distribution [Hz/s]")
+for ax in axs.ravel():
+    ax.set_ylabel("Relative Frequency")
 #%%
 # co2l_cluster = props_clust.index.get_level_values("co2l").unique().values
 # networks = {co2l: data_handling.load_pypsa_network(co2lvl=co2l, n_nodes=600) for co2l in co2l_cluster}
@@ -256,7 +285,14 @@ snap_counts_clust = props_clust_lvl.index.get_level_values("time_stamp").value_c
 #%%
 # intertia_cluster = inertia_time[idxs_snaps_clust]
 #%%
-(component_df[component_df.split_number_snapshot==1].groupby(component_df[component_df.split_number_snapshot==1].index.get_level_values("time_stamp")).rot_energy.sum()/1000).hist(bins=30, log=True)
+rot_energy_series = (
+    component_df[component_df.split_number_snapshot == 1]
+    .groupby(
+        component_df[component_df.split_number_snapshot == 1]
+        .index.get_level_values("time_stamp")
+    )
+    .rot_energy.sum() / 1000
+)
 #%%
 from operator import itemgetter
 # largest_component_sub = largest_component_df.loc[np.random.choice(largest_component_df.index, size=10000, replace=False)]
@@ -266,25 +302,58 @@ inertia_time = (
         config.path_to_pre_outage_sclopf + f"inertia_time_series_all_co2ls_{n_nodes}.npy"
     )
     / 1000
-)[-1,:]
+)[-1, :]
 largest_component_sub["time_stamp"] = pd.to_datetime(largest_component_sub["time_stamp"])
 time_stamps = largest_component_sub["time_stamp"].tolist()
 total_inertia_sub = np.array(inertia_time)[np.array(itemgetter(*time_stamps)(snapshot_to_idx))]
-inertia_share_largest_component = largest_component_sub.rot_energy / (total_inertia_sub + 1e-8) / 1000
-plt.scatter(largest_component_sub.power_imbalance/1000, largest_component_sub.rot_energy/1000, c=largest_component_sub.load_share, cmap="viridis", alpha=1, s=10)
-plt.colorbar(label="Load Share of Component", orientation="vertical")
+inertia_share_largest_component = (
+    largest_component_sub.rot_energy / (total_inertia_sub + 1e-8) / 1000
+)
+
+fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+# Plot 1 (left): Load share vs inertia share
+axs[0].scatter(
+    largest_component_sub.load_share,
+    inertia_share_largest_component,
+    alpha=0.5,
+    s=10,
+)
+axs[0].set_xlabel("Load Share of Component")
+axs[0].set_ylabel("Inertia Share of Component")
+# axs[0].set_title("Largest Component")
+xlims = axs[0].get_xlim()
+ylims = axs[0].get_ylim()
+axs[0].plot([0, 1], [0, 1], color="red", linestyle="-", linewidth=0.5)
+axs[0].set_xlim(xlims)
+axs[0].set_ylim(ylims)
+
+# Plot 2 (right): Power imbalance vs rotational energy
+sc = axs[1].scatter(
+    largest_component_sub.power_imbalance / 1000,
+    largest_component_sub.rot_energy / 1000,
+    c=largest_component_sub.load_share,
+    cmap="viridis",
+    alpha=1,
+    s=10,
+)
+fig.colorbar(sc, ax=axs[1], label="Load Share of Component", orientation="vertical")
 cbar_lims = (inertia_share_largest_component.min(), 1)
-plt.clim(cbar_lims)
-plt.xlabel("Power Imbalance [GW]")
-plt.ylabel("Rotational Energy [GWs]")
-xlims = plt.xlim()
-ylims = plt.ylim()
-# plt.colorbar(label="Counts")
-x = np.array([0, largest_component_sub.power_imbalance.min()*2])
-inertia_rocof_border = - 50 * np.array(x)/ 2
-plt.plot(x/1000, inertia_rocof_border/1000, label="RoCoF Border", linewidth=0.5, color="red")
-# fill stable area
-plt.fill_between(
+sc.set_clim(cbar_lims)
+axs[1].set_xlabel("Power Imbalance [GW]")
+axs[1].set_ylabel("Rotational Energy [GWs]")
+xlims = axs[1].get_xlim()
+ylims = axs[1].get_ylim()
+x = np.array([0, largest_component_sub.power_imbalance.min() * 2])
+inertia_rocof_border = -50 * np.array(x) / 2
+axs[1].plot(
+    x / 1000,
+    inertia_rocof_border / 1000,
+    label="RoCoF Border",
+    linewidth=0.5,
+    color="red",
+)
+axs[1].fill_between(
     x / 1000,
     inertia_rocof_border / 1000,
     ylims[1],
@@ -292,7 +361,7 @@ plt.fill_between(
     alpha=1,
     zorder=0,
 )
-plt.fill_between(
+axs[1].fill_between(
     x / 1000,
     inertia_rocof_border / 1000,
     ylims[1],
@@ -300,16 +369,15 @@ plt.fill_between(
     alpha=1,
     zorder=0,
 )
-plt.text(
-    x=largest_component_sub.power_imbalance.max()/1000*1.1,
-    y=largest_component_sub.rot_energy.max()/1000*0.95,
+axs[1].text(
+    x=largest_component_sub.power_imbalance.max() / 1000 * 1.1,
+    y=largest_component_sub.rot_energy.max() / 1000 * 0.95,
     s="Stable",
     horizontalalignment="right",
     verticalalignment="top",
     fontsize=14,
 )
-# fill rocof violation area
-plt.fill_between(
+axs[1].fill_between(
     x / 1000,
     ylims[0],
     inertia_rocof_border / 1000,
@@ -317,32 +385,22 @@ plt.fill_between(
     alpha=0.1,
     zorder=0,
 )
-plt.text(
-    x=largest_component_sub.power_imbalance.min()/1000*0.9,
-    y=largest_component_sub.rot_energy.max()/1000*0.95,
+axs[1].text(
+    x=largest_component_sub.power_imbalance.min() / 1000 * 0.9,
+    y=largest_component_sub.rot_energy.max() / 1000 * 0.95,
     s="RoCoF Violation",
     horizontalalignment="left",
     verticalalignment="top",
     fontsize=14,
 )
-plt.xlim(xlims)
-plt.ylim(ylims)
-plt.title("Largest Component")
-f_name = f"power_imbalance_vs_rot_energy_co2l{co2l}"
-plot_style.save_figure(plt.gcf(), save_dir, f_name)
-#%%
-ax, f = plt.subplots(figsize=(6,6))
-plt.scatter(largest_component_sub.load_share, inertia_share_largest_component, alpha=0.5, s=10)
-plt.xlabel("Load Share of Component")
-plt.ylabel("Inertia Share of Component")
-plt.title("Largest Component")
-xlims = plt.xlim()
-ylims = plt.ylim()
-plt.plot([0,1], [0,1], color="red", linestyle="-", linewidth=0.5)
-plt.xlim(xlims)
-plt.ylim(ylims)
-f_name = f"load_share_vs_inertia_share_co2l{co2l}"
-plot_style.save_figure(plt.gcf(), save_dir, f_name)
+axs[1].set_xlim(xlims)
+axs[1].set_ylim(ylims)
+# axs[1].set_title("Largest Component")
+
+plt.tight_layout()
+
+f_name = f"largest_component_two_panel_co2l{co2l}"
+plot_style.save_figure(fig, save_dir, f_name)
 
 
 #%% analyse overfrequency nodes
@@ -372,7 +430,28 @@ relative_contribution.describe()
 # since solar contributes more than 95% on average we will not plot by carrier but only total generation and storage
 #%%
 # plot histograms of generation and storage power
+bins = np.arange(0, gen_by_carrier.sum(axis=1).max()/1000*1.2, step=0.5)
 import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+for col in gen_by_carrier.columns:
+    sign_vals = gen_by_carrier[col].values[gen_by_carrier[col].values >= 500]
+    if len(sign_vals) == 0:
+        continue
+    ax.hist(
+        gen_by_carrier[col].values / 1000,
+        alpha=0.5,
+        bins=bins,
+        label=col,
+        weights=np.ones(len(gen_by_carrier[col])) / len(gen_by_carrier[col]),
+    )
+plt.yscale("log")
+ax.legend()
+ax.set_xlabel('Generation [GW]')
+ax.set_ylabel('Relative Frequency')
+plt.title("Generation by Carrier")
+f_name = f"generation_by_carrier_hist_co2l{co2l}"
+plot_style.save_figure(fig, save_dir, f_name)
+#%%
 fig, axs = plt.subplots(1,4, figsize=(15,5))
 # gen_store_vals = np.concatenate(
 #     [gen_by_carrier.values.flatten(), storage_by_carrier.values.flatten()]
@@ -380,32 +459,57 @@ fig, axs = plt.subplots(1,4, figsize=(15,5))
 # shared_bins = np.histogram_bin_edges(gen_store_vals, bins=30)
 # for col in gen_by_carrier.columns:
 #     axs[0].hist(gen_by_carrier[col].values/1000, bins=shared_bins, alpha=0.5, label=col)
-axs[2].hist(gen_by_carrier.sum(axis=1).values/1000, alpha=0.7, bins=30, label="Generation")
-axs[2].set_ylabel("Counts")
+gen_total_vals = gen_by_carrier.sum(axis=1).values / 1000
+axs[2].hist(
+    gen_total_vals,
+    alpha=0.7,
+    bins=30,
+    label="Generation",
+    weights=np.ones(len(gen_total_vals)) / len(gen_total_vals),
+)
+axs[2].set_ylabel("Relative Frequency")
 
 # for col in storage_by_carrier.columns:
 #     axs[2].hist(storage_by_carrier[col].values/1000, bins=shared_bins, alpha=0.5, label=col)
 # axs[2].set_title("Generation")
 # axs[2].legend()
-axs[2].set_ylim(1, axs[2].get_ylim()[1])
+# axs[2].set_ylim(1, axs[2].get_ylim()[1])
 axs[2].set_xlabel("Generation [GW]")
 
-axs[0].hist(load.values/1000, bins=30, alpha=0.7)
+load_vals = load.values / 1000
+axs[0].hist(
+    load_vals,
+    bins=30,
+    alpha=0.7,
+    weights=np.ones(len(load_vals)) / len(load_vals),
+)
 # axs[0].set_title("Load")
 # axs[0].set_xlabel("Load + Storage [GW]")
 axs[0].set_xlabel("Load [GW]")
-axs[0].set_ylabel("Counts")
+axs[0].set_ylabel("Relative Frequency")
 
-axs[1].hist(storage_by_carrier.sum(axis=1).values/1000, bins=30, alpha=0.7)
+storage_vals = storage_by_carrier.sum(axis=1).values / 1000
+axs[1].hist(
+    storage_vals,
+    bins=30,
+    alpha=0.7,
+    weights=np.ones(len(storage_vals)) / len(storage_vals),
+)
 # axs[1].set_title("Load")
 axs[1].set_xlabel("Storage [GW]")
-axs[1].set_ylabel("Counts")
+axs[1].set_ylabel("Relative Frequency")
 
 
-axs[3].hist(power_imbalance.values/1000, bins=30, alpha=0.7)
+imbalance_vals = power_imbalance.values / 1000
+axs[3].hist(
+    imbalance_vals,
+    bins=30,
+    alpha=0.7,
+    weights=np.ones(len(imbalance_vals)) / len(imbalance_vals),
+)
 # axs[3].set_title("Power imbalance")
 axs[3].set_xlabel("Power imbalance [GW]")
-axs[3].set_ylabel("Counts")
+axs[3].set_ylabel("Relative Frequency")
 
 plt.tight_layout()
 # axs[3].hist(inertia_time_cluster, bins=30, alpha=0.7, color="red")
@@ -419,34 +523,50 @@ f_name = f"gen_load_storage_imbalance_hist_co2l{co2l}"
 plot_style.save_figure(fig, save_dir, f_name)
 #%%
 # Plot histograms of snapshots - daily and yearly profiles
-fig, axs = plt.subplots(1, 2, figsize=(10, 5), width_ratios=[0.5, 1])
+fig, axs = plt.subplots(1, 2, figsize=(6, 5), width_ratios=[0.5, 1])
 
 # Convert snapshots to pandas datetime if needed
 snapshots_dt = pd.to_datetime(snaps_clust)
-possible_hours= pd.to_datetime(all_snapshots).hour.unique()
+possible_hours= list(pd.to_datetime(all_snapshots).hour.unique()) + [24]
 
 # Daily profile - bar plot centered on ticks
 hours = snapshots_dt.hour
 hours_counts = hours.value_counts().sort_index()
-axs[0].bar(hours_counts.index, hours_counts.values, width=0.9, edgecolor='black', alpha=0.7)
+hours_rel = hours_counts.values / hours_counts.values.sum()
+axs[0].bar(hours_counts.index + 1.5, hours_rel, width=3, edgecolor='black', alpha=0.7)
 axs[0].set_xlabel('Hour of Day')
-axs[0].set_ylabel('Frequency')
+axs[0].set_ylabel('Relative Frequency')
 axs[0].set_title('Daily Profile')
 axs[0].set_xticks(possible_hours)
-axs[0].set_xlim(possible_hours.min() - 0.5, possible_hours.max() + 0.5)
+# rotate x-axis labels
+axs[0].set_xticklabels(possible_hours, rotation=90)
+axs[0].set_xlim(0,24)
 axs[0].grid(axis='y', alpha=0.3)
 
 # Yearly profile - histogram of day of year
 day_of_year = snapshots_dt.dayofyear
-axs[1].hist(day_of_year, bins=len(snapshots_dt.dayofyear.unique()), range=(1, 366), edgecolor='black', alpha=0.7)
-axs[1].set_xlabel('Day of Year')
-axs[1].set_ylabel('Frequency')
+axs[1].hist(
+    day_of_year,
+    bins=len(snapshots_dt.dayofyear.unique()),
+    range=(1, 366),
+    edgecolor='black',
+    alpha=0.7,
+    weights=np.ones(len(day_of_year)) / len(day_of_year),
+)
+# axs[1].set_xlabel('Day of Year')
+axs[1].set_ylabel('Relative Frequency')
 axs[1].set_title('Yearly Profile')
-# axs[1].set_xticks(np.sort(day_of_year.unique()))
+# Set month ticks
+month_starts = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+month_labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+axs[1].set_xticks(month_starts)
+# rotate x-axis labels
+axs[1].set_xticklabels(month_labels, rotation=90)
 axs[1].grid(axis='y', alpha=0.3)
+axs[1].set_xlim(1, 366)
 
 # add suptitle
-plt.suptitle(f"Temporal Distribution of Blackouts", fontsize=16, y=1.1)
+plt.suptitle(f"Temporal Distribution of Blackouts", fontsize=16, y=0.93)
 
 plt.tight_layout()
 f_name = f"blackout_daily_yearly_profile_co2l{co2l}"
