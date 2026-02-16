@@ -54,6 +54,13 @@ from utils.plot_style import (
     save_figure,
 )
 
+# Backwards compatibility
+AXIS_LABELSIZE = AXIS_LABEL_FONTSIZE
+TICK_LABELSIZE = TICK_LABEL_FONTSIZE
+SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
+
+from utils.config import path_to_line_extension_mitigation_sclopf
+
 annualized_cost_per_MWs_max_DE = 888.5  # € per MWs/a of synthetic intertia as per https://www.netztransparenz.de/de-de/Systemdienstleistungen/Frequenzhaltung/Marktgest%C3%BCtzte-Beschaffung-von-Momentanreserve
 # annualized_cost_per_MVAs_GB = (
 #     5080 * 1.1672
@@ -63,12 +70,45 @@ annualized_cost_per_MWs_max_DE = 888.5  # € per MWs/a of synthetic intertia as
 annualized_cost_per_MWs_max = annualized_cost_per_MWs_max_DE
 annualized_cost_per_GWs_max = annualized_cost_per_MWs_max * 1e3  # € per GWs/a
 
-# Backwards compatibility
-AXIS_LABELSIZE = AXIS_LABEL_FONTSIZE
-TICK_LABELSIZE = TICK_LABEL_FONTSIZE
-SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 
-from utils.config import path_to_line_extension_mitigation_sclopf
+def calc_annualized_cost_per_km(
+    capex_per_km, discount_rate=0.05, lifetime=40, fom_fraction=0.0
+):
+    """
+    Calculate annualized transmission cost per km.
+
+    Parameters
+    ----------
+    capex_per_km : float
+        Investment cost [€/km]
+    discount_rate : float
+        Discount rate (e.g. 0.05 for 5%)
+    lifetime : int
+        Asset lifetime in years
+    fom_fraction : float, optional
+        Fixed O&M cost as fraction of CAPEX per year
+        (e.g. 0.02 for 2%), default = 0
+
+    Returns
+    -------
+    float
+        Annualized cost [€/km/year]
+    """
+    r = discount_rate
+    n = lifetime
+
+    # Capital Recovery Factor
+    crf = r * (1 + r) ** n / ((1 + r) ** n - 1)
+
+    annualized_capital = capex_per_km * crf
+    annual_fom = capex_per_km * fom_fraction
+
+    return annualized_capital + annual_fom
+
+
+capital_expenditure_per_km = (
+    4.5 * 1e6
+)  # € per km for 380kV line, source: https://www.netzentwicklungsplan.de/sites/default/files/2023-03/230321_NEP_Kostenschaetzung_NEP2037_2045_V2023_1.Entwurf.pdf
 
 
 def calculate_line_extension(
@@ -101,28 +141,15 @@ def calculate_line_extension(
 
     os.makedirs(path_to_line_extension_mitigation_sclopf, exist_ok=True)
 
-    # co2l_ref = 0.6
-    # split_properties_reference = split_properties[
-    #     split_properties.co2l == co2l_ref
-    # ].copy()
-    # lost_load_reference_lvl = split_properties_reference.lost_load_share_blackout.sum()
-    extension_cost_per_MWkm = 1100  # € / MVA / km ##  source: Tom Brown updated fig of https://ariadneprojekt.de/publikation/report-szenarien-zur-klimaneutralitat-2045-2/ Fig 7.2
-    annualized_extension_cost_per_MWkm = (
-        0.058 * extension_cost_per_MWkm
-    )  # € / MVA / km / a
+    # extension_cost_per_MWkm = 1100  # € / MVA / km ##  source: Tom Brown updated fig of https://ariadneprojekt.de/publikation/report-szenarien-zur-klimaneutralitat-2045-2/ Fig 7.2
+    # annualized_extension_cost_per_MWkm = (
+    #     0.058 * extension_cost_per_MWkm
+    # )  # € / MVA / km / a
+    annualized_cost_per_km = calc_annualized_cost_per_km(capital_expenditure_per_km)
 
-    networks = {
-        co2l: data_handling.load_pypsa_network(
-            n_nodes=600, co2lvl=co2l, use_sclopf=True
-        )
-        for co2l in co2ls
-    }
     n_lines = nx_graph.number_of_edges()
 
     for annualized_costs in [True, False]:
-
-        # cost_to_reach_ref_loss = {}
-        # cost_to_reach_double_ref_loss = {}
 
         for co2l in co2ls:
             if co2l == 0.6:
@@ -183,19 +210,9 @@ def calculate_line_extension(
                     lambda x: max_num_par[np.round(x, 5)] if x in max_num_par else 1
                 )
             if annualized_costs:
-                costs_["extension_cost"] = (
-                    annualized_extension_cost_per_MWkm
-                    * s_380kV
-                    * costs_.num_par_ext
-                    * costs_.length
-                )
+                costs_["extension_cost"] = annualized_cost_per_km * costs_.length
             else:
-                costs_["extension_cost"] = (
-                    extension_cost_per_MWkm
-                    * s_380kV
-                    * costs_.num_par_ext
-                    * costs_.length
-                )
+                costs_["extension_cost"] = capital_expenditure_per_km * costs_.length
 
             loss_with_mitigation = [
                 (
@@ -338,11 +355,10 @@ def create_gridExt_mitigation_filename(
 
 
 def create_combined_mitigation_plot(
-    use_annualized_costs=False,
+    use_annualized_costs=True,
     co2_lvl_map=0.1,
     build_380kV_only=False,
     plot_intertia_cost=False,
-    recalc_cost=False,
     blackoutthreshold=0.0,
     target: str = "num_GSS",
     plot_rows: str = "both",
@@ -757,14 +773,6 @@ def create_combined_mitigation_plot(
             use_annualized_costs,
             co2_lvl_map,
         )
-        # if use_annualized_costs:
-        #     f_name = f"heuristic_costMin_loss_mitigation_annualized_Co2L{co2_lvl_map}_n{n_nodes}.pkl"
-        # else:
-        #     f_name = (
-        #         f"heuristic_costMin_loss_mitigation_Co2L{co2_lvl_map}_n{n_nodes}.pkl"
-        #     )
-        # if build_380kV_only:
-        #     f_name = f_name.replace(".pkl", "_380kVonly.pkl")
 
         reinforced_lines, loss_with_mitigation, num_blackouts, cost = pickle.load(
             open(path_to_line_extension_mitigation_sclopf + f_name, "rb")
@@ -777,6 +785,7 @@ def create_combined_mitigation_plot(
         num_lines_to_reach_ref_loss = np.where(
             np.array(post_mitigation_value) < target_value
         )[0][0]
+        cost = [0] + cost  # Add 0 cost for the initial state with no lines reinforced
         cost_to_reach_ref_loss_lvl = sum(cost[: num_lines_to_reach_ref_loss + 1])
 
         # Line extension: Loss reduction curve
@@ -794,7 +803,7 @@ def create_combined_mitigation_plot(
 
         # Add secondary y-axis for cost
         if use_annualized_costs:
-            rescale_factor = 1 / 0.01
+            rescale_factor = 1 / 0.025
         else:
             rescale_factor = 1 / 1
         cost_rescaled = np.cumsum(cost) * rescale_factor / 1e9
@@ -927,12 +936,29 @@ def create_combined_mitigation_plot(
             nx_graph, pos=pos, ax=ax_line_map, node_color="black", node_size=0
         )
 
+        # Draw all lines first (background), then reinforced lines on top
+        nx.draw_networkx_edges(
+            nx_graph,
+            pos=pos,
+            ax=ax_line_map,
+            edge_color="gainsboro",
+            width=1,
+        )
+
+        edges_list = list(nx_graph.edges())
+        reinforced_edgelist = [
+            edges_list[i] for i in reinforced_lines_selected_int if i < len(edges_list)
+        ]
+        reinforced_colors = mitigated_loss_selected[reinforced_lines_selected_int]
+        reinforced_widths = width[reinforced_lines_selected_int]
+
         edges = nx.draw_networkx_edges(
             nx_graph,
             pos=pos,
             ax=ax_line_map,
-            edge_color=mitigated_loss_selected,
-            width=width,
+            edgelist=reinforced_edgelist,
+            edge_color=reinforced_colors,
+            width=reinforced_widths,
             edge_cmap=cmap,
             edge_vmin=0,
         )
@@ -988,7 +1014,7 @@ def create_combined_mitigation_plot(
 
             # Add secondary y-axis for cost
             if use_annualized_costs:
-                rescale_factor = 1 / 0.01
+                rescale_factor = 1 / 0.05
             else:
                 rescale_factor = 20 / 2
             cost_rescaled = (
@@ -1148,44 +1174,33 @@ def create_combined_mitigation_plot(
 
 if __name__ == "__main__":
     params = [
-        # {"blackoutthreshold": 0.8, "target": "num_GSS"},
-        {"blackoutthreshold": None, "target": "total_loss"},
+        {"blackoutthreshold": 0.8, "target": "num_GSS"},
+        # {"blackoutthreshold": None, "target": "total_loss"},
     ]
     for param in params:
         blackoutthreshold = param["blackoutthreshold"]
         target = param["target"]
         # Example 1: Plot both rows (original behavior)
         # create_combined_mitigation_plot(use_annualized_costs=False)
+        # for plot_rows_option in ["both", "inertia", "line_extension"]:
+        for plot_rows_option in ["line_extension", "both"]:
+            create_combined_mitigation_plot(
+                use_annualized_costs=True,
+                co2_lvl_map=0.2,
+                build_380kV_only=True,
+                plot_intertia_cost=True,
+                blackoutthreshold=blackoutthreshold,
+                plot_rows=plot_rows_option,  # Options: "both", "inertia", "line_extension"
+                target=target,
+            )
 
-        # # Example 2: Plot both rows with all options
+        # # Example 3: Plot only synthetic inertia row
         # create_combined_mitigation_plot(
         #     use_annualized_costs=True,
         #     co2_lvl_map=0.2,
         #     build_380kV_only=True,
         #     plot_intertia_cost=True,
-        #     recalc_cost=True,
         #     blackoutthreshold=blackoutthreshold,
-        #     plot_rows="both",  # Options: "both", "inertia", "line_extension"
-        #     target=target,
-        # )
-
-        # Example 3: Plot only synthetic inertia row
-        create_combined_mitigation_plot(
-            use_annualized_costs=True,
-            co2_lvl_map=0.2,
-            build_380kV_only=True,
-            plot_intertia_cost=True,
-            blackoutthreshold=blackoutthreshold,
-            plot_rows="inertia",
-            target=target,
-        )
-
-        # # Example 4: Plot only line extension row
-        # create_combined_mitigation_plot(
-        #     use_annualized_costs=True,
-        #     co2_lvl_map=0.2,
-        #     build_380kV_only=True,
-        #     blackoutthreshold=blackoutthreshold,
-        #     plot_rows="line_extension",
+        #     plot_rows="inertia",
         #     target=target,
         # )
