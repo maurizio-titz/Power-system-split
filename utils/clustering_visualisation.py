@@ -1041,6 +1041,7 @@ def get_color_from_cmap(co2, co2ls, cmap):
     return color
 
 
+# %%
 def plot_group_lost_load_hist_by_co2_single(
     group_mask,
     lost_loads,
@@ -1069,20 +1070,18 @@ def plot_group_lost_load_hist_by_co2_single(
     # cmap="cvidis"
     cmap = plt.get_cmap("cividis_r")
     co2ls = np.arange(0.0, 0.61, 0.1).round(1)
-    # group_mask = np.any([labels == i for i in centroid_inds], axis=0)
-    # print(lost_loads.shape)
-    # print(list(group_mask.values())[0].shape)
-    # print(masks_sig_to_co2[co2l_inds_hist[0]].shape)
+    # linestyles = (["-", "--", ":", "-."],)
+    # linewidths = [3.5, 3, 2.5]
+    histtypes = ["stepfilled", "step", "step"]
+
     lost_loads_lvl = [
         lost_loads[group_mask & masks_sig_to_co2[co2l_inds_hist[i]]]
         for i in range(len(co2_lvls_hist))
     ]
+
     if ax is None:
         fig, ax = plt.subplots()
-        # fig, ax = plt.subplots(
-        #     1, len(co2_lvls_hist), figsize=(len(co2_lvls_hist) * 3, 3), sharey=True
-        # )
-    # fig, ax = plt.subplots(len(co2_lvls_hist),1, figsize=(3, 3), sharey=True)
+
     for i, co2l_ind in enumerate(co2l_inds_hist):
         co2 = co2_lvls_hist[i]
         c = get_color_from_cmap(co2, co2ls, cmap)
@@ -1095,24 +1094,22 @@ def plot_group_lost_load_hist_by_co2_single(
             alpha=0.8,
             log=True,
             color=c,
-            histtype="step",
-            #  label='{} \%'.format(int(level*100)),
-            linewidth=3,
-            #  color=cmap(ind/len(co2ls)),
+            histtype=histtypes[i],
+            # histtype="step",
+            # edgecolor=c,
+            # linewidth=linewidths[i],
+            linewidth=2,
+            zorder=i,
         )
     ax.set_ylim(0.5 * 10**-8, 5 * 10**-4)
     ax.set_yticks([10**-i for i in range(4, 9)])
-    # ax.yaxis.set_major_locator(plt.LogLocator(base=10, numticks=5))
-    # plt.hist(lost_loads_lvl, bins=np.arange(101)/100) # , label=f"CO2={co2*100}%"
-    # ax.legend()
     ax.grid()
     ax.legend()
-    # ax.set_title(f"CO2={co2*100}%", pad=-10)
-    # if i!=0:
-    #     ax.set_yticks([])
-    # ax[1].set_title(group)
     ax.set_xlabel("Share of load not served [%]")
     ax.set_ylabel("Share of events")
+
+
+# %%
 
 
 def plot_group_lost_load_hist_by_co2(
