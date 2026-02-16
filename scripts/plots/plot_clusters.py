@@ -38,14 +38,13 @@ cl.plot_cluster_multiple(
     algorithm="agg",
     sort_by="frequency",
 )
+# %%
 cl.plot_cluster_multiple(
     n_best=4,
     # relative_score_threshold=0.1,
     average_over_classes=False,
     algorithm="agg",
+    sort_by="accumulative_lost_load",
 )
-# cl.plot_cluster_multiple(
-#     n_best=4,
-#     average_over_classes=False,
-#     algorithm="agg",
-# )
+
+# %%
