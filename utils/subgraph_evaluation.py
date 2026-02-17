@@ -132,6 +132,79 @@ def get_inertia_gen_subgraph(
     return rot_energy
 
 
+def get_inertia_by_type_subgraph(
+    subgraph,
+    generators,
+    current_generation,
+    storages,
+    current_storage,
+    loads,
+    current_load,
+    participation_threshold=0.05,
+    load_inertia_constant=0.4,
+):
+    """Calculate rotational energy contribution by carrier type in a subgraph.
+
+    Args:
+        subgraph (networkx graph or None): Subgraph of power system. If None, use all buses.
+        generators (pandas.DataFrame): PyPSA generators
+        current_generation (pandas.Series): Entry of PyPSA generation time series
+        storages (pandas.DataFrame): PyPSA storages
+        current_storage (pandas.Series): Entry of PyPSA storage time series
+        loads (pandas.DataFrame): PyPSA loads
+        current_load (pandas.Series): Entry of PyPSA load time series
+        participation_threshold (float, optional): Share of nominal power. Above the threshold, a
+            generator is considered to be online. Defaults to 0.05.
+        load_inertia_constant (float, optional): Load inertia constant in seconds. Defaults to 0.4.
+
+    Returns:
+        pandas.Series: Rotational energy by carrier type.
+    """
+
+    if subgraph is None:
+        gen_mask = pd.Series(True, index=generators.index)
+        store_mask = pd.Series(True, index=storages.index)
+        load_mask = pd.Series(True, index=loads.index)
+    else:
+        gen_mask = generators["bus"].isin(subgraph.nodes())
+        store_mask = storages["bus"].isin(subgraph.nodes())
+        load_mask = loads["bus"].isin(subgraph.nodes())
+
+    # Calc nominal power of generators
+    gens = generators.loc[:, ["carrier", "p_nom", "p_max_pu"]].copy()
+    gens.loc[:, "nominal_power"] = gens.p_max_pu * gens.p_nom
+
+    current_generation = current_generation.reindex(gens.index).fillna(0.0)
+    is_online = current_generation > participation_threshold * gens.nominal_power
+    gens = gens[gen_mask & is_online]
+
+    # Calc nominal power of storage units
+    stores = storages.loc[:, ["carrier", "p_nom", "p_max_pu"]].copy()
+    stores.loc[:, "nominal_power"] = stores.p_max_pu * stores.p_nom
+
+    current_storage = current_storage.reindex(stores.index).fillna(0.0)
+    is_online = current_storage > participation_threshold * stores.nominal_power
+    stores = stores[store_mask & is_online]
+
+    def _calc_inertia_by_carrier(df):
+        if df.empty:
+            return pd.Series(dtype=float)
+        by_carrier = df.groupby("carrier")["nominal_power"].sum()
+        inertia_consts = INERTIA_CONSTANTS.reindex(by_carrier.index).fillna(0.0)
+        return by_carrier.mul(inertia_consts)
+
+    inertia_by_carrier = _calc_inertia_by_carrier(gens)
+    inertia_by_carrier = inertia_by_carrier.add(
+        _calc_inertia_by_carrier(stores), fill_value=0.0
+    )
+
+    if load_inertia_constant is not None:
+        load_inertia = current_load.loc[load_mask].sum() * load_inertia_constant
+        inertia_by_carrier["load"] = inertia_by_carrier.get("load", 0.0) + load_inertia
+
+    return inertia_by_carrier.sort_index()
+
+
 def get_indicator_vectors_of_subgraphs(subgraphs, nx_graph):
     """
     Construct boolean indicator vector for a subgraph of the nx_graph
@@ -294,15 +367,14 @@ def get_line_inertia_subgraph(
     Returns:
         float: rotational energy
     """
-    raise NotImplementedError(
-        "electro-magnetic inertia not implemented yet")
-    
+    raise NotImplementedError("electro-magnetic inertia not implemented yet")
+
     if subgraph.number_of_edges() == 0:
         return 0
 
     # Get lines that are in subgraph and online in current timestamp
     data_handling.check_if_edges_sorted(subgraph)
-    
+
     lines["from_to"] = list(zip(lines["bus0"], lines["bus1"]))
     lines_snet = lines[lines.sub_network.astype(int) == 0]
     edge_orientations = nx.get_edge_attributes(subgraph, "orientation").values()
@@ -311,8 +383,11 @@ def get_line_inertia_subgraph(
 
     line_lengths = lines_subgraph.length
     from operator import itemgetter
-    line_momentum = np.sum(abs(np.array(itemgetter(*lines_subgraph.from_to.values)(flows)) * line_lengths))
-    
+
+    line_momentum = np.sum(
+        abs(np.array(itemgetter(*lines_subgraph.from_to.values)(flows)) * line_lengths)
+    )
+
     # assert subgraph.number_of_edges() == len(line_momentum), (
     #     "Number of edges in subgraph does not match number of caculated line_momentums subgraph"
     # )
