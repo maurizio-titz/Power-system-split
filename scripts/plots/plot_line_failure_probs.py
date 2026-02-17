@@ -42,192 +42,38 @@ from utils.plot_style import (
 )
 
 
-# def create_line_failure_plot():
-#     """Create line failure probabilities plot."""
+def save_failure_probabilities_to_csv(
+    edge_likelihoods,
+    nx_graph,
+    selected_co2ls,
+    n_nodes,
+    save_path,
+    filename,
+):
+    """Save line failure probabilities to CSV.
 
-#     # Setup
-#     n_nodes = 600
-#     save_path = path_to_figures_sclopf
-#     os.makedirs(save_path, exist_ok=True)
+    Args:
+        edge_likelihoods: dict keyed by CO2 level with (u, v) -> prob mapping.
+        nx_graph: networkx graph with edge list used for row order.
+        selected_co2ls: iterable of CO2 levels (scenarios) to include as columns.
+        n_nodes: number of nodes (used for actual CO2 level label).
+        save_path: directory to save the CSV.
+        filename: output CSV filename.
+    """
 
-#     # Load network
-#     network = data_handling.load_pypsa_network_from_path(
-#         path_to_pypsa_network_sclopf
-#         + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
-#         True,
-#     )
-#     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
-#     pos = nx.get_node_attributes(nx_graph, "pos")
+    os.makedirs(save_path, exist_ok=True)
+    edges = list(nx_graph.edges())
+    row_index = [f"{u}-{v}" for u, v in edges]
 
-#     # Get CO2 levels
-#     co2ls = get_co2_levels(n_nodes)
-#     selected_co2ls = np.array([0.0, 0.2, 0.6])
+    data = {}
+    for co2l in selected_co2ls:
+        level = np.round(co2l, 2)
+        col_label = f"CO2_{int(get_actual_co2_level(co2l, n_nodes, percent=True))}%"
+        data[col_label] = [edge_likelihoods[level][(u, v)] for u, v in edges]
 
-#     # Load edge likelihoods
-#     edge_likelihoods_primary = pickle.load(
-#         open(
-#             path_to_vis_results_sclopf
-#             + f"edge_likelihoods_primary_all_co2ls_n{n_nodes}.pickle",
-#             "rb",
-#         )
-#     )
-#     edge_likelihoods_secondary = pickle.load(
-#         open(
-#             path_to_vis_results_sclopf
-#             + f"edge_likelihoods_secondary_all_co2ls_n{n_nodes}.pickle",
-#             "rb",
-#         )
-#     )
-
-#     # Setup figure
-#     f = plt.figure(figsize=(21, 10))
-#     gs_vertical = GridSpec(1, 2, figure=f, width_ratios=[3, 0.05], wspace=-0.02)
-#     gs_maps = GridSpecFromSubplotSpec(
-#         2, 3, subplot_spec=gs_vertical[0], wspace=-0.1, hspace=-0.1
-#     )
-#     axs_primary = [f.add_subplot(gs_maps[0, i]) for i in range(3)]
-#     axs_secondary = [f.add_subplot(gs_maps[1, i]) for i in range(3)]
-#     gs_colorbars = GridSpecFromSubplotSpec(
-#         5, 1, subplot_spec=gs_vertical[1], height_ratios=[0.2, 1, 0.2, 1, 0.2]
-#     )
-#     axs_colorbars = [f.add_subplot(gs_colorbars[i]) for i in [1, 3]]
-
-#     mpl.style.use("default")
-#     plt.rc("text", usetex=True)
-#     plt.rc("text.latex", preamble=r"\usepackage{amsmath}")
-
-#     labels = [r"\textbf{a}", r"\textbf{b}", r"\textbf{c}", r"\textbf{d}"]
-#     vmaxvals = []
-#     vminvals = []
-
-#     # Primary failures
-#     cmap = copy.copy(mpl.cm.get_cmap("plasma_r"))
-#     cmap.set_under("gainsboro", 1.0)
-
-#     for count, co2l in enumerate(selected_co2ls[::-1]):
-#         level = np.round(co2l, 2)
-
-#         # Load likelihoods as dictionary and transform into array
-#         c_H_p = [edge_likelihoods_primary[level][(u, v)] for u, v in nx_graph.edges()]
-#         c_H_p_log = np.array([np.log10(x) if x > 1e-12 else -np.inf for x in c_H_p])
-
-#         print(
-#             "Min val prim: {:e}".format(
-#                 np.amin(np.array(c_H_p)[np.array(c_H_p) > 1e-12])
-#             )
-#         )
-#         print(
-#             "Max val prim: {:e}".format(
-#                 np.amax(np.array(c_H_p)[np.array(c_H_p) > 1e-12])
-#             )
-#         )
-
-#         vmax = 1e-3
-#         vmin = 1e-6
-
-#         nodes = nx.draw_networkx_nodes(
-#             nx_graph, pos=pos, ax=axs_primary[count], node_color="black", node_size=0
-#         )
-
-#         edges = nx.draw_networkx_edges(
-#             nx_graph,
-#             pos=pos,
-#             ax=axs_primary[count],
-#             edge_color=c_H_p_log,
-#             width=3.5,
-#             edge_cmap=cmap,
-#             edge_vmin=np.log10(vmin),
-#             edge_vmax=np.log10(vmax),
-#         )
-
-#         axs_primary[count].axis("off")
-
-#     # Primary failures colorbar
-#     sm = plt.cm.ScalarMappable(cmap=cmap, norm=mplcolors.LogNorm(vmin=vmin, vmax=vmax))
-#     cb = f.colorbar(sm, cax=axs_colorbars[0])
-#     cb.ax.tick_params(labelsize=26, width=1.0, which="both")
-#     axs_colorbars[0].set_title(
-#         r"$\langle p_{\ell}^{\text{p}}\rangle$",
-#         fontsize=25,
-#         weight="bold",
-#         verticalalignment="center",
-#         pad=20,
-#     )
-
-#     # Secondary failures
-#     cmap = copy.copy(mpl.cm.get_cmap("viridis_r"))
-#     cmap.set_under("gainsboro", 1.0)
-
-#     for count, co2l in enumerate(selected_co2ls[::-1]):
-#         level = np.round(co2l, 2)
-
-#         # Load likelihoods as dictionary and transform into array
-#         c_H_s = [edge_likelihoods_secondary[level][(u, v)] for u, v in nx_graph.edges()]
-#         c_H_s_log = np.array([np.log10(x) if x > 1e-12 else -np.inf for x in c_H_s])
-
-#         print(
-#             "Min val sec: {:e}".format(
-#                 np.amin(np.array(c_H_s)[np.array(c_H_s) > 1e-12])
-#             )
-#         )
-#         print(
-#             "Max val sec: {:e}".format(
-#                 np.amax(np.array(c_H_s)[np.array(c_H_s) > 1e-12])
-#             )
-#         )
-
-#         vmax = 1e-3
-#         vmin = 1e-5
-#         vmaxvals.append(vmax)
-#         vminvals.append(vmin)
-
-#         nodes = nx.draw_networkx_nodes(
-#             nx_graph, pos=pos, ax=axs_secondary[count], node_color="black", node_size=0
-#         )
-
-#         edges = nx.draw_networkx_edges(
-#             nx_graph,
-#             pos=pos,
-#             ax=axs_secondary[count],
-#             edge_color=c_H_s_log,
-#             width=3.5,
-#             edge_cmap=cmap,
-#             edge_vmin=np.log10(vmin),
-#             edge_vmax=np.log10(vmax),
-#         )
-
-#         axs_secondary[count].axis("off")
-
-#         axs_primary[count].set_title(
-#             r"CO$_2 =$ " + "{} \%".format(int(round(co2l * 100))), fontsize=28
-#         )
-#         axs_primary[count].text(
-#             0 + 0.1,
-#             1 + 0.05,
-#             labels[count],
-#             fontsize=30,
-#             weight="bold",
-#             verticalalignment="center",
-#             transform=axs_primary[count].transAxes,
-#         )
-
-#     # Secondary failures colorbar
-#     sm = plt.cm.ScalarMappable(cmap=cmap, norm=mplcolors.LogNorm(vmin=vmin, vmax=vmax))
-#     cb = f.colorbar(sm, cax=axs_colorbars[1])
-#     cb.set_ticks([1e-5, 1e-4, 1e-3], labels=[r"$10^{-5}$", r"$10^{-4}$", r"$10^{-3}$"])
-#     cb.ax.tick_params(labelsize=26, width=1.0, which="major")
-#     axs_colorbars[1].set_title(
-#         r"$\langle p_{\ell}^{\text{s}}\rangle$",
-#         fontsize=25,
-#         weight="bold",
-#         verticalalignment="center",
-#         pad=20,
-#     )
-
-#     print(np.max(vmaxvals), np.min(vminvals))
-
-#     plt.savefig(save_path + "line_failure_probs.pdf", bbox_inches="tight")
-#     plt.show()
+    df = pd.DataFrame(data, index=row_index)
+    df.index.name = "line"
+    df.to_csv(os.path.join(save_path, filename))
 
 
 def create_line_failure_plot_linear():
@@ -348,7 +194,7 @@ def create_line_failure_plot_linear():
         )
 
         axs_primary[count].axis("off")
-        axs_primary[count].set_aspect('equal')
+        axs_primary[count].set_aspect("equal")
 
         # Individual colorbar for this primary subplot
         sm = plt.cm.ScalarMappable(
@@ -406,7 +252,7 @@ def create_line_failure_plot_linear():
         )
 
         axs_secondary[count].axis("off")
-        axs_secondary[count].set_aspect('equal')
+        axs_secondary[count].set_aspect("equal")
 
         # Individual colorbar for this secondary subplot
         sm = plt.cm.ScalarMappable(
@@ -540,7 +386,7 @@ def create_secondary_line_failure_plot():
         )
 
         axs_secondary[count].axis("off")
-        axs_secondary[count].set_aspect('equal')
+        axs_secondary[count].set_aspect("equal")
 
         # Individual colorbar for this secondary subplot
         sm = plt.cm.ScalarMappable(
@@ -760,7 +606,7 @@ def create_total_line_failure_plot(
         )
 
         axs_secondary[count].axis("off")
-        axs_secondary[count].set_aspect('equal')
+        axs_secondary[count].set_aspect("equal")
 
         # Add individual colorbar if not using unified colorbar
         if not unified_colorbar:
@@ -825,14 +671,42 @@ if __name__ == "__main__":
     # for powernorm in [False, True]:
     # for scale_width in [False, True]:
     # for width_scale_sqrt in [False, True]:
+    save_csv = True
     cmap = "crameri:Batlow_r"
     powernorm = False
     scale_width = True
     width_scale_sqrt = True
-    create_total_line_failure_plot(
-        unified_colorbar=True,
-        powernorm=powernorm,
-        scale_width=scale_width,
-        width_scale_sqrt=width_scale_sqrt,
-        cmap=cmap,
-    )
+
+    if save_csv:
+        n_nodes = 600
+        save_path = path_to_figures_sclopf
+        network = data_handling.load_pypsa_network_from_path(
+            path_to_pypsa_network_sclopf
+            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+            True,
+        )
+        nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+        selected_co2ls = np.array([0.0, 0.2, 0.6])
+        edge_likelihoods_total = pickle.load(
+            open(
+                path_to_vis_results_sclopf
+                + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
+                "rb",
+            )
+        )
+        save_failure_probabilities_to_csv(
+            edge_likelihoods_total,
+            nx_graph,
+            selected_co2ls,
+            n_nodes,
+            save_path,
+            "line_failure_probs_total.csv",
+        )
+
+    # create_total_line_failure_plot(
+    #     unified_colorbar=True,
+    #     powernorm=powernorm,
+    #     scale_width=scale_width,
+    #     width_scale_sqrt=width_scale_sqrt,
+    #     cmap=cmap,
+    # )
