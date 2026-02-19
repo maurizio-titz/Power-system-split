@@ -45,4 +45,9 @@ path_to_vis_results_sclopf = path_to_sclopf_results + "split_visualization/"
 path_to_pre_outage_sclopf = path_to_sclopf_results + "pre_outage_data/"
 path_to_figures_sclopf = results_path + "/figures/"
 
+# Allow plot output directory override via environment variable
+_plot_output_dir = os.getenv("PLOT_OUTPUT_DIR", "").strip()
+if _plot_output_dir:
+    path_to_figures_sclopf = _plot_output_dir
+
 mattermost_url = None

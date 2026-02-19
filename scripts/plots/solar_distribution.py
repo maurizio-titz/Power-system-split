@@ -829,7 +829,7 @@ def create_population_density_plots(combined_data, selected_co2ls):
 
     plt.suptitle(r"Solar Capacity vs Population Density by CO$_2$ Level")
     plt.tight_layout()
-    save_figure(f, path_to_figures_sclopf, "solar_capacity_vs_population_density")
+    save_figure(f, "solar_capacity_vs_population_density", path_to_figures_sclopf)
 
 
 def analyze_solar_population_for_pypsa_networks(

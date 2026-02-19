@@ -349,7 +349,7 @@ def create_inertia_by_country_plot(
     fname = f"inertia_by_country_Co2L{co2_lvl_map}_ref{co2_lvl_ref}_{target}"
     if blackoutthreshold is not None and blackoutthreshold > 0.0:
         fname += f"_blackoutThres{blackoutthreshold}"
-    save_figure(fig, path_to_figures_sclopf, fname)
+    save_figure(fig, fname, path_to_figures_sclopf)
     plt.show()
 
 
@@ -478,7 +478,7 @@ def create_inertia_by_country_all_co2_plot(
     fname = f"inertia_by_country_allCo2_ref{co2_lvl_ref}_{target}"
     if blackoutthreshold is not None and blackoutthreshold > 0.0:
         fname += f"_blackoutThres{blackoutthreshold}"
-    save_figure(fig, path_to_figures_sclopf, fname)
+    save_figure(fig, fname, path_to_figures_sclopf)
     plt.show()
 
 

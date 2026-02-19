@@ -282,7 +282,7 @@ def create_line_failure_plot_linear():
         )
         add_panel_label(axs_primary[count], count)
     cmap_name = cmap if isinstance(cmap, str) else cmap.name
-    save_figure(f, save_path, "line_failure_probs_linear_" + cmap_name)
+    save_figure(f, "line_failure_probs_linear_" + cmap_name, save_path)
     plt.show()
 
 
@@ -412,7 +412,7 @@ def create_secondary_line_failure_plot():
         )
         add_panel_label(axs_secondary[count], count, x_offset=0.1)
 
-    save_figure(f, save_path, "line_failure_probs_secondary_only")
+    save_figure(f, "line_failure_probs_secondary_only", save_path)
     plt.show()
 
 
@@ -660,7 +660,7 @@ def create_total_line_failure_plot(
     if scale_width:
         suffix += "_sqrt_width" if width_scale_sqrt else "_linear_width"
     # save_figure(f, save_path, "line_failure_probs_total")
-    save_figure(f, save_path, f"line_failure_probs_total_{cmap_name}{suffix}")
+    save_figure(f, f"line_failure_probs_total_{cmap_name}{suffix}", save_path)
     plt.show()
 
 

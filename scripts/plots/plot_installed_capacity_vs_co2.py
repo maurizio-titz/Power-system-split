@@ -239,7 +239,7 @@ def create_installed_capacity_plot(aggregate_wind=False, add_nuclear=False, save
             file_name += "_with_nuclear"
         if aggregate_wind:
             file_name += "_aggregated_wind"
-        save_figure(f, save_path, file_name)
+        save_figure(f, file_name, save_path)
     plt.show()
 
 

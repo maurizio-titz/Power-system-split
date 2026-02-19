@@ -1168,7 +1168,7 @@ def create_combined_mitigation_plot(
     if plot_rows != "both":
         f_name = f_name + f"_{plot_rows}"
 
-    save_figure(f, save_path, f_name)
+    save_figure(f, f_name, save_path)
     plt.show()
 
 

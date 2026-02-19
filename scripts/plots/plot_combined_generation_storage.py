@@ -50,6 +50,38 @@ from utils.plot_style import (
     setup_map_axes,
 )
 
+
+_COUNTRY_3_TO_2 = {
+    "AUT": "AT",
+    "BEL": "BE",
+    "BGR": "BG",
+    "CHE": "CH",
+    "CZE": "CZ",
+    "DEU": "DE",
+    "DNK": "DK",
+    "ESP": "ES",
+    "EST": "EE",
+    "FIN": "FI",
+    "FRA": "FR",
+    "GBR": "GB",
+    "GRC": "GR",
+    "HRV": "HR",
+    "HUN": "HU",
+    "IRL": "IE",
+    "ITA": "IT",
+    "LTU": "LT",
+    "LUX": "LU",
+    "LVA": "LV",
+    "NLD": "NL",
+    "NOR": "NO",
+    "POL": "PL",
+    "PRT": "PT",
+    "ROU": "RO",
+    "SVK": "SK",
+    "SVN": "SI",
+    "SWE": "SE",
+}
+
 # Backwards compatibility constants
 SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 LABEL_FONTSIZE = AXIS_LABEL_FONTSIZE
@@ -89,6 +121,158 @@ def aggregate_carriers(current_gen, carrier_keyword_to_new_carrier, inplace=Fals
             ]
         )
     return current_gen
+
+
+def _country_from_bus_name(bus_name: str) -> str:
+    bus_str = str(bus_name)
+    if len(bus_str) >= 2 and bus_str[:2].isalpha():
+        code = bus_str[:2].upper()
+        if code == "UK":
+            return "GB"
+        return code
+    if len(bus_str) >= 3 and bus_str[:3].isalpha():
+        code3 = bus_str[:3].upper()
+        return _COUNTRY_3_TO_2.get(code3, code3)
+    return "UNK"
+
+
+def _get_bus_country_map(network):
+    if "country" in network.buses.columns:
+        countries = network.buses["country"].fillna("UNK")
+        return {bus: str(country) for bus, country in countries.items()}
+    return {bus: _country_from_bus_name(bus) for bus in network.buses.index}
+
+
+def _mean_generation_by_country(network) -> pd.Series:
+    weights = network.snapshot_weightings.generators
+    total_weight = weights.sum()
+    gen_weighted = network.generators_t.p.mul(weights, axis="index").mul(
+        network.generators.sign
+    )
+    mean_gen_by_generator = gen_weighted.sum(axis=0) / total_weight
+    mean_gen_by_bus = mean_gen_by_generator.groupby(network.generators["bus"]).sum()
+    bus_country_map = _get_bus_country_map(network)
+    country_vals = {}
+    for bus, value in mean_gen_by_bus.items():
+        country = bus_country_map.get(bus, "UNK")
+        country_vals[country] = country_vals.get(country, 0.0) + value
+    return pd.Series(country_vals).sort_values(ascending=False)
+
+
+def _aggregate_countries_by_region(df: pd.DataFrame) -> pd.DataFrame:
+    region_to_countries = {
+        # "Iberian Peninsula": ["ES", "PT"],
+        "Balkans": ["BG", "GR", "HR", "RO", "SI", "RS", "AL", "BA", "MK", "ME", "XK"],
+        "DE LU": ["DE", "LU"],
+        # "NL+Belgium": ["NL", "BE"],
+        # "Great Britain": ["GB", "IE"],
+        "Scandinavia": ["NO", "SE", "FI"],
+        "Balticum": ["LT", "LV", "EE"],
+    }
+    #     further agg:
+    # - CH and AT
+    # - CZ, HU, SK
+    # - balticum
+    # -  IE, GB
+
+    df_agg = df.copy()
+    for region, countries in region_to_countries.items():
+        existing = [c for c in countries if c in df_agg.index]
+        if not existing:
+            continue
+        df_agg.loc[region] = df_agg.loc[existing].sum()
+        df_agg = df_agg.drop(index=existing)
+    return df_agg
+
+
+def create_generation_by_country_stacked_bar_plot(n_nodes: int = 600):
+    """Create stacked bar plot of mean generation by country across CO2 levels."""
+
+    save_path = path_to_figures_sclopf
+    os.makedirs(save_path, exist_ok=True)
+
+    setup_matplotlib_style()
+
+    co2ls = get_co2_levels(n_nodes)
+    networks = {
+        co2l: data_handling.load_pypsa_network(
+            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+        )
+        for co2l in co2ls
+    }
+
+    country_by_co2 = {}
+    for co2l, network in networks.items():
+        country_by_co2[co2l] = _mean_generation_by_country(network)
+
+    generation_by_country = pd.DataFrame(country_by_co2).fillna(0.0)
+    generation_by_country = _aggregate_countries_by_region(generation_by_country)
+    plot_order = [
+        "PT",
+        "ES",
+        "FR",
+        "NL",
+        "BE",
+        "DE LU",
+        "DK",
+        "CH",
+        "AT",
+        "IT",
+        "CZ",
+        "PL",
+        "SK",
+        "HU",
+        "SI",
+        "RO",
+        "Balkans",
+        "GB",
+        "IE",
+        "Scandinavia",
+    ]
+    ordered_index = [x for x in plot_order if x in generation_by_country.index]
+    ordered_index += [x for x in generation_by_country.index if x not in ordered_index]
+    generation_by_country = generation_by_country.loc[ordered_index] / 1000
+
+    co2_order = np.array(sorted(co2ls))
+    x_labels = [f"{get_actual_co2_level(c, percent=True):g}%" for c in co2_order]
+
+    fig, ax = plt.subplots(figsize=(14, 7))
+
+    cmap = mpl.colormaps.get_cmap("tab20")
+    colors = [cmap(i % cmap.N) for i in range(len(generation_by_country.index))]
+
+    generation_by_country[co2_order].T.plot(
+        kind="bar",
+        stacked=True,
+        ax=ax,
+        color=colors,
+        width=0.8,
+        edgecolor="none",
+    )
+
+    ax.set_xlabel(r"CO$_2$ level [\% of 1990]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_ylabel(r"Mean generation [GW]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_xticklabels(x_labels, rotation=0)
+    ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    ax.grid(True, axis="y", alpha=0.3)
+    ax.invert_xaxis()
+
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(
+        handles[::-1],
+        labels[::-1],
+        title="Country",
+        fontsize=LEGEND_FONTSIZE,
+        title_fontsize=LEGEND_FONTSIZE,
+        bbox_to_anchor=(1.02, 1),
+        loc="upper left",
+        borderaxespad=0.0,
+        ncol=1,
+    )
+
+    fig.tight_layout()
+    save_figure(fig, "generation_by_country_stacked_bar", save_path)
+    plt.show()
 
 
 def create_combined_generation_storage_plot():
@@ -571,6 +755,7 @@ def create_combined_generation_storage_plot():
     ax_line_storage.tick_params(axis="both", which="both", labelsize=TICK_LABELSIZE)
 
     if plot_output_capacity:
+
         ax_line_storage.set_ylabel(
             f"Storage output capacity [{unit}]", fontsize=AXIS_LABELSIZE
         )
@@ -591,9 +776,10 @@ def create_combined_generation_storage_plot():
     )
     ax_line_legend_storage.axis("off")
 
-    save_figure(f, save_path, file_name)
+    save_figure(f, file_name, save_path)
     plt.show()
 
 
 if __name__ == "__main__":
     create_combined_generation_storage_plot()
+    create_generation_by_country_stacked_bar_plot()

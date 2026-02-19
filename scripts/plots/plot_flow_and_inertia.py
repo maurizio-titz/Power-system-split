@@ -217,7 +217,7 @@ def create_flow_and_inertia_plot(mean_distance=False):
     f_name = "flow_and_inertia"
     if mean_distance:
         f_name += "_mean_distance"
-    save_figure(f, save_path, f_name)
+    save_figure(f, f_name, save_path)
     plt.show()
 
 

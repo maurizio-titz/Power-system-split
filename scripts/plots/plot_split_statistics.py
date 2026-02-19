@@ -373,7 +373,7 @@ def create_split_statistics_plot(
     if secondary_proba_axis:
         save_name += "_with_secondary_proba_axis"
 
-    save_figure(fig, save_path, save_name)
+    save_figure(fig, save_name, save_path)
     plt.show()
 
 
@@ -541,7 +541,7 @@ def create_blackout_statistics_plot(
         save_name += "_different_corridor"
     if normalize_by_total_splits:
         save_name += "_normalized"
-    save_figure(fig, save_path, save_name)
+    save_figure(fig, save_name, save_path)
     plt.show()
 
 
@@ -657,7 +657,7 @@ def plot_blackout_size_histograms(
     plt.suptitle("Blackout Size Distribution", fontsize=PANEL_LABEL_FONTSIZE + 2)
 
     plt.tight_layout()
-    save_figure(fig, save_path, "blackout_size_histograms")
+    save_figure(fig, "blackout_size_histograms", save_path)
     plt.show()
 
 
@@ -715,7 +715,7 @@ def plot_component_number_vs_blackout_size(
     ax.set_ylabel("Number of Components")
     ax.set_title("Column-Normalized 2D Histogram")
     f_name = "lls_vs_n_components_colnorm"
-    save_figure(fig, save_dir, f_name)
+    save_figure(fig, f_name, save_dir)
 
 
 if __name__ == "__main__":

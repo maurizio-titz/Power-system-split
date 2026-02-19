@@ -185,7 +185,9 @@ def extract_planned_line_extensions(
 
         # Extract line lengths from the network
         line_indices_list = [network.lines.index[int(idx)] for idx in selected_lines]
-        selected_line_lengths[co2l] = network.lines.loc[line_indices_list, "length"].tolist()
+        selected_line_lengths[co2l] = network.lines.loc[
+            line_indices_list, "length"
+        ].tolist()
 
     return selected_line_indices, selected_node_pairs, selected_line_lengths
 
@@ -295,7 +297,7 @@ def plot_planned_line_extensions(
         ax.axis("off")
 
     fig.tight_layout()
-    save_figure(fig, path_to_figures_sclopf, figure_name)
+    save_figure(fig, figure_name, path_to_figures_sclopf)
     plt.close(fig)
 
 

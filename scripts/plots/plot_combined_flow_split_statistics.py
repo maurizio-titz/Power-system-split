@@ -440,7 +440,7 @@ def create_combined_flow_and_split_statistics_plot(
     if secondary_proba_axis:
         save_name += "_with_secondary_proba_axis"
 
-    save_figure(fig, save_path, save_name)
+    save_figure(fig, save_name, save_path)
     plt.show()
 
 

@@ -128,8 +128,30 @@ def get_plot_config():
         "save_with_config": os.getenv("PLOT_SAVE_WITH_CONFIG", "false").lower()
         == "true",
         "dpi": int(os.getenv("PLOT_DPI", "300")),
+        "output_dir": os.getenv("PLOT_OUTPUT_DIR", ""),
     }
     return config
+
+
+def apply_plot_profile(profile_name, output_dir=None):
+    """Apply a named plot profile and optionally set the output directory.
+
+    Supported profiles:
+        - "nature_energy": lowercase panel labels
+        - "joules": uppercase panel labels
+    """
+    profile = profile_name.strip().lower()
+    if profile == "nature_energy":
+        os.environ["PLOT_PANEL_LOWERCASE"] = "true"
+    elif profile == "joules":
+        os.environ["PLOT_PANEL_LOWERCASE"] = "false"
+    else:
+        raise ValueError(
+            f"Unknown plot profile: {profile_name}. Supported: ['nature_energy', 'joules']"
+        )
+
+    if output_dir is not None:
+        os.environ["PLOT_OUTPUT_DIR"] = output_dir
 
 
 def get_config_suffix():
@@ -137,11 +159,11 @@ def get_config_suffix():
     config = get_plot_config()
     suffix_parts = []
 
-    # Add panel label style indicator
-    if config["panel_lowercase"]:
-        suffix_parts.append("pLC")
-    else:
-        suffix_parts.append("pUC")
+    # # Add panel label style indicator
+    # if config["panel_lowercase"]:
+    #     suffix_parts.append("pLC")
+    # else:
+    #     suffix_parts.append("pUC")
 
     # Add DPI if different from default
     if config["dpi"] != 300:
@@ -287,42 +309,29 @@ def create_unified_legend(
 
 
 # === SAVE FUNCTIONS ===
-def save_figure(fig, arg2, arg3=None, formats=None, dpi=None, bbox_inches="tight"):
+def save_figure(
+    fig, filename, save_path=None, formats=None, dpi=None, bbox_inches="tight"
+):
     """Save figure with consistent settings and optional configuration suffix.
 
-    Supports both old and new function signatures for backward compatibility:
-    - New: save_figure(fig, filename, save_path, formats=None, dpi=None, bbox_inches="tight")
-    - Old: save_figure(fig, save_path, filename, formats=["pdf"], dpi=300, bbox_inches="tight")
+    Signature:
+        save_figure(fig, filename, save_path=None, formats=None, dpi=None, bbox_inches="tight")
 
     Args:
         fig: matplotlib figure object
-        arg2: filename (new signature) or save_path (old signature)
-        arg3: save_path (new signature) or filename (old signature) or None
+        filename: base filename without extension
+        save_path: directory to save into; if None, uses PLOT_OUTPUT_DIR
         formats: list of formats to save (default: ["pdf"])
         dpi: figure DPI (if None, uses environment variable PLOT_DPI)
         bbox_inches: bounding box setting for saving
     """
     import os
 
-    # Detect which signature is being used
-    if arg3 is None:
-        # Old signature: save_figure(fig, save_path, filename, ...)
-        # arg2 is save_path, need to find filename in kwargs or use default
-        raise ValueError("save_figure requires both filename and save_path arguments")
-
-    # Determine if this is old or new signature based on argument patterns
-    # Old: save_figure(fig, save_path, filename, ...)
-    # New: save_figure(fig, filename, save_path, ...)
-
-    # Check if arg2 looks like a path (contains / or is a directory)
-    if os.path.isdir(arg2) or ("/" in arg2 and not arg2.endswith(".pdf")):
-        # Old signature: save_figure(fig, save_path, filename, ...)
-        save_path = arg2
-        filename = arg3
-    else:
-        # New signature: save_figure(fig, filename, save_path, ...)
-        filename = arg2
-        save_path = arg3
+    if save_path is None:
+        config = get_plot_config()
+        if not config["output_dir"]:
+            raise ValueError("save_figure requires save_path or set PLOT_OUTPUT_DIR")
+        save_path = config["output_dir"]
 
     # Get configuration
     config = get_plot_config()
