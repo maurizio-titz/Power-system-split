@@ -668,16 +668,19 @@ def plot_component_number_vs_blackout_size(
         split_properties = pd.read_hdf(
             path_to_vis_results_sclopf + f"split_properties_all_n600.h5", index_col=0
         )
-    lls = split_properties["lost_load_share_blackout"].to_numpy()
+    lls = split_properties["lost_load_share_blackout"].to_numpy() * 100
     n_comp = split_properties["n_components"].to_numpy()
 
     # bins
-    lls_bins = np.linspace(0, 1, 11)
-    n_comp_min = int(np.nanmin(n_comp))
-    n_comp_max = int(np.nanmax(n_comp))
-    n_comp_bins = np.logspace(
-        np.log10(np.nanmin(n_comp)), np.log10(np.nanmax(n_comp)), 11
+    lls_bins = np.linspace(0, 100, 11)
+    n_comp_bins = np.unique(
+        np.round(
+            np.logspace(np.log10(np.nanmin(n_comp)), np.log10(np.nanmax(n_comp)), 11)
+        ).astype(int)
     )
+    # n_comp_bins = np.concatenate(
+    #     [n_comp_bins[:-2], [n_comp_bins[-1]]]
+    # )  # remove second to last bin edge to avoid tiny last bin
 
     # histogram and column normalization (per lost_load_share_blackout bin)
     hist2d, x_edges, y_edges = np.histogram2d(lls, n_comp, bins=[lls_bins, n_comp_bins])
@@ -697,45 +700,46 @@ def plot_component_number_vs_blackout_size(
     ax.set_yscale("log")
     import matplotlib.ticker as mticker
 
-    yticks = np.unique(
-        np.round(
-            np.logspace(
-                np.log10(n_comp_min),
-                np.log10(n_comp_max),
-                num=6,
-            )
-        ).astype(int)
-    )
-    yticks = yticks[(yticks >= n_comp_min) & (yticks <= n_comp_max)]
-    ax.set_yticks(yticks)
-    ax.yaxis.set_major_formatter(mticker.ScalarFormatter())
-    ax.yaxis.set_minor_formatter(mticker.NullFormatter())
+    yticks = n_comp_bins
+
+    # yticks = np.unique(
+    #     np.round(
+    #         np.logspace(
+    #             np.log10(n_comp_min),
+    #             np.log10(n_comp_max),
+    #             num=6,
+    #         )
+    #     ).astype(int)
+    # )
+    # yticks = yticks[(yticks >= n_comp_min) & (yticks <= n_comp_max)]
+    ax.set_yticks(yticks, labels=[str(int(tick)) for tick in yticks])
+    ax.minorticks_off()
     fig.colorbar(mesh, ax=ax, label="Relative Frequency")
-    ax.set_xlabel("Blackout size")
-    ax.set_ylabel("Number of Components")
-    ax.set_title("Column-Normalized 2D Histogram")
+    ax.set_xlabel("Share of load not served [\%]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_ylabel("Number of Components", fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_title("Column-Normalized 2D Histogram", fontsize=AXIS_LABEL_FONTSIZE)
     f_name = "lls_vs_n_components_colnorm"
     save_figure(fig, f_name, save_dir)
 
 
 if __name__ == "__main__":
-    create_split_statistics_plot()
-    for load_norm in [False]:
-        for blackout_stat in [True]:
-            create_split_statistics_plot(
-                load_normalization=load_norm,
-                show_blackout_stats=blackout_stat,
-                secondary_proba_axis=True,
-            )
+    # create_split_statistics_plot()
+    # for load_norm in [False]:
+    #     for blackout_stat in [True]:
+    #         create_split_statistics_plot(
+    #             load_normalization=load_norm,
+    #             show_blackout_stats=blackout_stat,
+    #             secondary_proba_axis=True,
+    #         )
 
-    # Create standalone blackout statistics plot
-    plot_blackout_size_histograms(log_scale=True, n_cols=2)
+    # # Create standalone blackout statistics plot
+    # plot_blackout_size_histograms(log_scale=True, n_cols=2)
 
-    # # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)
-    for same_corridor_option in [None, True, False]:
-        for normalize_option in [False, True]:
-            create_blackout_statistics_plot(
-                same_corridor=same_corridor_option,
-                normalize_by_total_splits=normalize_option,
-            )
+    # # # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)
+    # for same_corridor_option in [None, True, False]:
+    #     for normalize_option in [False, True]:
+    #         create_blackout_statistics_plot(
+    #             same_corridor=same_corridor_option,
+    #             normalize_by_total_splits=normalize_option,
+    #         )
     plot_component_number_vs_blackout_size()
