@@ -275,7 +275,7 @@ def create_generation_by_country_stacked_bar_plot(n_nodes: int = 600):
     plt.show()
 
 
-def create_combined_generation_storage_plot():
+def create_combined_generation_storage_plot(plot_battery_power=False):
     """Create combined generation and storage map plot."""
 
     # Setup
@@ -727,8 +727,8 @@ def create_combined_generation_storage_plot():
     )
 
     for feat_count in range(capacity_by_type_by_lvl_plotting.shape[1]):
-        if "ydro" in capacity_by_type_by_lvl_plotting.columns[feat_count]:
-            continue
+        # if "ydro" in capacity_by_type_by_lvl_plotting.columns[feat_count]:
+        #     continue
         ax_line_storage.scatter(
             get_actual_co2_level(capacity_by_type_by_lvl.columns, percent=True),
             (
@@ -740,11 +740,12 @@ def create_combined_generation_storage_plot():
             color=colors[feat_count],
         )
 
-    secax = ax_line_storage.secondary_yaxis(
-        "right", functions=(lambda x: x * (1 / 6), lambda x: x * 6)
-    )
-    secax.set_ylabel("Battery power [GW]", fontsize=AXIS_LABELSIZE)
-    secax.tick_params(labelsize=TICK_LABELSIZE)
+    if plot_battery_power:
+        secax = ax_line_storage.secondary_yaxis(
+            "right", functions=(lambda x: x * (1 / 6), lambda x: x * 6)
+        )
+        secax.set_ylabel("Battery power [GW]", fontsize=AXIS_LABELSIZE)
+        secax.tick_params(labelsize=TICK_LABELSIZE)
 
     for i, ii in enumerate(ax_line_storage.lines):
         ii.set_color(colors[i])

@@ -123,8 +123,20 @@ PANEL_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]
 # === ENVIRONMENT VARIABLE CONFIGURATION ===
 def get_plot_config():
     """Get plot configuration from environment variables."""
+    panel_lowercase_env = os.getenv("PLOT_PANEL_LOWERCASE")
+    plot_style = os.getenv("PLOT_STYLE", "").strip().lower()
+    if panel_lowercase_env is None:
+        if plot_style == "nature_energy":
+            panel_lowercase = True
+        elif plot_style == "joules":
+            panel_lowercase = False
+        else:
+            panel_lowercase = False
+    else:
+        panel_lowercase = panel_lowercase_env.lower() == "true"
+
     config = {
-        "panel_lowercase": os.getenv("PLOT_PANEL_LOWERCASE", "false").lower() == "true",
+        "panel_lowercase": panel_lowercase,
         "save_with_config": os.getenv("PLOT_SAVE_WITH_CONFIG", "false").lower()
         == "true",
         "dpi": int(os.getenv("PLOT_DPI", "300")),
@@ -345,9 +357,10 @@ def save_figure(
     # Add config suffix to filename if enabled
     if config["save_with_config"]:
         config_suffix = get_config_suffix()
-        # Remove extension from filename if present
-        if "." in filename:
-            base_filename, ext = filename.rsplit(".", 1)
+        base_filename, ext = os.path.splitext(filename)
+        ext = ext.lstrip(".")
+        format_set = {fmt.lstrip(".") for fmt in formats}
+        if ext and ext in format_set:
             filename = base_filename + config_suffix
         else:
             filename = filename + config_suffix

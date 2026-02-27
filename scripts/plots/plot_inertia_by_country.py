@@ -489,19 +489,19 @@ if __name__ == "__main__":
         target="num_GSS",
         blackoutthreshold=0.8,
     )
-    # for co2l_map in [0.2, 0.0]:
-    #     create_inertia_by_country_plot(
-    #         co2_lvl_map=co2l_map,
-    #         co2_lvl_ref=0.6,
-    #         n_nodes=600,
-    #         target="num_GSS",
-    #         blackoutthreshold=0.8,
-    #         delta_Erot=5000,
-    #         resolve_strategy="random",
-    #         max_iter=10000,
-    #         plot_inertia_map=True,
-    #         ref_loss_factor=1.0,
-    #     )
+    for co2l_map in [0.2, 0.0]:
+        create_inertia_by_country_plot(
+            co2_lvl_map=co2l_map,
+            co2_lvl_ref=0.6,
+            n_nodes=600,
+            target="num_GSS",
+            blackoutthreshold=0.8,
+            delta_Erot=5000,
+            resolve_strategy="random",
+            max_iter=10000,
+            plot_inertia_map=True,
+            ref_loss_factor=1.0,
+        )
     # for co2l in [0.2, 0.0]:
     #     create_inertia_by_country_plot(
     #         co2_lvl_map=co2l,

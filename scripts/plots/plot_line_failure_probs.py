@@ -36,10 +36,71 @@ from utils.plot_style import (
     COLORBAR_LABEL_FONTSIZE,
     COLORBAR_TICK_FONTSIZE,
     SUBTITLE_FONTSIZE,
+    AXIS_LABEL_FONTSIZE,
+    TICK_LABEL_FONTSIZE,
+    PRIMARY_COLORS,
     add_panel_label,
     setup_colormap_scientific_notation,
     save_figure,
 )
+
+
+_COUNTRY_3_TO_2 = {
+    "AUT": "AT",
+    "BEL": "BE",
+    "BGR": "BG",
+    "CHE": "CH",
+    "CZE": "CZ",
+    "DEU": "DE",
+    "DNK": "DK",
+    "ESP": "ES",
+    "EST": "EE",
+    "FIN": "FI",
+    "FRA": "FR",
+    "GBR": "GB",
+    "GRC": "GR",
+    "HRV": "HR",
+    "HUN": "HU",
+    "IRL": "IE",
+    "ITA": "IT",
+    "LTU": "LT",
+    "LUX": "LU",
+    "LVA": "LV",
+    "NLD": "NL",
+    "NOR": "NO",
+    "POL": "PL",
+    "PRT": "PT",
+    "ROU": "RO",
+    "SVK": "SK",
+    "SVN": "SI",
+    "SWE": "SE",
+}
+
+
+def _country_from_bus_name(bus_name: str) -> str:
+    bus_str = str(bus_name)
+    if len(bus_str) >= 2 and bus_str[:2].isalpha():
+        code = bus_str[:2].upper()
+        if code == "UK":
+            return "GB"
+        return code
+    if len(bus_str) >= 3 and bus_str[:3].isalpha():
+        code3 = bus_str[:3].upper()
+        return _COUNTRY_3_TO_2.get(code3, code3)
+    return "UNK"
+
+
+def _get_bus_country_map(network) -> dict:
+    if "country" in network.buses.columns:
+        countries = network.buses["country"].fillna("UNK")
+        return {bus: str(country) for bus, country in countries.items()}
+    return {bus: _country_from_bus_name(bus) for bus in network.buses.index}
+
+
+def _edge_is_cross_border(u: str, v: str, bus_country_map: dict) -> bool:
+    cu = bus_country_map.get(u, "UNK")
+    cv = bus_country_map.get(v, "UNK")
+    return cu != "UNK" and cv != "UNK" and cu != cv
 
 
 def save_failure_probabilities_to_csv(
@@ -664,44 +725,179 @@ def create_total_line_failure_plot(
     plt.show()
 
 
+def create_cross_border_vulnerability_plots(
+    top_n=50,
+    percentiles=np.arange(1, 21),
+    selected_co2ls=np.array([0.0, 0.2, 0.6]),
+):
+    """Plot cross-border vs same-country distribution among vulnerable lines.
+
+    Creates a ranked bar chart (top-N lines) and a share-vs-percentile plot.
+    """
+
+    n_nodes = 600
+    save_path = path_to_figures_sclopf
+    os.makedirs(save_path, exist_ok=True)
+
+    network = data_handling.load_pypsa_network_from_path(
+        path_to_pypsa_network_sclopf
+        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        True,
+    )
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+    edges = list(nx_graph.edges())
+
+    bus_country_map = _get_bus_country_map(network)
+    cross_border_flags = np.array(
+        [_edge_is_cross_border(u, v, bus_country_map) for u, v in edges]
+    )
+    overall_cross_share = (
+        cross_border_flags.sum() / len(cross_border_flags)
+        if len(cross_border_flags) > 0
+        else 0.0
+    )
+
+    edge_likelihoods = pickle.load(
+        open(
+            path_to_vis_results_sclopf
+            + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
+            "rb",
+        )
+    )
+
+    setup_matplotlib_style()
+    co2ls_ordered = list(selected_co2ls[::-1])
+
+    fig_bar, axes_bar = plt.subplots(
+        1,
+        len(co2ls_ordered),
+        figsize=(6 * len(co2ls_ordered), 4.2),
+        sharey=True,
+    )
+    if len(co2ls_ordered) == 1:
+        axes_bar = np.array([axes_bar])
+
+    fig_share, axes_share = plt.subplots(
+        1,
+        len(co2ls_ordered),
+        figsize=(6 * len(co2ls_ordered), 4.2),
+        sharey=True,
+    )
+    if len(co2ls_ordered) == 1:
+        axes_share = np.array([axes_share])
+
+    for col, co2l in enumerate(co2ls_ordered):
+        level = np.round(co2l, 2)
+        probs = np.array([edge_likelihoods[level][(u, v)] for u, v in edges])
+        order = np.argsort(probs)[::-1]
+        top_n_eff = min(top_n, len(order))
+        top_idx = order[:top_n_eff]
+
+        top_probs = probs[top_idx]
+        top_cross = cross_border_flags[top_idx]
+
+        bar_colors = [
+            PRIMARY_COLORS["red"] if is_cross else PRIMARY_COLORS["blue"]
+            for is_cross in top_cross
+        ]
+        ax_bar = axes_bar[col]
+        ax_bar.bar(np.arange(top_n_eff), top_probs, color=bar_colors, width=0.9)
+        ax_bar.set_yscale("log")
+        ax_bar.set_title(
+            rf"CO$_2$ = {int(get_actual_co2_level(co2l, n_nodes, percent=True))}\%",
+            fontsize=SUBTITLE_FONTSIZE,
+        )
+        ax_bar.set_xlabel("Rank", fontsize=AXIS_LABEL_FONTSIZE)
+        if col == 0:
+            ax_bar.set_ylabel("Failure probability", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_bar.tick_params(axis="both", labelsize=TICK_LABEL_FONTSIZE)
+        ax_bar.grid(True, axis="y", alpha=0.3)
+
+        ax_share = axes_share[col]
+        shares = []
+        for p in percentiles:
+            k = max(1, int(np.ceil(len(order) * p / 100)))
+            k = min(k, len(order))
+            share = cross_border_flags[order[:k]].sum() / k
+            shares.append(share * 100)
+
+        ax_share.plot(percentiles, shares, color=PRIMARY_COLORS["purple"], lw=2)
+        ax_share.axhline(
+            overall_cross_share * 100,
+            color=PRIMARY_COLORS["gray"],
+            ls="--",
+            lw=1.5,
+            label="overall share",
+        )
+        ax_share.set_title(
+            rf"CO$_2$ = {int(get_actual_co2_level(co2l, n_nodes, percent=True))}\%",
+            fontsize=SUBTITLE_FONTSIZE,
+        )
+        ax_share.set_xlabel(
+            "Top percentile of lines [\%]", fontsize=AXIS_LABEL_FONTSIZE
+        )
+        if col == 0:
+            ax_share.set_ylabel("Cross-border share [\%]", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_share.tick_params(axis="both", labelsize=TICK_LABEL_FONTSIZE)
+        ax_share.grid(True, axis="y", alpha=0.3)
+        if col == 0:
+            ax_share.legend(
+                fontsize=TICK_LABEL_FONTSIZE, frameon=True, loc="upper right"
+            )
+
+    legend_handles = [
+        plt.Line2D([0], [0], color=PRIMARY_COLORS["blue"], lw=6, label="same-country"),
+        plt.Line2D([0], [0], color=PRIMARY_COLORS["red"], lw=6, label="cross-border"),
+    ]
+    axes_bar[0].legend(
+        handles=legend_handles,
+        fontsize=TICK_LABEL_FONTSIZE,
+        frameon=True,
+        loc="upper right",
+    )
+
+    fig_bar.tight_layout()
+    save_figure(fig_bar, "cross_border_vulnerability_ranked", save_path)
+    fig_share.tight_layout()
+    save_figure(fig_share, "cross_border_vulnerability_share", save_path)
+    plt.show()
+
+
 if __name__ == "__main__":
     # create_line_failure_plot_linear()
     # create_secondary_line_failure_plot()
-    # for cmap in ["crameri:roma_r", "crameri:Batlow_r"]:
-    # for powernorm in [False, True]:
-    # for scale_width in [False, True]:
-    # for width_scale_sqrt in [False, True]:
-    save_csv = True
-    cmap = "crameri:Batlow_r"
-    powernorm = False
-    scale_width = True
-    width_scale_sqrt = True
 
-    if save_csv:
-        n_nodes = 600
-        save_path = path_to_figures_sclopf
-        network = data_handling.load_pypsa_network_from_path(
-            path_to_pypsa_network_sclopf
-            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
-            True,
-        )
-        nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
-        selected_co2ls = np.array([0.0, 0.2, 0.6])
-        edge_likelihoods_total = pickle.load(
-            open(
-                path_to_vis_results_sclopf
-                + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
-                "rb",
-            )
-        )
-        save_failure_probabilities_to_csv(
-            edge_likelihoods_total,
-            nx_graph,
-            selected_co2ls,
-            n_nodes,
-            save_path,
-            "line_failure_probs_total.csv",
-        )
+    # save_csv = True
+    # cmap = "crameri:Batlow_r"
+    # powernorm = False
+    # scale_width = True
+    # width_scale_sqrt = True
+
+    # if save_csv:
+    #     n_nodes = 600
+    #     save_path = path_to_figures_sclopf
+    #     network = data_handling.load_pypsa_network_from_path(
+    #         path_to_pypsa_network_sclopf
+    #         + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+    #         True,
+    #     )
+    #     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+    #     selected_co2ls = np.array([0.0, 0.2, 0.6])
+    #     edge_likelihoods_total = pickle.load(
+    #         open(
+    #             path_to_vis_results_sclopf
+    #             + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
+    #             "rb",
+    #         )
+    #     )
+    #     save_failure_probabilities_to_csv(
+    #         edge_likelihoods_total,
+    #         nx_graph,
+    #         selected_co2ls,
+    #         n_nodes,
+    #         save_path,
+    #         "line_failure_probs_total.csv",
+    #     )
 
     # create_total_line_failure_plot(
     #     unified_colorbar=True,
@@ -710,3 +906,4 @@ if __name__ == "__main__":
     #     width_scale_sqrt=width_scale_sqrt,
     #     cmap=cmap,
     # )
+    create_cross_border_vulnerability_plots()

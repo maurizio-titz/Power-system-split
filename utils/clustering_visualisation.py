@@ -1052,6 +1052,7 @@ def plot_group_lost_load_hist_by_co2_single(
     n_failures_weighted,
     # colors,
     ax=None,
+    nonoverlapping_hist=True,
 ):
     """plots the lost load distribution for a group of centroids
 
@@ -1070,37 +1071,66 @@ def plot_group_lost_load_hist_by_co2_single(
     # cmap="cvidis"
     cmap = plt.get_cmap("cividis_r")
     co2ls = np.arange(0.0, 0.61, 0.1).round(1)
-    # linestyles = (["-", "--", ":", "-."],)
-    # linewidths = [3.5, 3, 2.5]
+    # linestyles = ["-", (0, (1, 1)), (0, (5, 1)), "-."]
+    linestyles = ["-", "-", (0, (5, 1)), "-."]
+    linewidths = [0, 2, 2]
+    alphas = [0.8, 1, 1]
+    # histtypes = ["stepfilled", "step", "step"]
     histtypes = ["stepfilled", "step", "step"]
 
     lost_loads_lvl = [
         lost_loads[group_mask & masks_sig_to_co2[co2l_inds_hist[i]]]
+        * 100  # convert to percentage
         for i in range(len(co2_lvls_hist))
     ]
 
     if ax is None:
         fig, ax = plt.subplots()
-
-    for i, co2l_ind in enumerate(co2l_inds_hist):
-        co2 = co2_lvls_hist[i]
-        c = get_color_from_cmap(co2, co2ls, cmap)
+    if nonoverlapping_hist:
+        weights_data = [
+            weights[group_mask & masks_sig_to_co2[co2l_ind]]
+            for co2l_ind in co2l_inds_hist
+        ]
+        weights_data = [w / n_failures_weighted for w in weights_data]
+        colors = [
+            get_color_from_cmap(co2_lvls_hist[i], co2ls, cmap)
+            for i in range(len(co2_lvls_hist))
+        ]
+        n_bins = 5
         ax.hist(
-            np.array(lost_loads_lvl[i]) * 100,
-            weights=weights[group_mask & masks_sig_to_co2[co2l_ind]]
-            / (n_failures_weighted),
-            label=f"CO2={get_actual_co2_level(co2, percent=True)}%",
-            bins=np.linspace(0, 100, 21),
+            lost_loads_lvl,
+            weights=weights_data,
+            label=[
+                f"CO2={get_actual_co2_level(co2, percent=True)}%"
+                for co2 in co2_lvls_hist
+            ],
+            bins=np.linspace(0, 100, n_bins + 1),
             alpha=0.8,
             log=True,
-            color=c,
-            histtype=histtypes[i],
-            # histtype="step",
-            # edgecolor=c,
-            # linewidth=linewidths[i],
-            linewidth=2,
-            zorder=i,
+            color=colors,
+            histtype="bar",
         )
+    else:
+        for i, co2l_ind in enumerate(co2l_inds_hist):
+            co2 = co2_lvls_hist[i]
+            c = get_color_from_cmap(co2, co2ls, cmap)
+            ax.hist(
+                np.array(lost_loads_lvl[i]) * 100,
+                weights=weights[group_mask & masks_sig_to_co2[co2l_ind]]
+                / (n_failures_weighted),
+                label=f"CO2={get_actual_co2_level(co2, percent=True)}%",
+                bins=np.linspace(0, 100, 21),
+                alpha=alphas[i],
+                log=True,
+                color=c,
+                histtype=histtypes[i],
+                # histtype="step",
+                # edgecolor=c,
+                linewidth=linewidths[i],
+                linestyle=linestyles[i],
+                # linewidth=2,
+                zorder=i,
+            )
     ax.set_ylim(0.5 * 10**-8, 5 * 10**-4)
     ax.set_yticks([10**-i for i in range(4, 9)])
     ax.grid()

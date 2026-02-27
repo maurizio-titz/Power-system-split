@@ -1180,10 +1180,13 @@ if __name__ == "__main__":
     for param in params:
         blackoutthreshold = param["blackoutthreshold"]
         target = param["target"]
-        # Example 1: Plot both rows (original behavior)
-        # create_combined_mitigation_plot(use_annualized_costs=False)
-        # for plot_rows_option in ["both", "inertia", "line_extension"]:
-        for plot_rows_option in ["line_extension", "both"]:
+        for plot_rows_option in ["line_extension", "both", "inertia"]:
+            print(
+                "Mitigation params:",
+                f"blackoutthreshold={blackoutthreshold}",
+                f"target={target}",
+                f"plot_rows={plot_rows_option}",
+            )
             create_combined_mitigation_plot(
                 use_annualized_costs=True,
                 co2_lvl_map=0.2,
@@ -1193,14 +1196,3 @@ if __name__ == "__main__":
                 plot_rows=plot_rows_option,  # Options: "both", "inertia", "line_extension"
                 target=target,
             )
-
-        # # Example 3: Plot only synthetic inertia row
-        # create_combined_mitigation_plot(
-        #     use_annualized_costs=True,
-        #     co2_lvl_map=0.2,
-        #     build_380kV_only=True,
-        #     plot_intertia_cost=True,
-        #     blackoutthreshold=blackoutthreshold,
-        #     plot_rows="inertia",
-        #     target=target,
-        # )

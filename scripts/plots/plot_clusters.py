@@ -2,7 +2,7 @@
 import numpy as np
 import sys
 
-sys.path.append("../")
+# sys.path.append("../")
 sys.path.append("./")
 from utils.data_handling import get_co2_levels
 from utils.clustering.blackout_clustering_class import Clustering
@@ -26,6 +26,7 @@ cl = Clustering(
     clustering_params=clustering_params,
     distance_matrix_dtype=np.float16,
 )
+# %%
 cl.load_data()
 cl.transform_vectors()
 cl.filter_data()

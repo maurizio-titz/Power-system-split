@@ -719,23 +719,23 @@ def plot_component_number_vs_blackout_size(
 
 
 if __name__ == "__main__":
-    # create_split_statistics_plot()
-    # for load_norm in [False]:
-    #     for blackout_stat in [True]:
-    #         create_split_statistics_plot(
-    #             load_normalization=load_norm,
-    #             show_blackout_stats=blackout_stat,
-    #             secondary_proba_axis=True,
-    #         )
+    create_split_statistics_plot()
+    for load_norm in [False]:
+        for blackout_stat in [True]:
+            create_split_statistics_plot(
+                load_normalization=load_norm,
+                show_blackout_stats=blackout_stat,
+                secondary_proba_axis=True,
+            )
 
     # Create standalone blackout statistics plot
-    # plot_blackout_size_histograms(log_scale=True, n_cols=2)
+    plot_blackout_size_histograms(log_scale=True, n_cols=2)
 
-    # # # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)
-    # for same_corridor_option in [None, True, False]:
-    #     for normalize_option in [False, True]:
-    #         create_blackout_statistics_plot(
-    #             same_corridor=same_corridor_option,
-    #             normalize_by_total_splits=normalize_option,
-    #         )
+    # # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)
+    for same_corridor_option in [None, True, False]:
+        for normalize_option in [False, True]:
+            create_blackout_statistics_plot(
+                same_corridor=same_corridor_option,
+                normalize_by_total_splits=normalize_option,
+            )
     plot_component_number_vs_blackout_size()
