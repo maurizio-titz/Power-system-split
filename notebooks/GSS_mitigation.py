@@ -8,12 +8,18 @@ import pickle
 import sys
 
 import pandas as pd
+
+from utils.mitigation_visualization import load_inertia_placement_results
 root_path = '../' # This defaults to './', which should be the repository path
 sys.path.append(root_path)
 #%%
 os.environ["POWER_SYSTEM_DATASET"] = "current"
 from utils import config
+from utils import data_handling
 #%%
+net = data_handling.load_pypsa_network(n_nodes=600, co2lvl=0.6, use_sclopf=True, lopt=False)
+#%%
+
 
 from utils import data_handling
 
@@ -28,6 +34,26 @@ split_properties = pd.read_hdf(
 component_properties = pd.read_hdf(
     config.path_to_vis_results_sclopf + f"component_properties_all_n{n_nodes}.h5", index_col=0
 )
+
+#%%
+co2_lvl = 0.0
+blackoutthreshold=0.8
+max_iter=10000
+delta_Erot=5000
+rocof_thres=1
+l_share=0.0
+resolve_strategy="random"
+delta_Erot_saved, res_tuple = load_inertia_placement_results(
+            n_nodes,
+            max_iter,
+            delta_Erot,
+            rocof_thres,
+            l_share,
+            resolve_strategy,
+            blackoutthreshold=blackoutthreshold,
+            path_to_inertia_mitigation_results=config.path_to_inertia_mitigation_results_sclopf,
+            co2_lvl=co2_lvl,
+        )
 #%%
 component_properties["split_props_idx"] = component_properties[["co2l", "time_stamp", "split_number"]].apply(tuple, axis=1)
 # %%
