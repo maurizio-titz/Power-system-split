@@ -15,7 +15,7 @@ sys.path.append("../..")  # To import from parent directory
 sys.path.append("./")  # To import from parent directory
 sys.path.append("../")  # To import from parent directory
 
-from scripts.plots.metero_statistics import load_weather_regimes
+from scripts.meteo.meteo_statistics import load_weather_regimes
 from utils import data_handling
 from utils.clustering.blackout_clustering_class import Clustering
 from utils.clustering.distance_metrics import geometric_mean
@@ -425,8 +425,8 @@ fig.tight_layout(rect=(0, 0, 1, 0.98))
 plt.show()
 
 f_name = f"weather_regime_cluster_comparison_co2l{co2l}.png"
-from utils.config import path_to_figures_sclopf
+from utils.config import path_to_meteo_figures
 
-plot_style.save_figure(fig, f_name, path_to_figures_sclopf)
+plot_style.save_figure(fig, f_name, path_to_meteo_figures)
 
 # %%

@@ -53,4 +53,7 @@ if not _plot_output_dir and _plot_style in {"nature_energy", "joules"}:
 if _plot_output_dir:
     path_to_figures_sclopf = _plot_output_dir
 
+# Meteo analysis figures subfolder
+path_to_meteo_figures = path_to_figures_sclopf + "meteo/"
+
 mattermost_url = None

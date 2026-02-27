@@ -30,6 +30,7 @@ from utils.data_handling import get_actual_co2_level, get_co2_levels
 from utils.config import (
     path_to_pypsa_network_sclopf,
     path_to_figures_sclopf,
+    path_to_meteo_figures,
     path_to_vis_results_sclopf,
 )
 from utils import data_handling, cascade_simulation
@@ -55,7 +56,7 @@ def create_weather_regime_blackout_plot(
     n_nodes: int = 600,
     co2_levels=None,
     n_blackout_bins: int = 5,
-    save_path=path_to_figures_sclopf,
+    save_path=path_to_meteo_figures,
     save: bool = True,
 ):
     """Plot blackout-size frequency by weather regime.
@@ -198,7 +199,7 @@ def create_weather_regime_blackout_plot(
 
 
 def create_blackout_statistics_plot(
-    save_path=path_to_figures_sclopf,
+    save_path=path_to_meteo_figures,
     same_corridor=None,
     normalize_by_total_splits=False,
     n_bins=5,
@@ -208,7 +209,7 @@ def create_blackout_statistics_plot(
 
     Parameters
     ----------
-    save_path : str, default path_to_figures_sclopf
+    save_path : str, default path_to_meteo_figures
         Path where the plot will be saved
     same_corridor : bool or None, default None
         If True, only consider splits where both failed lines are in the same corridor. If False, only consider splits where failed lines are in different corridors.
@@ -422,7 +423,7 @@ def create_capacity_factor_grid(
     n_cap_bins: int = 10,
     n_blackout_bins: int = 5,
     normalize_by_capacity_frequency: bool = False,
-    save_path=path_to_figures_sclopf,
+    save_path=path_to_meteo_figures,
     save: bool = True,
 ):
     if co2_levels is None:
