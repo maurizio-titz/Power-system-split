@@ -115,7 +115,7 @@ def create_split_statistics_plot(
     if show_blackout_stats:
         fig = plt.figure(figsize=(12, 5))
         n_cols = 4
-        width_ratios = [1, 1, 1, 1]
+        width_ratios = [1, 1, 1.6, 1]
     else:
         fig = plt.figure(figsize=(8, 5))
         n_cols = 2

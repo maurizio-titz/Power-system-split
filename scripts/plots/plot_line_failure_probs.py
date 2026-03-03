@@ -867,43 +867,43 @@ if __name__ == "__main__":
     # create_line_failure_plot_linear()
     # create_secondary_line_failure_plot()
 
-    # save_csv = True
-    # cmap = "crameri:Batlow_r"
-    # powernorm = False
-    # scale_width = True
-    # width_scale_sqrt = True
+    save_csv = True
+    cmap = "crameri:Batlow_r"
+    powernorm = False
+    scale_width = True
+    width_scale_sqrt = True
 
-    # if save_csv:
-    #     n_nodes = 600
-    #     save_path = path_to_figures_sclopf
-    #     network = data_handling.load_pypsa_network_from_path(
-    #         path_to_pypsa_network_sclopf
-    #         + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
-    #         True,
-    #     )
-    #     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
-    #     selected_co2ls = np.array([0.0, 0.2, 0.6])
-    #     edge_likelihoods_total = pickle.load(
-    #         open(
-    #             path_to_vis_results_sclopf
-    #             + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
-    #             "rb",
-    #         )
-    #     )
-    #     save_failure_probabilities_to_csv(
-    #         edge_likelihoods_total,
-    #         nx_graph,
-    #         selected_co2ls,
-    #         n_nodes,
-    #         save_path,
-    #         "line_failure_probs_total.csv",
-    #     )
+    if save_csv:
+        n_nodes = 600
+        save_path = path_to_figures_sclopf
+        network = data_handling.load_pypsa_network_from_path(
+            path_to_pypsa_network_sclopf
+            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+            True,
+        )
+        nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+        selected_co2ls = np.array([0.0, 0.2, 0.6])
+        edge_likelihoods_total = pickle.load(
+            open(
+                path_to_vis_results_sclopf
+                + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
+                "rb",
+            )
+        )
+        save_failure_probabilities_to_csv(
+            edge_likelihoods_total,
+            nx_graph,
+            selected_co2ls,
+            n_nodes,
+            save_path,
+            "line_failure_probs_total.csv",
+        )
 
-    # create_total_line_failure_plot(
-    #     unified_colorbar=True,
-    #     powernorm=powernorm,
-    #     scale_width=scale_width,
-    #     width_scale_sqrt=width_scale_sqrt,
-    #     cmap=cmap,
-    # )
+    create_total_line_failure_plot(
+        unified_colorbar=True,
+        powernorm=powernorm,
+        scale_width=scale_width,
+        width_scale_sqrt=width_scale_sqrt,
+        cmap=cmap,
+    )
     create_cross_border_vulnerability_plots()
