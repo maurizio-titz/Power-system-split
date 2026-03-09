@@ -35,6 +35,8 @@ path_to_clustering_results_sclopf = path_to_sclopf_results + "clustering/"
 path_to_cascade_results_sclopf = path_to_sclopf_results + "cascade_results/"
 path_to_evaluation_results_sclopf = path_to_sclopf_results + "evaluation_results/"
 path_to_pypsa_network_sclopf = root_path + "/data/European_networks_sclopf/"
+path_to_pypsa_network_lopf = "/srv/data/jlange/PYPSA3/sclopf-iter/workflow/submodules/pypsa-eur/resources/networks/"
+# root_path + "/data/European_networks_lopf/"
 path_to_inertia_mitigation_results_sclopf = (
     path_to_sclopf_results + "syn_inertia_mitigation/"
 )

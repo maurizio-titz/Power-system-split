@@ -22,6 +22,7 @@ from utils.cascade_simulation import (
 )
 from utils.config import (
     path_to_pypsa_network_sclopf,
+    path_to_pypsa_network_lopf,
     path_to_vis_results_sclopf,
     path_to_cascade_results_sclopf,
     path_to_grid_data,
