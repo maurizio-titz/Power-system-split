@@ -25,6 +25,7 @@ new_res_path = jureca_files_path + "/full/"
 
 
 def compare_batched_to_old_results(batched_dir, old_res_dir, co2l):
+    """this is a check function to compare the results of the new batched cascade code to the old full cascade code, to make sure we get the same results. It compares the number of cascades found at each timestamp, and prints the difference."""
 
     print(f"Comparing results for CO2 level {co2l}")
     casc_number_diffs = []
@@ -77,24 +78,8 @@ def compare_batched_to_old_results(batched_dir, old_res_dir, co2l):
 
         print(f"Timestamp {timestamp}: Cascade number difference: {casc_number_diff}")
         casc_number_diffs.append(casc_number_diff)
-        # missing_keys = set(old_results_at_timestamp.keys()) - set(
-        #     batched_cascade_at_timestamp_.keys()
-        # )
-        # if missing_keys:
-        #     raise ValueError(f"Timestamp {timestamp}: Missing keys: {missing_keys}")
-        #     # if len(batched_cascade_at_timestamp_.keys()) < len(
-        #     #     old_results_at_timestamp.keys()
-        #     # ):
-        #     # raise ValueError(
-        #     #     f"Batched results have less keys: {len(batched_cascade_at_timestamp_)} vs {len(old_results_at_timestamp)}"
-        #     # )
 
     return casc_numbers_old, casc_numbers_batched
-
-
-# old_res_dir = path_to_cascade_results_sclopf.replace(
-#     "cascade_results/", "cascade_results_missingTriggers/"
-# )
 
 
 def process_co2_level(co2l, batch_files_path, new_res_path):
@@ -122,20 +107,3 @@ if __name__ == "__main__":
     # Use multiprocessing to run in parallel
     with Pool() as pool:
         pool.map(process_func, co2_levels)
-    # casc_numbers_old, casc_numbers_batched = compare_batched_to_old_results(
-    #     new_res_path, old_res_dir, co2l
-    # )
-    # print(
-    #     f"Cascade numbers for CO2 level {co2l}: Old - {sum(casc_numbers_old)}, Batched - {sum(casc_numbers_batched)}"
-    # )
-    # print(
-    #     "Max number of missing cascades in new results in one timestamp:",
-    #     max(np.array(casc_numbers_old) - np.array(casc_numbers_batched)),
-    # )
-    # print(f"Cascade number differences for CO2 level {co2l}: {sum(casc_number_diffs)}")
-    # plt.figure()
-    # plt.scatter(list(range(len(casc_number_diffs))), casc_number_diffs)
-    # plt.xlabel("Timestamps")
-    # plt.ylabel("Cascade number difference")
-    # plt.title(f"Cascade number differences for CO2 level {co2l}")
-    # plt.show()

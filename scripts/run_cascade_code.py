@@ -160,7 +160,7 @@ def run_cascade_single_line_failures(
 def run_cascade_dual_line_failures(
     co2l: float,
     n_nodes: int,
-    save_whole_cascades: bool = True,
+    save_non_split_cascades: bool = True,
     snet_index: int = 0,
     check_n1_security: bool = True,
     use_sclopf: bool = True,
@@ -175,7 +175,7 @@ def run_cascade_dual_line_failures(
     Args:
         co2l (float): co2 level as float
         n_nodes (int): Number of nodes in PyPSA network.
-        save_whole_cascades (bool, optional): If False, only the cascade trigger is saved. Defaults to False.
+        save_non_split_cascades (bool, optional): If False, only cascades that lead to system splits are saved. Defaults to True.
         check_n1_security (bool, optional): If 'True', check if the networks are n-1 secure before starting the dual line failure experiments.
         snet_index (int, optional): Select a particular subnetwork for calculations (if the pypsa network has different ones).
                 For our data set, "0" indicates the Continental European AC grid. Defaults to 0.
@@ -210,7 +210,7 @@ def run_cascade_dual_line_failures(
     if not use_sclopf:
         fpath_out += "_lopf"
 
-    if save_whole_cascades:
+    if save_non_split_cascades:
         fpath_out += "_allcascades"
 
     if line_mitigation_dict is not None:
@@ -405,7 +405,7 @@ def run_cascade_dual_line_failures(
             )
             failures_tuple = tuple(initial_failure["failures"])
 
-            if save_whole_cascades:
+            if save_non_split_cascades:
                 res_dict[failures_tuple] = (
                     failing_links,
                     system_split,
@@ -694,10 +694,9 @@ if __name__ == "__main__":
     # Load arguments
     n_nodes = 600
     co2ls = get_co2_levels(n_nodes)
-    # co2l = [0.5]
     if isinstance(co2ls, float):
         co2ls = [co2ls]
-    save_whole_cascades = False
+    save_whole_cascades = False  # set this to true if you want to save all cascades, not only the ones that lead to system splits. Be aware that this can lead to very large files, especially for lower CO2 levels where many cascades are triggered.
 
     for co2l in co2ls:
         if co2l > 0.4:
@@ -705,54 +704,46 @@ if __name__ == "__main__":
         run_cascade_dual_line_failures(
             co2l,
             n_nodes,
-            save_whole_cascades=save_whole_cascades,
+            save_non_split_cascades=save_whole_cascades,
             use_sclopf=True,
-            n_checkpoints=0,
+            n_checkpoints=10,
             check_n1_security=True,
-            # line_mitigation_dict=None,
-            # start_timestamp_str="2013-01-01 03:00:00",
-            # stop_timestamp_str="2014-12-31 06:00",
             overwrite=True,
         )
-    exit()
 
-    start_date = "2013-01-01 00:00"
-    end_date = "2013-11-01 04:04"
-    use_sclopf = True
-
+    ### Cascades can also be run in batches to speed up the computation by parallelization.
+    # co2l=0.6
     # total_batches = 2
     # for batch_id in range(total_batches):
     #     output_filename = run_cascade_dual_line_failures_batch(
     #         batch_id=batch_id,
     #         total_batches=total_batches,
-    #         co2l=0.6,
+    #         co2l=co2l,
     #         n_nodes=600,
     #         save_whole_cascades=True,
-    #         use_sclopf=use_sclopf,
+    #         use_sclopf=True,
     #         check_n1_security=False,
-    #         start_date=start_date,
-    #         end_date=end_date,
     #         overwrite=True,
     #         n_checkpoints=2,
     #     )
 
-    output_filename = f"system_splits_Co2L{co2l}_n{n_nodes}"
+    # output_filename = f"system_splits_Co2L{co2l}_n{n_nodes}"
 
-    if not use_sclopf:
-        output_filename += "_lopf"
+    # if not use_sclopf:
+    #     output_filename += "_lopf"
 
-    if save_whole_cascades:
-        output_filename += "_allcascades"
+    # if save_whole_cascades:
+    #     output_filename += "_allcascades"
 
-    if start_date is not None:
-        output_filename += f"_from{start_date.replace(' ', '_')}"
+    # if start_date is not None:
+    #     output_filename += f"_from{start_date.replace(' ', '_')}"
 
-    if end_date is not None:
-        output_filename += f"_to{end_date.replace(' ', '_')}"
-    output_filename = output_filename + "_collected.pklz"
+    # if end_date is not None:
+    #     output_filename += f"_to{end_date.replace(' ', '_')}"
+    # output_filename = output_filename + "_collected.pklz"
 
     # collect_batch_results(
-    #     co2l=0.6,
+    #     co2l=co2l,
     #     n_nodes=600,
     #     total_batches=total_batches,
     #     start_date=start_date,

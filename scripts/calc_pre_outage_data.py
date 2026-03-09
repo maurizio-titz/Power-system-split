@@ -92,9 +92,8 @@ np.save(
 )
 print(f"Saved min/max nodal inertia generation to {nodal_inertia_min_max_file_path}")
 
-exit()
 
-# #### Calculate dipole vectors ####
+# #### Calculate dipole vectors #### not used in the publication, but can be used for further analysis of the spatial power inhomogeneity
 
 # pos = nx.get_node_attributes(nx_graph, "pos")
 # dipole_vector = np.zeros((len(co2l_list), 2, len(network.snapshots)))
