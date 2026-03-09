@@ -350,17 +350,16 @@ for i_cluster, cluster_idx in enumerate(
 
     cluster_data = selected_clusters[i_cluster]
 
-    # 3 rows × 2 columns: map spans all 3 rows in col 0, bars in col 1
+    # 2×2 grid: map upper-left, weather upper-right, solar lower-left, wind lower-right
     panel_gs = GridSpecFromSubplotSpec(
-        3,
+        2,
         2,
         subplot_spec=outer_gs[grid_row, grid_col],
-        width_ratios=[3, 2],
-        hspace=0.55,
-        wspace=0.3,
+        hspace=0.45,
+        wspace=0.35,
     )
 
-    ax_map = fig.add_subplot(panel_gs[:, 0])  # spans all 3 rows
+    ax_map = fig.add_subplot(panel_gs[0, 0])
     plot_cluster(
         ax=ax_map,
         centroid=cluster_data["centroid"],
@@ -368,11 +367,15 @@ for i_cluster, cluster_idx in enumerate(
         nx_graph=nx_graph,
         pos=pos,
     )
-    ax_map.set_title(f"Cluster {int(cluster_idx)}")
+
+    # Title for the whole 2×2 panel
+    fig.add_subplot(outer_gs[grid_row, grid_col], frameon=False)
+    plt.tick_params(labelcolor="none", top=False, bottom=False, left=False, right=False)
+    plt.title(f"Cluster {int(cluster_idx)}", fontweight="bold", pad=12, y=1.05)
 
     ax_weather = fig.add_subplot(panel_gs[0, 1])
-    ax_solar = fig.add_subplot(panel_gs[1, 1])
-    ax_wind = fig.add_subplot(panel_gs[2, 1])
+    ax_solar = fig.add_subplot(panel_gs[1, 0])
+    ax_wind = fig.add_subplot(panel_gs[1, 1])
 
     ax_weather.bar(
         weather_x,
@@ -384,7 +387,7 @@ for i_cluster, cluster_idx in enumerate(
     ax_weather.set_xticklabels(weather_labels, rotation=45)
     ax_weather.set_xlabel("Weather regime")
     ax_weather.set_ylabel("Norm. P(Cluster | Regime)")
-    ax_weather.grid(True, alpha=0.3)
+    ax_weather.grid(False)
     ax_weather.set_ylim(bottom=0)
 
     ax_solar.bar(
@@ -395,7 +398,7 @@ for i_cluster, cluster_idx in enumerate(
     )
     ax_solar.set_xlabel("Solar capacity factor")
     ax_solar.set_ylabel("Rel. freq.")
-    ax_solar.grid(True, alpha=0.3)
+    ax_solar.grid(False)
     ax_solar.set_xlim(0.0, 1.0)
     ax_solar.set_ylim(bottom=0)
 
@@ -407,7 +410,7 @@ for i_cluster, cluster_idx in enumerate(
     )
     ax_wind.set_xlabel("Wind capacity factor")
     ax_wind.set_ylabel("Rel. freq.")
-    ax_wind.grid(True, alpha=0.3)
+    ax_wind.grid(False)
     ax_wind.set_xlim(0.0, 1.0)
     ax_wind.set_ylim(bottom=0)
 

@@ -697,7 +697,7 @@ def create_combined_mitigation_plot(
         ax_inertia_all.invert_xaxis()
         ax_inertia_all.set_ylabel(f"Inertia placed [{unit}]", fontsize=AXIS_LABELSIZE)
         ax_inertia_all.set_xlabel("CO$_2$ level [\\% of 1990]", fontsize=AXIS_LABELSIZE)
-        ax_inertia_all.set_title("Synthetic inertia needed", fontsize=TITLE_FONTSIZE)
+        ax_inertia_all.set_title("Additional inertia needed", fontsize=TITLE_FONTSIZE)
         ax_inertia_all.tick_params(axis="both", which="major", labelsize=TICK_LABELSIZE)
         ax_inertia_all.grid(True, alpha=0.3)
 
@@ -734,7 +734,7 @@ def create_combined_mitigation_plot(
             )
 
         # Set consistent styling for inertia plots
-        title = f"Synthetic inertia mitigation \n CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\\%"
+        title = f"Additional inertia mitigation \n CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\\%"
         ax_inertia_loss.set_title(
             title,
             fontsize=TITLE_FONTSIZE,
@@ -750,7 +750,7 @@ def create_combined_mitigation_plot(
         ax_inertia_map.set_aspect("equal")
         # Set map title with appropriate symbol based on target
         ax_inertia_map.set_title(
-            rf"Synthetic inertia to reach ${target_symbol}_{{{int(round(co2_ref_percent))}\%}}$"
+            rf"Additional inertia to reach ${target_symbol}_{{{int(round(co2_ref_percent))}\%}}$"
             + "\n"
             + rf"CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\%",
             fontsize=TITLE_FONTSIZE,
