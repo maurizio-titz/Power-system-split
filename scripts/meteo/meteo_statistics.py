@@ -76,6 +76,12 @@ def create_weather_regime_blackout_plot(
     split_props["total_weighting"] = (
         split_props["snapshot_weighting"] * split_props["trigger_weighting"]
     )
+    n_2_failures_file = (
+        data_handling.path_to_grid_data + f"n_2_failures_co2lvl{0.6}.pklz"
+    )
+    with gzip.open(n_2_failures_file, "rb") as fh:
+        n_2_failures = pickle.load(fh)
+    num_failures = sum([initial_failure["weight"] for initial_failure in n_2_failures])
 
     if "time_stamp" in split_props.index.names:
         timestamps = split_props.index.get_level_values("time_stamp")
@@ -148,7 +154,10 @@ def create_weather_regime_blackout_plot(
                 if subset.empty:
                     counts_by_regime.append(np.nan)
                     continue
-                total_weight = subset.total_weighting.sum()
+                # total_weight = subset.total_weighting.sum()
+                total_weight = (
+                    weather_regimes.weather_regime == regime
+                ).sum() * num_failures
                 if total_weight <= 0:
                     counts_by_regime.append(np.nan)
                     continue
@@ -185,8 +194,9 @@ def create_weather_regime_blackout_plot(
         fig.legend(
             handles,
             labels,
+            title="Share of load not served",
             loc="center left",
-            bbox_to_anchor=(1.02, 0.5),
+            bbox_to_anchor=(0.9, 0.5),
             fontsize=TICK_LABEL_FONTSIZE,
             frameon=False,
         )
@@ -435,6 +445,11 @@ def create_capacity_factor_grid(
         missing = [lvl for lvl in co2_levels if lvl not in available_co2_levels]
         raise ValueError(f"Missing CO2 levels: {missing}")
 
+    file_path = data_handling.path_to_grid_data + f"n_2_failures_co2lvl{0.6}.pklz"
+    with gzip.open(file_path, "rb") as fh:
+        n_2_failures = pickle.load(fh)
+    num_failures = sum([initial_failure["weight"] for initial_failure in n_2_failures])
+
     setup_matplotlib_style()
     os.makedirs(save_path, exist_ok=True)
 
@@ -525,7 +540,9 @@ def create_capacity_factor_grid(
                     bins=cap_bins,
                     weights=freq_weights,
                 )
-                freq_counts = np.where(freq_counts > 0, freq_counts, np.nan)
+                freq_counts = (
+                    np.where(freq_counts > 0, freq_counts, np.nan) * num_failures
+                )
 
             for i in range(len(blackout_centers)):
                 low = blackout_bins[i]
@@ -540,6 +557,7 @@ def create_capacity_factor_grid(
                 )
                 if freq_counts is not None:
                     counts = counts / freq_counts
+                # set zero counts to nan for better visualization on log scale
                 counts = np.where(counts > 0, counts, np.nan)
                 color = cmap(
                     i / (len(blackout_centers) + 1) + (1 / (len(blackout_centers) + 1))
@@ -564,9 +582,9 @@ def create_capacity_factor_grid(
                     fontsize=AXIS_LABEL_FONTSIZE,
                 )
             if col_idx == 0:
-                ylabel = f"{carrier} blackout count"
+                ylabel = f"{carrier} \n blackout count"
                 if normalize_by_capacity_frequency:
-                    ylabel = f"{carrier} blackout count / freq"
+                    ylabel = f"{carrier} \n relative frequency"
                 ax.set_ylabel(ylabel, fontsize=AXIS_LABEL_FONTSIZE)
             if row_idx == n_rows - 1:
                 ax.set_xlabel("Capacity factor", fontsize=AXIS_LABEL_FONTSIZE)
@@ -576,10 +594,11 @@ def create_capacity_factor_grid(
         fig.legend(
             handles,
             labels,
+            title="Share of load not served",
             loc="center left",
-            bbox_to_anchor=(1.02, 0.5),
+            bbox_to_anchor=(0.9, 0.5),
             fontsize=TICK_LABEL_FONTSIZE,
-            frameon=False,
+            frameon=True,
         )
 
     fig.tight_layout(rect=[0.0, 0.0, 0.86, 1.0])
@@ -600,6 +619,6 @@ if __name__ == "__main__":
     #             same_corridor=same_corridor_option,
     #             normalize_by_total_splits=normalize_option,
     #         )
-    create_blackout_statistics_plot()
-    create_capacity_factor_grid(normalize_by_capacity_frequency=True)
+    # create_blackout_statistics_plot()
+    # create_capacity_factor_grid(normalize_by_capacity_frequency=True)
     create_weather_regime_blackout_plot()
