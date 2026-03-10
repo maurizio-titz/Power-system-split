@@ -273,6 +273,7 @@ def _get_capacity_factor_series(network, carrier_name):
     )
 
 
+# %%
 def _relative_cluster_freq_by_capacity_bin(
     df,
     cf_column,
@@ -289,7 +290,8 @@ def _relative_cluster_freq_by_capacity_bin(
         fill_value=0.0,
     ).reindex(columns=cluster_columns, fill_value=0.0)
     interval_index = pd.IntervalIndex.from_breaks(bins, closed="right")
-    weighted = weighted.reindex(interval_index, fill_value=0.0)
+    weighted.index = interval_index
+    print(weighted.sum())
     relative = weighted.div(weighted.sum(axis=0), axis=1).fillna(0.0)
     centers = np.array([interval.mid for interval in relative.index])
     return centers, relative
@@ -304,6 +306,12 @@ network = data_handling.load_pypsa_network(
 solar_cf = _get_capacity_factor_series(network, "solar")
 wind_cf = _get_capacity_factor_series(network, "wind")
 
+plt.figure()
+plt.hist(solar_cf.dropna(), bins=20)
+plt.figure()
+plt.hist(wind_cf.dropna(), bins=20)
+# %%
+
 plot_df["timestamp"] = pd.to_datetime(plot_df.index)
 plot_df["solar_cf"] = solar_cf.reindex(plot_df["timestamp"]).values
 plot_df["wind_cf"] = wind_cf.reindex(plot_df["timestamp"]).values
@@ -315,12 +323,15 @@ solar_x, solar_relative_freq = _relative_cluster_freq_by_capacity_bin(
     cluster_ids,
     cf_bins,
 )
+assert np.allclose(solar_relative_freq.sum().values, 1.0, atol=1e-6)
 wind_x, wind_relative_freq = _relative_cluster_freq_by_capacity_bin(
     plot_df[np.isfinite(plot_df["wind_cf"])],
     "wind_cf",
     cluster_ids,
     cf_bins,
 )
+assert np.allclose(wind_relative_freq.sum().values, 1.0, atol=1e-6)
+# %%
 
 n_clusters = len(normalized_conditional_probability_clusterRegime.columns)
 clusters_per_row = 3
@@ -338,7 +349,9 @@ outer_gs = GridSpec(
 nx_graph = data_handling.load_networkx_graph(snet_index=0, co2lvl=0.0)
 pos = nx.get_node_attributes(nx_graph, "pos")
 
-weather_labels = normalized_conditional_probability_clusterRegime.index.astype(str)
+weather_labels = list(
+    normalized_conditional_probability_clusterRegime.index.astype(str)
+)
 weather_x = np.arange(len(weather_labels))
 cf_bar_width = (cf_bins[1] - cf_bins[0]) * 0.9
 
@@ -386,7 +399,7 @@ for i_cluster, cluster_idx in enumerate(
     ax_weather.set_xticks(weather_x)
     ax_weather.set_xticklabels(weather_labels, rotation=45)
     ax_weather.set_xlabel("Weather regime")
-    ax_weather.set_ylabel("Norm. P(Cluster | Regime)")
+    ax_weather.set_ylabel("P(C | R)/P(Blackout)")
     ax_weather.grid(False)
     ax_weather.set_ylim(bottom=0)
 
@@ -397,7 +410,7 @@ for i_cluster, cluster_idx in enumerate(
         alpha=0.9,
     )
     ax_solar.set_xlabel("Solar capacity factor")
-    ax_solar.set_ylabel("Rel. freq.")
+    ax_solar.set_ylabel("P(C | S)")
     ax_solar.grid(False)
     ax_solar.set_xlim(0.0, 1.0)
     ax_solar.set_ylim(bottom=0)
@@ -409,7 +422,7 @@ for i_cluster, cluster_idx in enumerate(
         alpha=0.9,
     )
     ax_wind.set_xlabel("Wind capacity factor")
-    ax_wind.set_ylabel("Rel. freq.")
+    ax_wind.set_ylabel("P(C | W)")
     ax_wind.grid(False)
     ax_wind.set_xlim(0.0, 1.0)
     ax_wind.set_ylim(bottom=0)
