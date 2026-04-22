@@ -2,7 +2,7 @@
 # Generate all plots with specified style configuration
 
 # Default configuration
-PLOT_STYLE="nature_energy"
+PLOT_STYLE="joules"
 PLOT_PANEL_LOWERCASE=""
 PLOT_DPI="300"
 PLOTS_DIR="scripts/plots"

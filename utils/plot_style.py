@@ -321,13 +321,77 @@ def create_unified_legend(
 
 
 # === SAVE FUNCTIONS ===
+def _extract_plot_base_name(filename):
+    """Extract base name from filename by removing parametric suffixes.
+
+    Removes common parametric suffixes like:
+    - _co2l{value} or _co2{value}
+    - _conditioning_{value}
+    - _{numeric_id}
+    - _GSS, _normalized, _picked, etc. (common boolean/categorical suffixes)
+    - _same_corridor, _different_corridor
+    - other common conditional suffixes
+
+    This allows plots that are variations of the same type (differing by parameters)
+    to be grouped in the same subdirectory.
+
+    Examples:
+        weather_regime_cluster_comparison_co2l0.6 -> weather_regime_cluster_comparison
+        regime_1d_histograms_co2l0.5 -> regime_1d_histograms
+        initial_network_cascade_ES_FR_1 -> initial_network_cascade_ES_FR
+        weather_regime_blackout_frequency_GSS -> weather_regime_blackout_frequency
+        renewable_cap_blackout_statistics_same_corridor -> renewable_cap_blackout_statistics
+        renewable_capacity_factor_grid_normalized_by_frequency -> renewable_capacity_factor_grid
+    """
+    import re
+
+    name = filename
+
+    # Apply removals iteratively until no more changes
+    # This handles cases with multiple suffixes
+    prev_name = None
+    max_iterations = 5
+    iteration = 0
+
+    while name != prev_name and iteration < max_iterations:
+        prev_name = name
+        iteration += 1
+
+        # Remove trailing CO2 level specifications (co2l, co2)
+        name = re.sub(r"_(?:co2l?)[0-9.]+$", "", name, flags=re.IGNORECASE)
+        # Remove conditioning specifications
+        name = re.sub(r"_conditioning_\w+$", "", name, flags=re.IGNORECASE)
+        # Remove common boolean flag suffixes
+        name = re.sub(
+            r"_(?:GSS|normalized|picked|normalized_by_\w+)$",
+            "",
+            name,
+            flags=re.IGNORECASE,
+        )
+        # Remove corridor and similar categorical suffixes
+        name = re.sub(r"_(?:same|different)_corridor$", "", name, flags=re.IGNORECASE)
+        name = re.sub(r"_(?:co2_)?picked$", "", name, flags=re.IGNORECASE)
+        # Remove trailing numeric indices (but be careful: only remove if last part is purely numeric)
+        name = re.sub(r"_\d+$", "", name)
+
+    return name
+
+
 def save_figure(
-    fig, filename, save_path=None, formats=None, dpi=None, bbox_inches="tight"
+    fig,
+    filename,
+    save_path=None,
+    formats=None,
+    dpi=None,
+    bbox_inches="tight",
+    clear_fig=False,
+    organize_plots=True,
 ):
     """Save figure with consistent settings and optional configuration suffix.
 
     Signature:
-        save_figure(fig, filename, save_path=None, formats=None, dpi=None, bbox_inches="tight")
+        save_figure(fig, filename, save_path=None, formats=None, dpi=None, bbox_inches="tight",
+                   clear_fig=False, organize_plots=True)
 
     Args:
         fig: matplotlib figure object
@@ -336,6 +400,8 @@ def save_figure(
         formats: list of formats to save (default: ["pdf"])
         dpi: figure DPI (if None, uses environment variable PLOT_DPI)
         bbox_inches: bounding box setting for saving
+        clear_fig: if True, clear and close the figure after saving
+        organize_plots: if True, organize plots into subdirectories based on base name
     """
     import os
 
@@ -365,13 +431,68 @@ def save_figure(
         else:
             filename = filename + config_suffix
 
+    # Organize plots into subdirectories if enabled
+    if organize_plots:
+        base_name = _extract_plot_base_name(filename)
+        if base_name != filename:  # Only create subdirectory if name was modified
+            save_path = os.path.join(save_path, base_name)
+
     os.makedirs(save_path, exist_ok=True)
 
     for fmt in formats:
         full_path = os.path.join(save_path, f"{filename}.{fmt}")
         fig.savefig(full_path, format=fmt, dpi=dpi, bbox_inches=bbox_inches)
+        if clear_fig:
+            fig.clear()
+            plt.close(fig)
+
         assert os.path.isfile(full_path), f"Failed to save figure: {full_path}"
         print(f"Saved: {full_path}")
+
+
+def savefig_organized(fig, file_path, organize_plots=True, **savefig_kwargs):
+    """Save figure with optional plot organization into subdirectories.
+
+    Wrapper around plt.savefig that organizes plots into subdirectories based on base name.
+    Useful for scripts using plt.savefig directly instead of save_figure().
+
+    Args:
+        fig: matplotlib figure object
+        file_path: full file path or filename (can include directory and extension)
+        organize_plots: if True, organize into subdirectory based on base name
+        **savefig_kwargs: additional arguments passed to fig.savefig() (dpi, bbox_inches, etc.)
+
+    Example:
+        savefig_organized(fig, "/path/plots/regime_1d_histograms_co2l0.5.pdf")
+        # Saves to: /path/plots/regime_1d_histograms/regime_1d_histograms_co2l0.5.pdf
+    """
+    import os
+
+    file_path = str(file_path)
+
+    if organize_plots:
+        # Split path into directory and filename
+        dir_path = os.path.dirname(file_path)
+        filename_with_ext = os.path.basename(file_path)
+        filename_base, ext = os.path.splitext(filename_with_ext)
+
+        # Extract base name (removes parametric suffixes)
+        base_name = _extract_plot_base_name(filename_base)
+
+        # Create subdirectory based on base name
+        if base_name != filename_base:  # Only organize if name was modified
+            dir_path = os.path.join(dir_path, base_name)
+
+        file_path = os.path.join(dir_path, f"{filename_base}{ext}")
+
+    # Ensure directory exists
+    dir_path = os.path.dirname(file_path)
+    if dir_path:
+        os.makedirs(dir_path, exist_ok=True)
+
+    # Save figure
+    fig.savefig(file_path, **savefig_kwargs)
+    print(f"Saved: {file_path}")
 
 
 # === UTILITY FUNCTIONS ===

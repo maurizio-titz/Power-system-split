@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 import os
 
+from pathlib import Path
+
+project_folder_path = str(Path(__file__).parent.parent)
+
+# TODO remove this
 use_extensions = False  # legacy, do not use
 
 # Read dataset selection from environment variable, default to "no_extensions"
@@ -55,7 +60,8 @@ if not _plot_output_dir and _plot_style in {"nature_energy", "joules"}:
 if _plot_output_dir:
     path_to_figures_sclopf = _plot_output_dir
 
-# Meteo analysis figures subfolder
+# Meteo analysis data + figures subfolder
+path_to_WR_meteo_data = project_folder_path + "/weather_data/18674941/"
 path_to_meteo_figures = path_to_figures_sclopf + "meteo/"
 
 mattermost_url = None

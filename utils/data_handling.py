@@ -662,7 +662,7 @@ def get_co2_levels(n_nodes, ignore_lvls=()):
 
     return np.array(sorted(co2l_list, reverse=True))
 
-
+# FIXME n_nodes goes not into this. Maybe other names filenames.
 def get_actual_co2_level(lvls, n_nodes=600, percent=False):
     """Get actual CO2 levels from results file.
 
