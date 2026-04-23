@@ -378,7 +378,7 @@ def load_pypsa_network(
             f"Multiple files found for n_nodes={n_nodes} and co2lvl={co2lvl}: {files}"
         )
     else:
-        return load_pypsa_network_from_path(data_path + files[0], use_sclopf)
+        return load_pypsa_network_from_path(data_path + "/" +files[0], use_sclopf)
 
 
 def load_pypsa_network_from_path(path_to_pypsa_network: str, use_sclopf: bool):

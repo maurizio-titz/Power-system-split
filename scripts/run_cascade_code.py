@@ -29,6 +29,7 @@ from utils import (
 from utils.config import (
     path_to_cascade_results_sclopf,
     path_to_pypsa_network_sclopf,
+    path_to_cascade_results_lopf
 )
 
 # Setup paths to solved PyPSA networks and results of this script
