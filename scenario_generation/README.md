@@ -36,7 +36,7 @@ If runs before where terminated (e.g. by keyboard interupt), you need to use
 
 
 ## 1. Installation
-
+<!-- go to workflow -->
 Install the necessary dependencies using `conda` or `mamba`:
 
     mamba env create -f submodules/pypsa-eur/envs/environment.fixed.yaml
@@ -47,7 +47,7 @@ Activate `pypsa-eur` environment:
 
 Navigate into the main Snakemake workflow directory of `PyPSA-Eur`:
 
-    cd workflow/submodules/pypsa-eur
+    cd submodules/pypsa-eur
 
 ## 2. Running scenarios
 
@@ -55,7 +55,7 @@ Before running all scenarios, check your spatial and temporal resolution set in 
 
     scenario:
       clusters:
-        - 50 # change for a different spatial resolution
+        - 600 # change for a different spatial resolution
 
     clustering:
       temporal:
@@ -63,7 +63,7 @@ Before running all scenarios, check your spatial and temporal resolution set in 
 
 And make sure to copy the custom powerplants to the right place in pypsa-eur
 
-    cp workflow/data/custom_powerplants.csv workflow/submodules/pypsa-eur/data/
+    cp data/custom_powerplants.csv submodules/pypsa-eur/data/
 
 **Note!** Running the scenarios requires a high-performance computing environment, as well as a [Gurobi license](https://www.gurobi.com/downloads/gurobi-software/).
 
@@ -76,6 +76,7 @@ To create and solve all scenarios (all different Co2 Limits), switch to the PyPS
 and run the following command:
 
     snakemake -call -j1 solve_elec_networks --configfile ../../configs/config.yaml 
+When running the scenarios the first time, one needs to set the `retrieve = true` and it is advised to increase the allowed latency using the `--latency-wait 20` flag.
 
 Please follow the documentation of PyPSA-Eur for more details.
 
