@@ -4,8 +4,6 @@
 import numpy as np
 import networkx as nx
 
-import pypsa
-
 import gzip
 import pickle
 
@@ -383,3 +381,8 @@ def iterate_over_all_system_split_trigger(path_to_pypsa_network: str = "sclopf-e
         results_ls.append((trigger_line, fedges_names, size_subgraphs))
 
     return results_ls
+
+
+if __name__ == "__main__":
+    
+    pass

@@ -206,7 +206,7 @@ class Clustering(object):
     def load_data(self):
         if not "split_properties" in self.__dict__:
             self.split_properties = pd.read_hdf(
-                path_to_vis_results_sclopf + f"split_properties_all_n{self.n_nodes}.h5"
+                path_to_vis_results_sclopf + f"/split_properties_all_n{self.n_nodes}.h5"
             )
             co2l_mask = self.split_properties.index.get_level_values("co2l").isin(
                 self.co2l_list
