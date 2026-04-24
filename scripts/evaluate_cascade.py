@@ -1055,8 +1055,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Evaluate cascade for specific CO2 levels"
     )
-    parser.add_argument("--co2l", type=float, help="CO2 level to process")
-    parser.add_argument("--n_nodes", type=int, default=600, help="Number of nodes")
+    parser.add_argument("--co2l", type=float, 
+                        help="CO2 level to process")
+    parser.add_argument("--n_nodes", 
+                        type=int, 
+                        default=600, help="Number of nodes")
     parser.add_argument(
         "--all",
         action="store_true",
