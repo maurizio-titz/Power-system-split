@@ -13,7 +13,10 @@ sys.path.append("./")
 
 import warnings
 
-warnings.simplefilter(action="ignore", category=FutureWarning)
+from loguru import logger
+from tqdm import tqdm
+
+#warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
 from utils import cascade_simulation, data_handling
@@ -23,13 +26,16 @@ from utils.data_handling import get_co2_levels
 n_nodes = 600
 
 overwrite = True
+
 if overwrite:
-    print("Overwrite is enabled: Existing files will be replaced.")
+    logger.warning("Overwrite is enabled: Existing files will be replaced.")
 
 co2ls = get_co2_levels(n_nodes)
-snet_index = 0
+snet_index = '0'
 
-for co2l in co2ls:
+pbar = tqdm(co2ls, total=len(co2ls))
+for co2l in pbar:
+    pbar.set_description(f"C02={co2l*100:.2f}%")
     if use_extensions:
         # if extensions are used, we need to build the graph from the LOPF network
         # because it contains the information about the original and updated s_nom values

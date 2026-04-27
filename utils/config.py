@@ -17,7 +17,6 @@ results_path = root_path + "/results"
 path_to_sclopf_data = data_path + "/European_networks_sclopf"
 path_to_lopf_data = data_path + "/European_networks_lopf"
 
-
 # lopf paths
 path_to_pypsa_network_lopf = data_path + "/European_networks_sclopf"
 path_to_lopf_results = results_path + "/lopf"

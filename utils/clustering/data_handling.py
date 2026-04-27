@@ -297,7 +297,7 @@ def get_path_to_clustering_dir(
     if isinstance(co2l, (np.ndarray)):
         co2l = co2l.tolist()
     if isinstance(co2l, (list)):
-        co2_string = str(co2l).replace(", ", "_")[1:-1]
+        co2_string = str([float(xx) for xx in co2l]).replace(", ", "_")[1:-1]
     else:
         co2_string = str(co2l)
 

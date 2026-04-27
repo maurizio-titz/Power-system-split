@@ -74,7 +74,7 @@ else:
     for co2l in tqdm(co2l_list):
         component_props_level = pd.read_hdf(
             path_to_evaluation_results_sclopf
-            + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
+            + f"/component_properties_Co2L{co2l}_n{n_nodes}.h5"
         )
         if component_props_level.trigger_weighting.nunique() == 1:
             raise ValueError("trigger weighting has only one unique value")

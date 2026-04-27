@@ -25,9 +25,12 @@ from utils.config import (
     path_to_pypsa_network_lopf,
     path_to_vis_results_sclopf,
     path_to_cascade_results_sclopf,
+    path_to_cascade_results_lopf,
     path_to_grid_data,
 )
 
+if not os.path.exists(path_to_grid_data):
+    os.mkdir(path_to_grid_data)
 
 def update_line_params(n: pypsa.Network):
     """Return updated line parameters in pypsa network if lines extension used in optimization.
@@ -53,9 +56,9 @@ def update_line_params(n: pypsa.Network):
     # return n.lines
 
 
-def get_networkx_graph_path(snet_index=0, co2lvl=None):
+def get_networkx_graph_path(snet_index: str | None = '0', co2lvl=None):
     """Get the path to a networkx graph from the pypsa networks"""
-    graph_path = path_to_grid_data + f"nx_graph"
+    graph_path = path_to_grid_data + f"/nx_graph"
     if co2lvl is not None:
         graph_path = f"{graph_path}_Co2{co2lvl}"
     if snet_index is not None:
@@ -65,14 +68,14 @@ def get_networkx_graph_path(snet_index=0, co2lvl=None):
     return graph_path
 
 
-def load_networkx_graph(snet_index=None, co2lvl=None):
+def load_networkx_graph(snet_index: str | None=None, co2lvl: None = None):
     """Get a networkx graph from the pypsa networks"""
     graph_path = get_networkx_graph_path(snet_index, co2lvl)
     graph = nx.read_gml(graph_path)  # [, stringizer])
     return graph
 
 
-def save_networkx_graph(graph, snet_index=None, co2lvl=None, overwrite=False):
+def save_networkx_graph(graph, snet_index: str | None =None, co2lvl=None, overwrite=False):
     """Save a networkx graph from the pypsa networks"""
     graph_path = get_networkx_graph_path(snet_index, co2lvl)
     if not overwrite and os.path.exists(graph_path):
@@ -85,10 +88,10 @@ def save_networkx_graph(graph, snet_index=None, co2lvl=None, overwrite=False):
 
 def build_networkx_graph(
     pypsa_network,
-    snet_index=None,
-    assert_order=True,
-    inplace=False,
-    update_lines=False,
+    snet_index: str  | None = None,
+    assert_order: bool = True,
+    inplace: bool = False,
+    update_lines: bool = False,
 ):
     """Build a networkx graph from the pypsa networks"""
     if not inplace:
@@ -273,7 +276,7 @@ def save_effective_injections(co2lvl, effective_injections, overwrite=False):
         str: Path to the written file.
     """
 
-    file_path = path_to_grid_data + f"effective_injections_co2lvl{co2lvl}.pklz"
+    file_path = path_to_grid_data + f"/effective_injections_co2lvl{co2lvl}.pklz"
 
     if not overwrite and os.path.exists(file_path):
         raise FileExistsError(f"File {file_path} already exists. Set overwrite=True.")
@@ -293,7 +296,7 @@ def load_effective_injections(co2lvl):
         effective_injections (dict): Dictionary of effective injections per snapshot.
     """
     with gzip.open(
-        path_to_grid_data + f"effective_injections_co2lvl{co2lvl}.pklz",
+        path_to_grid_data + f"/effective_injections_co2lvl{co2lvl}.pklz",
         "rb",
     ) as f:
         effective_injections = pickle.load(f)
@@ -311,7 +314,7 @@ def load_snapshot_list(co2lvl):
         snapshot_list (list): List of snapshots.
     """
     with gzip.open(
-        path_to_grid_data + f"snapshot_list_co2lvl{co2lvl}.pklz",
+        path_to_grid_data + f"/snapshot_list_co2lvl{co2lvl}.pklz",
         "rb",
     ) as f:
         snapshot_list = pickle.load(f)
@@ -329,7 +332,7 @@ def save_snapshot_list(snapshots, co2lvl, overwrite=False):
         str: Path to the written file.
     """
 
-    file_path = path_to_grid_data + f"snapshot_list_co2lvl{co2lvl}.pklz"
+    file_path = path_to_grid_data + f"/snapshot_list_co2lvl{co2lvl}.pklz"
 
     if not overwrite and os.path.exists(file_path):
         raise FileExistsError(f"File {file_path} already exists. Set overwrite=True.")
@@ -341,8 +344,8 @@ def save_snapshot_list(snapshots, co2lvl, overwrite=False):
 
 
 def load_pypsa_network(
-    co2lvl,
-    n_nodes,
+    co2lvl: float,
+    n_nodes: int,
     use_sclopf: bool = True,
     lopt: bool = False,
 ):
@@ -428,7 +431,7 @@ def load_pypsa_network_from_path(path_to_pypsa_network: str, use_sclopf: bool):
     return network
 
 
-def load_cascades(co2lvl, n_nodes, use_sclopf: bool = True):
+def load_cascades(co2lvl: float, n_nodes: int, use_sclopf: bool = True):
     if use_sclopf:
         path_to_cascade_results = path_to_cascade_results_sclopf
     else:
@@ -529,7 +532,7 @@ def load_grid_matrices(snet_index, co2lvl):
         line_limits (numpy array): Line limits per edge
     """
     with gzip.open(
-        path_to_grid_data + f"grid_matrices_snet{snet_index}_co2lvl{co2lvl}.pklz", "rb"
+        path_to_grid_data + f"/grid_matrices_snet{snet_index}_co2lvl{co2lvl}.pklz", "rb"
     ) as f:
         grid_matrices = pickle.load(f)
 
@@ -566,7 +569,7 @@ def save_grid_matrices(
     """
 
     file_path = (
-        path_to_grid_data + f"grid_matrices_snet{snet_index}_co2lvl{co2lvl}.pklz"
+        path_to_grid_data + f"/grid_matrices_snet{snet_index}_co2lvl{co2lvl}.pklz"
     )
 
     if not overwrite and os.path.exists(file_path):
