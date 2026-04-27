@@ -64,7 +64,7 @@ def create_split_statistics_plot(
     # Load network
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
@@ -86,7 +86,7 @@ def create_split_statistics_plot(
 
     # Load split component properties and split properties
     component_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"component_properties_all_n{n_nodes}.h5"
+        path_to_vis_results_sclopf + f"/component_properties_all_n{n_nodes}.h5"
     )
     component_props.time_stamp = pd.to_datetime(component_props.time_stamp)
 

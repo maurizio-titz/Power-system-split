@@ -34,7 +34,7 @@ path_to_pypsa_network = path_to_pypsa_network_sclopf
 os.makedirs(path_to_pre_outage, exist_ok=True)
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
 # For our data set, "0" indicates the Continental European AC grid.
-snet_index = 0
+snet_index = '0'
 
 # Get number of time steps and graph
 network = data_handling.load_pypsa_network(0.0, n_nodes, use_sclopf=use_sclopf)
@@ -253,6 +253,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib
 
+from loguru import logger
+
+from tqdm import tqdm
+
 import os
 
 import sys
@@ -353,7 +357,9 @@ CO2_values = pd.Series(index=Co2_scenarios)
 CO2_global = pd.Series(index=Co2_scenarios)
 # emissions = pd.Dataframe(None,index = [0], columns = Co2_scenarios)
 
-for Co2l in Co2_scenarios:
+for Co2l in (pbar:= tqdm(Co2_scenarios, total=len(Co2_scenarios))):
+    pbar.set_description(f"CO2 {Co2l}")
+    pbar.update()
 
     network = networks[Co2l]
 
@@ -428,7 +434,8 @@ plt.ylabel("calculated emission lvl[%]")
 
 plt.figure()
 plt.scatter(x_values, emission_by_co2l.values, label="Data")
-plt.scatter(x_values, CO2_global.values, label="Global constraints", marker="x")
+plt.scatter(x_values, CO2_global.values, label="Global constraints", 
+            marker="x")
 
 plt.legend()
 plt.gca().invert_xaxis()
@@ -454,4 +461,4 @@ actual_co2ls = pd.DataFrame.from_dict(
 )
 actual_co2ls.sort_index(inplace=True)
 actual_co2ls.index.name = "co2_level"
-actual_co2ls.to_csv(path_to_sclopf_results + "actual_co2_levels.csv")
+actual_co2ls.to_csv(path_to_sclopf_results + "/actual_co2_levels.csv")

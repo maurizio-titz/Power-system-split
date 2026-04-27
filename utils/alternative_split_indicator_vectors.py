@@ -287,14 +287,14 @@ def add_indices_to_indicator_vectors(
     else:
         indicator_vectors_file_path = (
             path_to_evaluation_results
-            + f"indicator_vector_rocof_Co2L{co2_lvl}_n{n_nodes}_old.pklz"
+            + f"/indicator_vector_rocof_Co2L{co2_lvl}_n{n_nodes}_old.pklz"
         )
         with gzip.open(indicator_vectors_file_path, "rb") as fh_in_indi:
             indicator_vector_rocof = pickle.load(fh_in_indi)[-1]
 
     df_comp_props = pd.read_hdf(
         path_to_evaluation_results
-        + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
+        + f"/component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
         key="df",
     )
 
@@ -409,7 +409,7 @@ def validate_rocofVec_splitProps_match(n_nodes, co2_lvl, test_mode=False):
     """Validate that the rocof indicator vectors match the split properties time stamps and initial failures."""
     with gzip.open(
         path_to_indicator_vectors_sclopf
-        + f"indicator_vector_rocof_Co2L{co2_lvl}_n{n_nodes}.pklz",
+        + f"/indicator_vector_rocof_Co2L{co2_lvl}_n{n_nodes}.pklz",
         "rb",
     ) as fh_in:
         rocof_vecs = pickle.load(fh_in)
@@ -519,7 +519,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(
     if use_sclopf:
         path_to_cascade_results_file = (
             path_to_cascade_results_sclopf
-            + f"system_splits_Co2L{co2_lvl}_n{n_nodes}.pklz"
+            + f"/system_splits_Co2L{co2_lvl}_n{n_nodes}.pklz"
         )
     else:
         path_to_cascade_results_file = (
@@ -580,7 +580,7 @@ def find_failed_edge_indicator_vector_for_cascade_results(
 
     df_comp_props = pd.read_hdf(
         path_to_evaluation_results
-        + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
+        + f"/component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
         key="df",
     )
     df_comp_props_sorted = df_comp_props.sort_values(by=["time_stamp", "split_number"])
@@ -679,7 +679,7 @@ def sort_failed_edge_indicator_vector(
     else:
         path_to_cascade_results_file = (
             path_to_cascade_results_lopf
-            + f"system_splits_singlelinefailures_Co2L{co2_lvl}_n{n_nodes}_lopf.pklz"
+            + f"/system_splits_singlelinefailures_Co2L{co2_lvl}_n{n_nodes}_lopf.pklz"
         )
 
     with gzip.open(fpath_out_edge_base, "rb") as fh_out_edges:

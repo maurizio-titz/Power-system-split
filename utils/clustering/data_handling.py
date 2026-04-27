@@ -307,7 +307,7 @@ def get_path_to_clustering_dir(
 def split_mask(
     split_properties_df: pd.DataFrame,
     lost_load_share: float,
-    n_nodes: int = None,
+    n_nodes: int | None = None,
     ignore_shedding: bool = True,
 ):
     """create mask for filtering insignificant splits

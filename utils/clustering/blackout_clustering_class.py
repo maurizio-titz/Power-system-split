@@ -95,6 +95,7 @@ def _fit_clustering_worker(
     model.fit(distance_matrix, **fit_params)
 
     silhouette_avg = None
+    print("Silhouette Score: ")
     if calc_silhouette:
         from sklearn.metrics import silhouette_score
 
@@ -102,7 +103,7 @@ def _fit_clustering_worker(
         silhouette_avg = silhouette_score(
             distance_matrix, cluster_labels, metric="precomputed"
         )
-        print(f"Silhouette Score: {silhouette_avg:.4f}")
+        print(f"{silhouette_avg:.4f}", end=",")
 
     return model, silhouette_avg
 
@@ -653,6 +654,7 @@ class Clustering(object):
         model.fit(self.distance_matrix, **fit_params)
 
         silhouette_avg = None
+        print("Silhouette Score:")
         if calc_silhouette:
             from sklearn.metrics import silhouette_score
 
@@ -660,7 +662,7 @@ class Clustering(object):
             silhouette_avg = silhouette_score(
                 self.distance_matrix, cluster_labels, metric="precomputed"
             )
-            print(f"Silhouette Score: {silhouette_avg:.4f}")
+            print(f"{silhouette_avg:.4f}", end=",")
 
         return model, silhouette_avg
 
@@ -717,7 +719,8 @@ class Clustering(object):
                     fit_params,
                     calc_silhouette=calc_silhouette,
                 )
-                for params in tqdm(HP_params, desc=alg_name)
+                for params in tqdm(HP_params, desc=alg_name,
+                                   total=len(HP_params))
             )
 
             # Save each result with unique filename
@@ -776,8 +779,8 @@ class Clustering(object):
         with gzip.open(index_path, "wb") as f:
             pickle.dump(all_results, f)
 
-        print(f"\nSaved {len(all_results)} clustering results to {self.cluster_dir}")
-        print(f"Results index saved to: {index_path}")
+        logger.info(f"\nSaved {len(all_results)} clustering results to {self.cluster_dir}")
+        logger.info(f"Results index saved to: {index_path}")
 
     def create_clustering_results_index(self, overwrite: bool = True):
         """Create an index of all clustering results by scanning the cluster directory.
@@ -792,7 +795,7 @@ class Clustering(object):
 
         # Check if index exists and overwrite is False
         if os.path.exists(index_path) and not overwrite:
-            print(
+            logger.warning(
                 f"Index already exists at {index_path}. Use overwrite=True to recreate."
             )
             return self.load_clustering_results_index()
@@ -800,10 +803,10 @@ class Clustering(object):
         # Scan directory for result files
         all_results = []
         if not os.path.exists(self.cluster_dir):
-            print(f"Cluster directory does not exist: {self.cluster_dir}")
+            logger.warning(f"Cluster directory does not exist: {self.cluster_dir}")
             return all_results
 
-        print(f"Scanning {self.cluster_dir} for clustering results...")
+        logger.info(f"Scanning {self.cluster_dir} for clustering results...")
         for filename in os.listdir(self.cluster_dir):
             if (
                 filename.endswith(".pklz")
@@ -829,7 +832,7 @@ class Clustering(object):
 
                     all_results.append(result_info)
                 except Exception as e:
-                    print(f"Warning: Could not load {filename}: {e}")
+                    logger.warning(f"Warning: Could not load {filename}: {e}")
 
         # Save index using dedicated function
         self._save_clustering_results_index(all_results)
@@ -888,7 +891,8 @@ class Clustering(object):
             result_filename = self.clustering_result_filename
 
         create_clustering_analysis_plot(
-            clustering_res_full_path=os.path.join(self.cluster_dir, result_filename),
+            clustering_res_full_path=os.path.join(self.cluster_dir, 
+                                                  result_filename),
             plot_dir=self.plot_dir,
             **self.plotting_params,
             co2l_list=self.co2l_list,
@@ -899,9 +903,9 @@ class Clustering(object):
     def plot_cluster_multiple(
         self,
         result_filenames: List[str] = [],
-        n_best: int = None,
-        relative_score_threshold: float = None,
-        algorithm: str = None,
+        n_best: int | None = None,
+        relative_score_threshold: float | None= None,
+        algorithm: str | None = None,
         **plot_kwargs,
     ):
         """Plot multiple clustering results.

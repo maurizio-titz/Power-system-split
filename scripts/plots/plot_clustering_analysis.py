@@ -54,7 +54,7 @@ def load_clustering_data(
 ):
     """Load clustering data and network setup."""
     # Load network graph and node positions
-    snet_index = 0
+    snet_index = '0'
     network = data_handling.load_pypsa_network(0.6, n_nodes, True)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
     pos = nx.get_node_attributes(nx_graph, "pos")
@@ -396,7 +396,7 @@ def create_clustering_analysis_plot(
                 rf"\\"
                 rf"$R={round(centroid_row.lost_load_share*100, ndigits=1)}\%$"
                 rf"\\"
-                rf"$\beta={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100)}\%$"
+                rf"$\beta={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100, ndigits=1)}\%$"
             )
             # cluster_label = f"{plot_count}," rf"\\" f"test line2," rf"\\" f"test line3"
             ax.set_title(
@@ -543,8 +543,8 @@ def create_clustering_analysis_plot(
 
 
 def compute_centroids_from_clusters(
-    average_over_classes,
-    co2l_list,
+    average_over_classes: bool,
+    co2l_list: list[float],
     clustering_res_path,
     split_properties_filtered,
     weights_filtered,

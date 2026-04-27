@@ -1,3 +1,6 @@
+#!usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """calculate optimal inertia placement to reduce lost load due to RoCoF. Start with large step size delta_rot_ls and decrease it by a factor of 2 in each iteration. Throws an error the placement of inertia can not mitigate any loss of load (i.e. delta_rot_ls is too small push the RoCoF over -1 for any split component)."""
 
 import sys
