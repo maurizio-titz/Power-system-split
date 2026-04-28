@@ -4,6 +4,11 @@ configfile: "configs/config.yaml"
 
 import numpy as np
 import os
+import sys
+
+root_path = "../../"
+sys.path.append(root_path)
+
 
 group_size = int(config["groupsize"])
 temp_resolution = int(config["clustering"]["temporal"]["resolution_elec"].split("H")[0])
@@ -11,15 +16,14 @@ temp_resolution = int(config["clustering"]["temporal"]["resolution_elec"].split(
 N_ITER = str(int(np.ceil(8760 / temp_resolution / group_size))-1)
 NCLUSTERS = str(config["scenario"]["clusters"][0])
 
-base_repository_path = "../../../"
-export PYTHONPATH=str(base_repository_path):$PYTHONPATH
+# export PYTHONPATH=str(base_repository_path):$PYTHONPATH
 
 from utils.config import path_to_sclopf_data
 
 
 rule prepare_sclopf:
     input:
-        network = "submodules/pypsa-eur/" + s_max_pu_path + "results/networks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc",
+        network = "submodules/pypsa-eur/" + "results/networks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc",
         lookup = "data/np_lookup.csv"
     output: path_to_sclopf_data + f"prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc"
     resources: mem=4000

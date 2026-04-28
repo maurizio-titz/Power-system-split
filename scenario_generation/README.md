@@ -40,7 +40,7 @@ If runs before where terminated (e.g. by keyboard interupt), you need to use
 Install the necessary dependencies using `conda` or `mamba`:
 
     mamba env create -f submodules/pypsa-eur/envs/environment.fixed.yaml
-
+<!-- check if conda channels are all availible to your workstation -->
 Activate `pypsa-eur` environment:
 
     conda activate pypsa-eur
@@ -75,7 +75,7 @@ To create and solve all scenarios (all different Co2 Limits), switch to the PyPS
 
 and run the following command:
 
-    snakemake -call -j1 solve_elec_networks --configfile ../../configs/config.yaml 
+    snakemake -call -j1 solve_elec_networks --configfile ../../configs/config.yaml -F
 When running the scenarios the first time, one needs to set the `retrieve = true` and it is advised to increase the allowed latency using the `--latency-wait 20` flag.
 
 Please follow the documentation of PyPSA-Eur for more details.
