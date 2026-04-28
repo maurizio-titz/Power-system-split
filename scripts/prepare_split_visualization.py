@@ -161,7 +161,7 @@ else:
 
     for lvl in split_props["co2l"].unique():
         split_props_lvl = split_props[split_props["co2l"] == lvl]
-        split_props_lvl.to_csv(save_path + f"split_props_Co2L{lvl}_n{n_nodes}.csv")
+        split_props_lvl.to_csv(save_path + f"/split_props_Co2L{lvl}_n{n_nodes}.csv")
 
     split_props.to_hdf(split_props_fpath, key="df", mode="w")
 
