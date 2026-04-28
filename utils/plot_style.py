@@ -9,6 +9,8 @@ import matplotlib as mpl
 import numpy as np
 import os
 
+from loguru import logger
+
 
 # === FONT SIZES ===
 # Main text sizes
@@ -447,7 +449,7 @@ def save_figure(
             plt.close(fig)
 
         assert os.path.isfile(full_path), f"Failed to save figure: {full_path}"
-        print(f"Saved: {full_path}")
+        logger.info(f"Saved: {full_path}")
 
 
 def savefig_organized(fig, file_path, organize_plots=True, **savefig_kwargs):
@@ -492,7 +494,7 @@ def savefig_organized(fig, file_path, organize_plots=True, **savefig_kwargs):
 
     # Save figure
     fig.savefig(file_path, **savefig_kwargs)
-    print(f"Saved: {file_path}")
+    logger.info(f"Saved: {file_path}")
 
 
 # === UTILITY FUNCTIONS ===

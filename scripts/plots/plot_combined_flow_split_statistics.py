@@ -16,6 +16,10 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
+import logging
+import pypsa
+pypsa.network.io.logger.setLevel(logging.ERROR)
+
 sys.path.append("./")
 
 from utils.data_handling import get_actual_co2_level, get_co2_levels

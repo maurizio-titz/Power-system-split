@@ -17,6 +17,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pypsa
+from loguru import logger
+import logging
+pypsa.network.io.logger.setLevel(logging.ERROR)
 from matplotlib.collections import LineCollection
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from sklearn.decomposition import PCA
@@ -72,7 +75,7 @@ def _build_generation_matrix_from_network(network, node_order=None):
             network.storage_units_t.p.T.groupby(network.storage_units["bus"]).sum().T
         )
         generation_by_bus = generation_by_bus.add(storage_by_bus, fill_value=0.0)
-        print("Included storage dispatch in generation matrix.")
+        logger.info("Included storage dispatch in generation matrix.")
 
     if node_order is None:
         node_order = list(generation_by_bus.columns)

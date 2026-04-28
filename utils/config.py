@@ -12,7 +12,7 @@ use_extensions = False  # legacy, do not use
 root_path = project_folder_path
 
 data_path = root_path + "/data"
-path_to_grid_data = root_path + "/grid_params"
+path_to_grid_data = root_path + "/results/grid_params"
 results_path = root_path + "/results"
 path_to_sclopf_data = data_path + "/European_networks_sclopf"
 path_to_lopf_data = data_path + "/European_networks_lopf"

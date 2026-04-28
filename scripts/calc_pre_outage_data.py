@@ -10,6 +10,8 @@ import networkx as nx
 import numpy as np
 from shapely.geometry import Point
 
+from loguru import logger
+
 from utils.data_handling import get_co2_levels
 from utils import data_handling, subgraph_evaluation
 from utils.config import (
@@ -24,9 +26,9 @@ n_nodes = 600
 co2l_list = get_co2_levels(n_nodes)
 use_sclopf = True
 
-print(f"n_nodes: {n_nodes}")
-print(f"use_sclopf: {use_sclopf}")
-print(f"co2l_list: {co2l_list}")
+logger.info(f"n_nodes: {n_nodes}")
+logger.info(f"use_sclopf: {use_sclopf}")
+logger.info(f"co2l_list: {co2l_list}")
 
 path_to_pre_outage = path_to_pre_outage_sclopf
 path_to_pypsa_network = path_to_pypsa_network_sclopf
@@ -76,21 +78,21 @@ for i, co2l in enumerate(co2l_list):
             nodal_inertia_min_max[i, t_count, nodecount] = obs[0, 0] + load_inertia
 
 inertia_time_series_file_path = (
-    path_to_pre_outage + f"inertia_time_series_all_co2ls_{n_nodes}.npy"
+    path_to_pre_outage + f"/inertia_time_series_all_co2ls_{n_nodes}.npy"
 )
 np.save(
     inertia_time_series_file_path,
     inertia_time_series,
 )
-print(f"Saved inertia time series to {inertia_time_series_file_path}")
+logger.info(f"Saved inertia time series to {inertia_time_series_file_path}")
 nodal_inertia_min_max_file_path = (
-    path_to_pre_outage + f"min_max_nodal_inertia_generation_all_co2ls_{n_nodes}.npy"
+    path_to_pre_outage + f"/min_max_nodal_inertia_generation_all_co2ls_{n_nodes}.npy"
 )
 np.save(
     nodal_inertia_min_max_file_path,
     nodal_inertia_min_max,
 )
-print(f"Saved min/max nodal inertia generation to {nodal_inertia_min_max_file_path}")
+logger.info(f"Saved min/max nodal inertia generation to {nodal_inertia_min_max_file_path}")
 
 
 # #### Calculate dipole vectors #### not used in the publication, but can be used for further analysis of the spatial power inhomogeneity
@@ -150,20 +152,20 @@ print(f"Saved min/max nodal inertia generation to {nodal_inertia_min_max_file_pa
 #             raise ValueError("SPI coordinates are not valid!")
 
 # np.save(
-#     path_to_pre_outage + f"dipole_vector_time_series_all_co2ls_{n_nodes}.npy",
+#     path_to_pre_outage + f"/dipole_vector_time_series_all_co2ls_{n_nodes}.npy",
 #     dipole_vector,
 # )
 # np.save(
-#     path_to_pre_outage + f"mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
+#     path_to_pre_outage + f"/mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
 #     mean_consumption_vector,
 # )
 # np.save(
-#     path_to_pre_outage + f"weighted_mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
+#     path_to_pre_outage + f"/weighted_mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
 #     weighted_mean_consumption_vector,
 # )
 # np.save(
 #     path_to_pre_outage
-#     + f"graph_net_power_mismatch_time_series_all_co2ls_{n_nodes}.npy",
+#     + f"/graph_net_power_mismatch_time_series_all_co2ls_{n_nodes}.npy",
 #     graph_net_mismatch,
 # )
 
@@ -173,7 +175,7 @@ print(f"Saved min/max nodal inertia generation to {nodal_inertia_min_max_file_pa
 # # We then evaluate the geodesic distance between the mean position (given in logitude and latitude)
 # # and the end point of the rescaled spi vector)
 
-# print("\nCalculate spatial power inhomogeneity...")
+# logger.info("\nCalculate spatial power inhomogeneity...")
 # vec_norm = np.zeros((len(co2l_list), len(network.snapshots)))
 # positions = np.array([pos[n] for n in nx_graph.nodes()])
 # mean_pos = np.array([np.mean(positions[:, 0]), np.mean(positions[:, 1])])
@@ -190,7 +192,7 @@ print(f"Saved min/max nodal inertia generation to {nodal_inertia_min_max_file_pa
 #         vec_norm[i, j] = distance
 #         if np.any(np.isnan(vec_norm)):
 #             raise ValueError("SPI coordinates are not valid!")
-# np.save(path_to_pre_outage + f"spi_time_series_all_co2ls_{n_nodes}.npy", vec_norm)
+# np.save(path_to_pre_outage + f"/spi_time_series_all_co2ls_{n_nodes}.npy", vec_norm)
 
 
 #### get actual co2 emission lvls ####
@@ -446,7 +448,7 @@ plt.ylabel("calculated emissions")
 
 
 for cx, Co2l in enumerate(Co2_scenarios):
-    print(
+    logger.info(
         f"{Co2l}: Actual CO2lvl: {emission_by_co2l.values[cx]/CO2_global.values[cx]*float(Co2l)*100}"
     )
 

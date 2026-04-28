@@ -88,7 +88,7 @@ def save_networkx_graph(graph, snet_index: str | None =None, co2lvl=None, overwr
 
 def build_networkx_graph(
     pypsa_network,
-    snet_index: str  | None = None,
+    snet_index: str | None = None,
     assert_order: bool = True,
     inplace: bool = False,
     update_lines: bool = False,
@@ -680,7 +680,7 @@ def get_actual_co2_level(lvls, n_nodes=600, percent=False):
     from utils.config import path_to_sclopf_results
 
     lvls_actual = (
-        pd.read_csv(path_to_sclopf_results + "actual_co2_levels.csv", index_col=0)
+        pd.read_csv(path_to_sclopf_results + "/actual_co2_levels.csv", index_col=0)
         .loc[lvls]
         .values.squeeze()
     )
