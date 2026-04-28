@@ -11,7 +11,9 @@ import networkx as nx
 
 sys.path.append("./")
 
-import warnings
+import logging
+import pypsa
+pypsa.network.io.logger.setLevel(logging.ERROR)
 
 from loguru import logger
 from tqdm import tqdm
@@ -68,7 +70,7 @@ for co2l in pbar:
     n_2_failures = cascade_simulation.calc_possible_double_line_failures(
         num_parallels, ignored_idxs=bridge_idxs
     )
-    file_path = data_handling.path_to_grid_data + f"n_2_failures_co2lvl{co2l}.pklz"
+    file_path = data_handling.path_to_grid_data + f"/n_2_failures_co2lvl{co2l}.pklz"
     with gzip.open(file_path, "wb") as fh:
         pickle.dump(n_2_failures, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
