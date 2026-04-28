@@ -406,9 +406,11 @@ def create_combined_flow_and_split_statistics_plot(
             )
         )
     else:
-        ax1_imbalance.set_xlabel("Power imbalance [GW]", fontsize=AXIS_LABEL_FONTSIZE)
+        ax1_imbalance.set_xlabel("Power imbalance [GW]", 
+                                 fontsize=AXIS_LABEL_FONTSIZE)
 
-    ax1_imbalance.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    ax1_imbalance.tick_params(axis="both", which="both", 
+                              labelsize=TICK_LABEL_FONTSIZE)
 
     h, l = ax2_inertia.get_legend_handles_labels()
     handles = [Line2D([], [], color="none")] + h[::-1]
