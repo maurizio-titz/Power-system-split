@@ -1,4 +1,9 @@
-"""this module analyses the blackout clusters. Especially, it investigates which nodes have an overfrequency blackout and what carrier was dominant before the blackout."""
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""this module analyses the blackout clusters. 
+Especially, it investigates which nodes have an overfrequency blackout 
+and what carrier was dominant before the blackout."""
 
 # %%
 import gzip
@@ -199,7 +204,7 @@ for cluster_number in [11, 12]:
     co2l = 0.0
     fpath_component_in = (
         config.path_to_evaluation_results_sclopf
-        + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
+        + f"/component_properties_Co2L{co2l}_n{n_nodes}.h5"
     )
     component_df = pd.read_hdf(fpath_component_in, key="df")
     props_clust_lvl = props_clust[props_clust.index.get_level_values("co2l") == co2l]
@@ -294,7 +299,7 @@ for cluster_number in [11, 12]:
     inertia_time = (
         np.load(
             config.path_to_pre_outage_sclopf
-            + f"inertia_time_series_all_co2ls_{n_nodes}.npy"
+            + f"/inertia_time_series_all_co2ls_{n_nodes}.npy"
         )
         / 1000
     )[-1, :]
