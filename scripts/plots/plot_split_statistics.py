@@ -44,7 +44,9 @@ from utils.plot_style import (
 
 
 def create_split_statistics_plot(
-    load_normalization=False, show_blackout_stats=True, secondary_proba_axis=False
+    load_normalization=False, 
+    show_blackout_stats=True, 
+    secondary_proba_axis=False
 ):
     """Create split statistics plot.
 
@@ -67,7 +69,7 @@ def create_split_statistics_plot(
         + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index='0')
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
         nx_graph
     )
@@ -91,7 +93,7 @@ def create_split_statistics_plot(
     component_props.time_stamp = pd.to_datetime(component_props.time_stamp)
 
     split_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
     )
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
@@ -402,7 +404,7 @@ def create_blackout_statistics_plot(
 
     # Load split properties
     split_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
     )
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
@@ -443,7 +445,7 @@ def create_blackout_statistics_plot(
         data.append(counts)
         if normalize_by_total_splits:
             file_path = (
-                data_handling.path_to_grid_data + f"n_2_failures_co2lvl{co2l}.pklz"
+                data_handling.path_to_grid_data + f"/n_2_failures_co2lvl{co2l}.pklz"
             )
             with gzip.open(file_path, "rb") as fh:
                 n_2_failures = pickle.load(fh)
@@ -551,7 +553,7 @@ def plot_blackout_size_histograms(
     # load split properties
     n_nodes = 600
     split_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
     )
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
@@ -666,7 +668,7 @@ def plot_component_number_vs_blackout_size(
 ):
     if split_properties is None:
         split_properties = pd.read_hdf(
-            path_to_vis_results_sclopf + f"split_properties_all_n600.h5", index_col=0
+            path_to_vis_results_sclopf + f"/split_properties_all_n600.h5", index_col=0
         )
     lls = split_properties["lost_load_share_blackout"].to_numpy() * 100
     n_comp = split_properties["n_components"].to_numpy()

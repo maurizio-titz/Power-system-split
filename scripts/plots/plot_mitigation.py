@@ -302,7 +302,7 @@ def calculate_line_extension(
                     remaining_splits.total_weighting.sum()
                 )
 
-            with open(path_to_line_extension_mitigation_sclopf + f_name, "wb") as f:
+            with open(os.path.join(path_to_line_extension_mitigation_sclopf, f_name), "wb") as f:
                 pickle.dump(
                     (
                         reinforced_lines,
@@ -380,10 +380,10 @@ def create_combined_mitigation_plot(
     # Load network
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.6-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.6-2920SEG.nc",
         True,
     )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index='0')
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
         nx_graph
     )
@@ -392,7 +392,7 @@ def create_combined_mitigation_plot(
     # Get CO2 levels and split properties
     co2ls = get_co2_levels(n_nodes)
     split_properties = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
     )
 
     # Reference levels and setup
@@ -413,7 +413,7 @@ def create_combined_mitigation_plot(
         inertia_time = (
             np.load(
                 path_to_pre_outage_sclopf
-                + f"inertia_time_series_all_co2ls_{n_nodes}.npy"
+                + f"/inertia_time_series_all_co2ls_{n_nodes}.npy"
             )
             / 1000
         )
@@ -421,7 +421,7 @@ def create_combined_mitigation_plot(
         median_inertia_ref = np.median(inertia_time[ind, :])
 
         # try loading results
-        fname = f"inertia_placement_results_refLoss_allCo2lvls_n{n_nodes}_{target}_blackoutthres{blackoutthreshold}.pkl"
+        fname = f"/inertia_placement_results_refLoss_allCo2lvls_n{n_nodes}_{target}_blackoutthres{blackoutthreshold}.pkl"
         try:
             with gzip.open(
                 path_to_inertia_mitigation_results_sclopf + fname,
@@ -530,7 +530,7 @@ def create_combined_mitigation_plot(
             try:
                 reinforced_lines, post_mitigation_value, num_blackouts, cost = (
                     pickle.load(
-                        open(path_to_line_extension_mitigation_sclopf + f_name, "rb")
+                        open(os.path.join(path_to_line_extension_mitigation_sclopf, f_name), "rb")
                     )
                 )
             except FileNotFoundError as e:
@@ -775,7 +775,7 @@ def create_combined_mitigation_plot(
         )
 
         reinforced_lines, loss_with_mitigation, num_blackouts, cost = pickle.load(
-            open(path_to_line_extension_mitigation_sclopf + f_name, "rb")
+            open(os.path.join(path_to_line_extension_mitigation_sclopf, f_name), "rb")
         )
         if target == "num_GSS":
             post_mitigation_value = num_blackouts

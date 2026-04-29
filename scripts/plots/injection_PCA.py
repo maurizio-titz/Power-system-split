@@ -18,8 +18,7 @@ import numpy as np
 import pandas as pd
 import pypsa
 from loguru import logger
-import logging
-pypsa.network.io.logger.setLevel(logging.ERROR)
+
 from matplotlib.collections import LineCollection
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from sklearn.decomposition import PCA
@@ -229,11 +228,11 @@ def create_injection_pca_plot(n_nodes=600, node_data="effective_injections"):
 
 
 def create_injection_pca_component_profiles_plot(
-    n_nodes=600,
-    n_components=5,
-    snet_index=0,
-    rolling_days=14,
-    node_data="effective_injections",
+    n_nodes: int = 600,
+    n_components: int = 5,
+    snet_index: str = '0',
+    rolling_days: int = 14,
+    node_data: str = "effective_injections",
 ):
     """Create grid plot with one row per CO2 level and one column per PCA component.
 

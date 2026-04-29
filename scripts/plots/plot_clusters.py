@@ -11,6 +11,8 @@ from utils.clustering.blackout_clustering_class import Clustering
 from utils.clustering.distance_metrics import geometric_mean
 from hdbscan import HDBSCAN
 
+from loguru import logger
+
 from scripts.cluster_blackouts import (
     distance_metric_kwargs,
     clustering_params,
@@ -18,6 +20,7 @@ from scripts.cluster_blackouts import (
 
 n_nodes = 600
 co2l_iter = list(get_co2_levels(n_nodes))
+logger.info(f"Cluster plots for {co2l_iter}")
 cl = Clustering(
     n_nodes,
     co2l_iter,
@@ -29,11 +32,13 @@ cl = Clustering(
     distance_matrix_dtype=np.float16,
 )
 # %%
+logger.info("Loading data")
 cl.load_data()
 cl.transform_vectors()
 cl.filter_data()
 cl.create_clustering_results_index()
 # %%
+logger.info("Plotting multiple clusters ordered by occurence")
 cl.plot_cluster_multiple(
     # relative_score_threshold=0.1,
     n_best=4,
@@ -42,6 +47,7 @@ cl.plot_cluster_multiple(
     sort_by="frequency",
 )
 # %%
+logger.info("Plotting multiple clusters ordered by accum. lost load")
 cl.plot_cluster_multiple(
     n_best=4,
     # relative_score_threshold=0.1,

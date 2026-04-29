@@ -16,6 +16,11 @@ import pypsa
 from scipy import sparse
 import re
 
+# Logging
+import logging
+pypsa.network.io.logger.setLevel(logging.ERROR)
+from loguru import logger
+
 from utils.cascade_simulation import (
     remove_highest_volt_lvl_circuit,
     line_type_num_parallels,

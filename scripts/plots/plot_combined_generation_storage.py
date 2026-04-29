@@ -16,6 +16,10 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import pypsa
+
+# Logging
+from loguru import logger
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.colors as mplcolors
@@ -403,7 +407,7 @@ def create_combined_generation_storage_plot(plot_battery_power=False):
     carrier_mask = max_carrier_share > plot_generator_type_threshold
     carrier_mask["OCGT"] = True  # keep gas carriers, add them together later
     dropped_carriers = carrier_mask[~carrier_mask].index
-    print(f"Dropping {len(dropped_carriers)} carriers: {dropped_carriers}")
+    logger.info(f"Dropping {len(dropped_carriers)} carriers: {dropped_carriers}")
     generation_by_carrier_and_co2l = generation_by_carrier_and_co2l[carrier_mask]
 
     target_levels = [0.6, 0.0]
@@ -692,7 +696,7 @@ def create_combined_generation_storage_plot(plot_battery_power=False):
 
     for target_level in co2ls:
         n = networks[target_level]
-        print(f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{target_level}-2920SEG.nc")
+        logger.info(f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{target_level}-2920SEG.nc")
         storage_capacities_all_lvl = pd.Series(index=multi_index, data=0)
         storage_capacities_lvl = n.storage_units.max_hours * n.storage_units.p_nom
         if plot_output_capacity:
@@ -841,7 +845,7 @@ def create_generation_capacity_plot(show_pie_charts=False):
     carrier_mask[carrier_mask.index.str.contains("load", case=False)] = False
     carrier_mask["OCGT"] = True  # keep gas carriers, add them together later
     dropped_carriers = carrier_mask[~carrier_mask].index
-    print(f"Dropping {len(dropped_carriers)} carriers: {dropped_carriers}")
+    logger.info(f"Dropping {len(dropped_carriers)} carriers: {dropped_carriers}")
     filtered_carriers = capacity_by_carrier_and_co2l[carrier_mask].index.tolist()
 
     # Setup colors same as example
@@ -903,7 +907,7 @@ def create_generation_capacity_plot(show_pie_charts=False):
         )
 
         # Plot
-        n.plot(
+        n.plot.map(
             bus_sizes=capacity_by_bus_carrier / 5e4,  # Adjust scaling factor
             line_colors="black",
             link_colors="black",

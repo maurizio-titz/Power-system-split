@@ -16,10 +16,6 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
-import logging
-import pypsa
-pypsa.network.io.logger.setLevel(logging.ERROR)
-
 sys.path.append("./")
 
 from utils.data_handling import get_actual_co2_level, get_co2_levels
@@ -59,7 +55,7 @@ def create_combined_flow_and_split_statistics_plot(
         + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index='0')
 
     co2ls = get_co2_levels(n_nodes)
     networks = {

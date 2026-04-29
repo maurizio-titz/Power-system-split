@@ -21,6 +21,12 @@ import matplotlib as mpl
 import matplotlib.colors as mplcolors
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
+# Logging
+from loguru import logger
+import logging
+import pypsa
+pypsa.network.io.logger.setLevel(logging.ERROR)
+
 sys.path.append("./")
 
 from utils.data_handling import get_actual_co2_level, get_co2_levels
@@ -148,7 +154,7 @@ def create_line_failure_plot_linear():
     # Load network
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
@@ -162,14 +168,14 @@ def create_line_failure_plot_linear():
     edge_likelihoods_primary = pickle.load(
         open(
             path_to_vis_results_sclopf
-            + f"edge_likelihoods_primary_all_co2ls_n{n_nodes}.pickle",
+            + f"/edge_likelihoods_primary_all_co2ls_n{n_nodes}.pickle",
             "rb",
         )
     )
     edge_likelihoods_secondary = pickle.load(
         open(
             path_to_vis_results_sclopf
-            + f"edge_likelihoods_secondary_all_co2ls_n{n_nodes}.pickle",
+            + f"/edge_likelihoods_secondary_all_co2ls_n{n_nodes}.pickle",
             "rb",
         )
     )
@@ -515,7 +521,7 @@ def create_total_line_failure_plot(
     # Load network
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
@@ -529,7 +535,7 @@ def create_total_line_failure_plot(
     edge_likelihoods = pickle.load(
         open(
             path_to_vis_results_sclopf
-            + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
+            + f"/edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
             "rb",
         )
     )
@@ -741,7 +747,7 @@ def create_cross_border_vulnerability_plots(
 
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
@@ -760,7 +766,7 @@ def create_cross_border_vulnerability_plots(
     edge_likelihoods = pickle.load(
         open(
             path_to_vis_results_sclopf
-            + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
+            + f"/edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
             "rb",
         )
     )
@@ -878,7 +884,7 @@ if __name__ == "__main__":
         save_path = path_to_figures_sclopf
         network = data_handling.load_pypsa_network_from_path(
             path_to_pypsa_network_sclopf
-            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+            + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
             True,
         )
         nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
@@ -886,7 +892,7 @@ if __name__ == "__main__":
         edge_likelihoods_total = pickle.load(
             open(
                 path_to_vis_results_sclopf
-                + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
+                + f"/edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle",
                 "rb",
             )
         )

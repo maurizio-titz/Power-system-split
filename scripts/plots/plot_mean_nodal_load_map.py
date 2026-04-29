@@ -91,7 +91,8 @@ def create_mean_nodal_load_map(n_nodes=600, co2l=0.0):
     ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
 
     fig.tight_layout()
-    save_figure(fig, f"mean_nodal_load_map_co2l{co2l}", save_path)
+    save_figure(fig, f"mean_nodal_load_map_co2l{co2l}", save_path,
+                organize_plots=False)
     plt.show()
 
 

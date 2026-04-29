@@ -17,7 +17,6 @@ import copy
 
 from tqdm import tqdm
 
-
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -29,6 +28,8 @@ import matplotlib as mpl
 import matplotlib.colors as mplcolors
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from sklearn.metrics import silhouette_score
+
+from loguru import logger
 
 # Add project root to path
 root_path = "./"
@@ -216,7 +217,7 @@ def create_clustering_analysis_plot(
     """
 
     # Load data
-    print("Loading clustering data...")
+    logger.info("Loading clustering data...")
     data = load_clustering_data(n_nodes=n_nodes)
     nx_graph = data["nx_graph"]
     pos = data["pos"]
@@ -225,13 +226,13 @@ def create_clustering_analysis_plot(
     fname = os.path.basename(clustering_res_full_path)
 
     # Find and load clustering results
-    print("Loading clustering results...")
+    logger.info("Loading clustering results...")
     if not fname:
         fname = find_best_clustering_file(cluster_res_dir, alg_filter)
-    print(f"Using clustering file: {fname}")
+    logger.info(f"Using clustering file: {fname}")
     clustering_res_path = os.path.join(cluster_res_dir, fname)
 
-    print("Loading processed data...")
+    logger.info("Loading processed data...")
     processed_data = load_processed_data(cluster_res_dir + "../data/", n_nodes)
     split_properties_filtered = processed_data["split_properties_filtered"]
     weights_filtered = split_properties_filtered.total_weighting
@@ -257,9 +258,9 @@ def create_clustering_analysis_plot(
         centroids_df = centroid_res["centroids_df"]
         centroids = centroid_res["centroids"]
         edge_centroids = centroid_res["edge_centroids"]
-        print("Loaded pre-computed centroids from disk.")
+        logger.info("Loaded pre-computed centroids from disk.")
     except FileNotFoundError:
-        print("Computing centroids from clusters...")
+        logger.info("Computing centroids from clusters...")
         (
             weights,
             split_lost_load,
@@ -287,7 +288,7 @@ def create_clustering_analysis_plot(
         raise ValueError("sort_by must be 'frequency' or 'accumulative_lost_load'")
 
     # === CREATE THE PLOT ===
-    print("Creating visualization...")
+    logger.info("Creating visualization...")
 
     # Plot parameters
     ncols = 4
@@ -333,7 +334,7 @@ def create_clustering_analysis_plot(
     plot_count = 0
     df_iter = centroids_df.iterrows()
 
-    print(f"Plotting top {n_subplots} clusters...")
+    logger.info(f"Plotting top {n_subplots} clusters...")
     # Plot clusters
     for row in range(n_rows):
         if plot_count >= n_subplots:
@@ -537,7 +538,7 @@ def create_clustering_analysis_plot(
     if fname:
         save_name += f"_{fname.replace('.pklz','')}"
     save_figure(fig, save_name, plot_dir)
-    print(f"Plot saved to: {os.path.join(plot_dir, f'{save_name}.pdf')}")
+    logger.info(f"Plot saved to: {os.path.join(plot_dir, f'{save_name}.pdf')}")
 
     return fig
 
@@ -552,7 +553,7 @@ def compute_centroids_from_clusters(
     failed_edges_indicator_vectors_filtered,
 ):
     weights = weights_filtered.values
-    print("total weighted number of events:", weights.sum())
+    logger.info("total weighted number of events:", weights.sum())
     blackout_vectors_filtered = np.concatenate(
         [
             blackout_vectors_filtered_dict[co2l]
@@ -572,13 +573,13 @@ def compute_centroids_from_clusters(
     if not os.path.exists(group_masks_path):
         raise FileNotFoundError(f"Required file not found: {group_masks_path}")
 
-    print("Processing clustering results...")
+    logger.info("Processing clustering results...")
     # Load clustering results
     with gzip.open(clustering_res_path, "rb") as f:
         clustering_res = pickle.load(f)["model"]
 
     labels_all = np.load(labels_all_path, allow_pickle=True)
-    print(f"{clustering_res.labels_.shape[0]} unique blackouts.")
+    logger.info(f"{clustering_res.labels_.shape[0]} unique blackouts.")
 
     with gzip.open(group_masks_path, "rb") as f:
         group_masks = pickle.load(f)

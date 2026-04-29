@@ -14,6 +14,8 @@ import pandas as pd
 
 from utils import config
 
+from loguru import logger
+
 
 matplotlib.rcParams["pgf.texsystem"] = "pdflatex"
 matplotlib.rcParams.update(
@@ -215,7 +217,7 @@ def plot_map_inertia_placement_final(
 
     # Load graph
     pypsa_net = data_handling.load_pypsa_network(co2_lvl, nn, use_sclopf)
-    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index='0')
     pos_nodes = networkx.get_node_attributes(nx_graph, "pos")
 
     # Load synthetic inertia placement
@@ -249,7 +251,8 @@ def plot_map_inertia_placement_final(
             fpath_in = path_to_inertia_mitigation_results + fnames_lvl[0]
         else:
             raise FileNotFoundError(
-                f"No unique inertia placement results for CO2 level {co2_lvl} found. {len(fnames_lvl)} files found. Skipping."
+                f"No unique inertia placement results for CO2 level {co2_lvl} found. " + 
+                f"{len(fnames_lvl)} files found. Skipping."
             )
     with gzip.open(fpath_in) as fh_in:
         (
@@ -264,7 +267,7 @@ def plot_map_inertia_placement_final(
     # correcting delta_Erot factor if saved with different one
     delta_Erot_saved = int(fpath_in.split("deltarotE")[1].split("_rocofthres")[0])
     if delta_Erot_saved != delta_Erot:
-        print("Correcting delta_Erot factor from", delta_Erot, "to", delta_Erot_saved)
+        logger.info("Correcting delta_Erot factor from", delta_Erot, "to", delta_Erot_saved)
         delta_Erot = delta_Erot_saved
 
     inertia_placed_res_arr = np.array(inertia_placed_ls)
@@ -303,7 +306,7 @@ def plot_map_inertia_placement_final(
     for indi_idx_r, indi_count_r in inertia_node_idx[:idx_reached_target, :]:
         inertia_placements_by_node[int(indi_idx_r)] += indi_count_r
     inertia_in_map_plot = np.sum(inertia_placements_by_node) * delta_Erot
-    print("inertia placed in map: ", inertia_in_map_plot)
+    logger.info(f"inertia placed in map: {inertia_in_map_plot}")
 
     # Plot graph
     if axes is None:
@@ -331,6 +334,7 @@ def plot_map_inertia_placement_final(
 
     ## Plot mitigated lost load and remaining lost splits over time
     if plot_curve:
+        # TODO should this have "new". Is this the new function?
         plot_inertia_loss_mitigation_curve(
             resolve_strategy,
             co2_lvl,
@@ -535,7 +539,7 @@ def plot_map_inertia_placement_new(
 
     # Load graph
     pypsa_net = data_handling.load_pypsa_network(co2_lvl, nn, use_sclopf)
-    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index='0')
     pos_nodes = networkx.get_node_attributes(nx_graph, "pos")
 
     inertia_placed = res_tuple[2]
@@ -761,17 +765,17 @@ def plot_map_inertia_placement(
     # Load graph
     fpath_pypsa = (
         path_to_pypsa_network_sclopf
-        + "sclopf-elec_s_"
+        + "/sclopf-elec_s_"
         + f"{nn}_ec_lv1.0_Co2L{co2_lvl}-2920SEG.nc"
     )
     pypsa_net = data_handling.load_pypsa_network_from_path(fpath_pypsa, use_sclopf=True)
-    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index='0')
     pos_nodes = networkx.get_node_attributes(nx_graph, "pos")
 
     # Load synthetic inertia placement
     fpath_in = (
         path_to_inertia_mitigation_results_sclopf
-        + f"synthetic_inertia_placement_Co2{co2_lvl:g}"
+        + f"/synthetic_inertia_placement_Co2{co2_lvl:g}"
         + f"_N{nn}_deltarotE{delta_Erot:g}_rocofthres-1.00"
         + f"_lshare0.00_maxiter{max_iter}_{resolve_strategy}.pklz"
     )
@@ -1086,7 +1090,7 @@ def calc_inertia_placement_ref_loss(
         ).sum() * ref_loss_factor
         component_properties = pd.read_hdf(
             config.path_to_vis_results_sclopf
-            + f"component_properties_all_n{n_nodes}.h5",
+            + f"/component_properties_all_n{n_nodes}.h5",
             index_col=0,
         )
     elif target == "lost_load_GSS":
@@ -1101,7 +1105,7 @@ def calc_inertia_placement_ref_loss(
         ).sum()
         component_properties = pd.read_hdf(
             config.path_to_vis_results_sclopf
-            + f"component_properties_all_n{n_nodes}.h5",
+            + f"/component_properties_all_n{n_nodes}.h5",
             index_col=0,
         )
     else:
@@ -1229,7 +1233,7 @@ def load_inertia_placement_results(
 ):
     fpath_in = (
         path_to_inertia_mitigation_results
-        + f"synthetic_inertia_placement_Co2{co2_lvl:g}"
+        + f"/synthetic_inertia_placement_Co2{co2_lvl:g}"
         + f"_N{n_nodes}_deltarotE{delta_Erot:g}_rocofthres{rocof_thres:g}"
         + f"_lshare{l_share:g}_maxiter{max_iter}_{resolve_strategy}.pklz"
     )
@@ -1245,9 +1249,10 @@ def load_inertia_placement_results(
                 f for f in fnames_lvl if "blackoutthres" not in f
             ]  # select only files without blackout threshold
         if len(fnames_lvl) == 1:
-            fpath_in = path_to_inertia_mitigation_results + fnames_lvl[0]
+            fpath_in = os.path.join(path_to_inertia_mitigation_results, fnames_lvl[0])
 
         else:
+            logger.error(fpath_in)
             raise FileNotFoundError(
                 f"No unique inertia placement results for CO2 level {co2_lvl} found. Skipping."
             )
@@ -1602,7 +1607,7 @@ def plot_most_likely_lines_on_map(savefig=True):
         path_to_pypsa_network_sclopf + "sclopf-elec_s_400_ec_lv1.0_Co2L0.1-2920SEG.nc",
         use_sclopf=True,
     )
-    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(pypsa_net, snet_index='0')
 
     # Load file
     path_out = (
