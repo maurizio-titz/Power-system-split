@@ -15,6 +15,8 @@ from utils.clustering.blackout_clustering_class import Clustering
 from utils.clustering.distance_metrics import geometric_mean
 from hdbscan import HDBSCAN
 
+from loguru import logger
+
 
 # Module-level worker function for parallel clustering (must be at top level for pickling)
 def _fit_clustering_worker_script(
@@ -162,12 +164,19 @@ if __name__ == "__main__":
             random_subsample_size=random_subsample_size,
             clustering_worker_func=_fit_clustering_worker_script,  # Use script-level worker for pickling
         )
+        
         cl.load_data()
+        logger.info("Loaded data")
         cl.transform_vectors()
+        logger.info("Transformed Vectors")
         cl.filter_data()
+        logger.info("filtered data")
         cl.get_distance_matrix()
+        logger.info("go dist matrix")
         cl.fit_clusters()
+        logger.info("fitted clusters")
         cl.create_clustering_results_index()
+        logger.info("created index")
         cl.plot_cluster_multiple(
             # relative_score_threshold=0.1,
             n_best=4,
