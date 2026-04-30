@@ -60,8 +60,8 @@ def _fit_clustering_worker_script(
     return model, silhouette_avg
 
 
-n_jobs_distance = 32
-n_jobs_clustering = 32
+n_jobs_distance = 16
+n_jobs_clustering = 16
 distance_metric_kwargs = {
     "name": "composite",
     "metrics": [
@@ -84,8 +84,8 @@ distance_metric_kwargs = {
     "cache_components": True,
 }
 
-n_clusters_list = np.arange(32, 1025, step=32).tolist()
-# n_clusters_list = [16, 32, 64, 80]
+#n_clusters_list = np.arange(32, 1025, step=32).tolist()
+n_clusters_list = [16, 32, 64, 80]
 clustering_params = {
     "agg": {
         "n_iter": 1e4,

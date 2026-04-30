@@ -25,7 +25,13 @@ def plot_all_figures(also_supplementary_figures: bool=False):
     
     
     # Fig. 4: Conditional probability of transmission lines participating in casc. failures
-    create_total_line_failure_plot()
+    create_total_line_failure_plot(
+        unified_colorbar=True,
+        powernorm=False,
+        scale_width=True,
+        width_scale_sqrt=True,
+        cmap="crameri:Batlow_r"
+    )
     
     # Fig. 5: Mitigation of split-induced blackouts via inertia and grid reinforcements
     create_combined_mitigation_plot(use_annualized_costs=True,
