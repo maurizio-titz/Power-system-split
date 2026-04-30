@@ -224,6 +224,7 @@ def setup_matplotlib_style():
 
 def setup_colormap_scientific_notation(colorbar, power_limits=(-3, -3)):
     """Format colorbar with scientific notation."""
+    
     colorbar.ax.ticklabel_format(style="scientific", axis="y", scilimits=power_limits)
     colorbar.ax.tick_params(labelsize=COLORBAR_TICK_FONTSIZE, width=1.0, which="both")
 
