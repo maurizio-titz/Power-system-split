@@ -634,7 +634,7 @@ def load_split_props(n_nodes: int, co2l=None, use_sclopf: bool = True):
 
     assert isinstance(n_nodes, int), "n_nodes must be an integer"
     # load hdf pandas
-    split_properties = pd.read_hdf(load_dir + f"split_properties_all_n{n_nodes}.h5")
+    split_properties = pd.read_hdf(load_dir + f"/split_properties_all_n{n_nodes}.h5")
     split_properties["lost_load_share_blackout"] = split_properties[
         "lost_load_share_blackout"
     ].astype(float)

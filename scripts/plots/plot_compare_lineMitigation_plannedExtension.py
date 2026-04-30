@@ -135,7 +135,7 @@ def extract_planned_line_extensions(
     os.makedirs(path_to_line_extension_mitigation_sclopf, exist_ok=True)
 
     split_properties = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5",
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5",
         index_col=0,
     )
     split_properties["lost_load_share_blackout"] = split_properties[
@@ -151,7 +151,7 @@ def extract_planned_line_extensions(
 
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_ref}-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_ref}-2920SEG.nc",
         True,
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
@@ -253,7 +253,7 @@ def plot_planned_line_extensions(
 
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_ref}-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_ref}-2920SEG.nc",
         True,
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
@@ -341,7 +341,7 @@ def plot_planned_line_extensions_single_co2(
 
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_ref}-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_ref}-2920SEG.nc",
         True,
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
