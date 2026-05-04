@@ -547,6 +547,77 @@ def create_blackout_statistics_plot(
     plt.show()
 
 
+def ax_blackout_size_histogram(ax, 
+                               split_props_df: pd.DataFrame, 
+                               co2lvl: float, 
+                               n_bins: int = 100,
+                               bin_edges: tuple[float, float] | None = None,
+                               use_total_lost_load: bool = False, 
+                               xscale_log: bool = False,
+                               yscale_log: bool = False, 
+                               color="C0",
+                               linewidth: float = 2., 
+                               label_str: str | None = None):
+    """Draw the histogram of the blackout sizes on the axis ax"""
+    
+    mask_co2lvl = split_props_df.co2l == co2lvl
+    
+    needed_cols = ["lost_load_share_blackout",
+                   "load", 
+                   "snapshot_weighting", 
+                   "trigger_weighting"]
+    
+    dtype_dict = {xx: float for xx in needed_cols}
+    
+    split_props_df_cut = split_props_df.loc[mask_co2lvl, needed_cols]
+    split_props_df_cut = split_props_df_cut.astype(dtype_dict)
+    split_props_df_cut["total_weighting"] = split_props_df_cut["snapshot_weighting"] * \
+        split_props_df_cut["trigger_weighting"]
+    
+    
+    lost_load_val = split_props_df_cut["lost_load_share_blackout"].values
+    
+    if use_total_lost_load:
+        lost_load_val = (split_props_df_cut["lost_load_share_blackout"] * split_props_df_cut["load"]).values
+
+        if bin_edges is None:
+            if xscale_log:
+                bin_edges = (1, lost_load_val.max())
+            else:
+                bin_edges = (0, lost_load_val.max())
+    else: 
+        if bin_edges is None:
+            if xscale_log:
+                bin_edges = (1, 0)
+            else:
+                bin_edges = (0, 1)
+       
+    if xscale_log:
+        bin_arr = np.logspace(np.log10(min(bin_edges)), 
+                              np.log10(max(bin_edges)), 
+                              n_bins)
+        
+    else: 
+        bin_arr = np.linspace(min(bin_edges), 
+                              max(bin_edges), n_bins)
+            
+    # Plot it
+    ax.hist(lost_load_val, 
+            weights=split_props_df_cut.total_weighting,
+            bins=bin_arr, histtype="step", color=color,
+            linewidth=linewidth,
+            label=label_str)
+    
+    # Aesthetics
+    if xscale_log:
+        ax.set_xscale("log")
+    
+    if yscale_log:
+        ax.set_yscale("log")
+    
+    return
+    
+
 def plot_blackout_size_histograms(
     save_path=path_to_figures_sclopf, log_scale=True, n_cols=1
 ):
