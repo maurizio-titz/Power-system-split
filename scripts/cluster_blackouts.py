@@ -84,7 +84,7 @@ distance_metric_kwargs = {
     "cache_components": True,
 }
 
-n_clusters_list = [16, 32, 64, 80]
+n_clusters_list = [16, 32, 64, 80, 96, 112]
 clustering_params = {
     "agg": {
         "n_iter": 1e4,
@@ -157,7 +157,7 @@ if __name__ == "__main__":
         cl.filter_data()
         logger.info("filtered data")
         cl.get_distance_matrix()
-        logger.info("go dist matrix")
+        logger.info("Calculated distance matrix")
         cl.fit_clusters()
         logger.info("fitted clusters")
         cl.create_clustering_results_index()
@@ -169,6 +169,7 @@ if __name__ == "__main__":
             algorithm="agg",
             sort_by="frequency",
         )
+        logger.info("----Finished----(Plotting now)")
         cl.plot_cluster_multiple(
             n_best=4,
             # relative_score_threshold=0.1,
@@ -176,3 +177,5 @@ if __name__ == "__main__":
             algorithm="agg",
             sort_by="accumulative_lost_load",
         )
+        logger.info("Finishied plotting")
+        
