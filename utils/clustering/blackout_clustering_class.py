@@ -847,7 +847,8 @@ class Clustering(object):
         Returns:
             List of dicts containing filepath, algorithm, and params for each result
         """
-        index_path = os.path.join(self.cluster_dir, "clustering_results_index.pklz")
+        index_path = os.path.join(self.cluster_dir, 
+                                  "clustering_results_index.pklz")
         if not os.path.exists(index_path):
             raise FileNotFoundError(f"Results index not found at {index_path}")
 

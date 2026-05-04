@@ -2,7 +2,7 @@ import os
 
 from utils.clustering.data_handling import load_clustering
 
-os.chdir("..")
+#os.chdir("..")
 import copy
 import gzip
 import pickle

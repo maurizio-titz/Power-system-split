@@ -65,10 +65,12 @@ def load_clustering_data(
         nx_graph
     )
     try:
-        file_path = data_handling.path_to_grid_data + f"n_2_failures_co2lvl{0.0}.pklz"
+        # TODO this loads it for one levels. Why even save it for every level!
+        file_path = data_handling.path_to_grid_data + f"/n_2_failures_co2lvl{0.0}.pklz"
         with gzip.open(file_path, "rb") as fh:
             n_2_failures = pickle.load(fh)
     except FileNotFoundError:
+        logger.warning("File not found. Fallback by creating possbile line failurres")
         bridge_idxs = data_handling.nx_edges_to_matrix_indices(
             nx.bridges(nx_graph), nx_graph
         )
@@ -90,7 +92,7 @@ def load_clustering_data(
         "num_failures_weighted": num_failures_weighted,
     }
 
-
+# TODO n_nodes is not loaded anymore
 def load_processed_data(save_dir, n_nodes):
     """Load pre-processed clustering and split data."""
     # Load split properties
@@ -103,7 +105,7 @@ def load_processed_data(save_dir, n_nodes):
     #     weights_dict = pickle.load(f)
 
     # Load blackout vectors
-    with gzip.open(save_dir + f"blackout_vectors_filtered_dict.pklz", "rb") as f:
+    with gzip.open(save_dir + f"/blackout_vectors_filtered_dict.pklz", "rb") as f:
         blackout_vectors_filtered_dict = pickle.load(f)
 
     # Load failed edges indicator
