@@ -84,7 +84,6 @@ distance_metric_kwargs = {
     "cache_components": True,
 }
 
-#n_clusters_list = np.arange(32, 1025, step=32).tolist()
 n_clusters_list = [16, 32, 64, 80]
 clustering_params = {
     "agg": {
@@ -101,20 +100,6 @@ clustering_params = {
         },
         "calc_silhouette": True,
     },
-    ## HDBSCAN didn't work well.
-    # "hdbscan": {
-    #     "n_iter": 128,
-    #     "n_jobs": n_jobs_clustering,
-    #     "HPs": {
-    #         "min_cluster_size": np.arange(5, 1000),
-    #         "min_samples": np.arange(10, 1000),
-    #         "cluster_selection_epsilon": loguniform(0.005, 0.1),
-    #         "metric": ["precomputed"],
-    #         "cluster_selection_method": ["eom", "leaf"],
-    #         "core_dist_n_jobs": [32 // n_jobs_clustering],
-    #     },
-    #     "calc_silhouette": True,
-    # },
 }
 
 # %%
