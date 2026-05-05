@@ -164,17 +164,32 @@ if __name__ == "__main__":
     print("\n---------------------------------------- \nCO2 Check:\n---------------------------------------- \n")
     # get co2 emissions after sclopf
     emissions_sclopf_i = get_emissions(n, snapshots)
-    perc = 100 * emissions_sclopf_i / (emissions_lopf_i)
 
-    rtol = 0.005
-    if perc <= 100 * (1+rtol): 
-        logger.info(
-            f"Co2-Test successful. Emissions are {perc}% of LOPF window."
-        )
-    else:
-        raise AssertionError(
+    if emissions_lopf_i == 0:
+
+        if emissions_sclopf_i != 0:
+            raise AssertionError(
             f"Co2-Test not succesful. Emissions are {perc}% of LOPF window."
         )
+
+        else: 
+            logger.info(
+                f"Co2-Test successful. Emissions are 0 as in LOPF window."
+            )
+
+    else: 
+
+        perc = 100 * emissions_sclopf_i / (emissions_lopf_i)
+        
+        rtol = 0.005
+        if perc <= 100 * (1+rtol): 
+            logger.info(
+                f"Co2-Test successful. Emissions are {perc}% of LOPF window."
+            )
+        else:
+            raise AssertionError(
+                f"Co2-Test not succesful. Emissions are {perc}% of LOPF window."
+            )
 
     # export network
     n.export_to_netcdf(snakemake.output[0])

@@ -33,9 +33,9 @@ rule prepare_sclopf:
 
 rule solve_sclopf:
     input: 
-        prepared = path_to_sclopf_data + "prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc",
+        prepared = path_to_sclopf_data + "/prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc",
         previous = lambda w: path_to_sclopf_data + f"postnetworks/{w.opts}/sclopf-elec_s_" + NCLUSTERS + f"_ec_lv1.0-{int(w.i)-1}.nc" if int(w.i) > 0 else []
-    output: path_to_sclopf_data + "postnetworks/{opts}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-{i}.nc"
+    output: path_to_sclopf_data + "/postnetworks/{opts}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-{i}.nc"
     resources: mem_mb=100000
     threads: 4
     script: "scripts/solve_sclopf.py"
@@ -43,16 +43,16 @@ rule solve_sclopf:
 
 rule reassemble_all:
     input:
-        pre = path_to_sclopf_data + "prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc",
-        sub = path_to_sclopf_data + "postnetworks/{opts}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-" + N_ITER + ".nc"
-    output: path_to_sclopf_data + "postnetworks/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc"
+        pre = path_to_sclopf_data + "/prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc",
+        sub = path_to_sclopf_data + "/postnetworks/{opts}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-" + N_ITER + ".nc"
+    output: path_to_sclopf_data + "/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc"
     script: "scripts/reassemble.py"
 
 
 rule run_all:
     input:
         expand(
-            path_to_sclopf_data + "postnetworks/Co2L{Co2L}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-{i}.nc",
+            path_to_sclopf_data + "/postnetworks/Co2L{Co2L}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-{i}.nc",
             Co2L = config["Co2-scenarios"],
             i = [n for n in range(int(np.ceil(8760 / temp_resolution / group_size)))],
             onerror=lambda e: print(f"Warning: {e} failed, continuing..."),
