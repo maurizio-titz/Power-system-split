@@ -61,7 +61,7 @@ def update_line_params(n: pypsa.Network):
     # return n.lines
 
 
-def get_networkx_graph_path(snet_index: str | None = '0', co2lvl=None):
+def get_networkx_graph_path(snet_index: str | None = '0', co2lvl: float | None = None):
     """Get the path to a networkx graph from the pypsa networks"""
     graph_path = path_to_grid_data + f"/nx_graph"
     if co2lvl is not None:
@@ -73,14 +73,16 @@ def get_networkx_graph_path(snet_index: str | None = '0', co2lvl=None):
     return graph_path
 
 
-def load_networkx_graph(snet_index: str | None=None, co2lvl: None = None):
+def load_networkx_graph(snet_index: str | None = None, 
+                        co2lvl: None = None):
     """Get a networkx graph from the pypsa networks"""
     graph_path = get_networkx_graph_path(snet_index, co2lvl)
     graph = nx.read_gml(graph_path)  # [, stringizer])
     return graph
 
 
-def save_networkx_graph(graph, snet_index: str | None =None, co2lvl=None, overwrite=False):
+def save_networkx_graph(graph, snet_index: str | None =None, 
+                        co2lvl=None, overwrite=False):
     """Save a networkx graph from the pypsa networks"""
     graph_path = get_networkx_graph_path(snet_index, co2lvl)
     if not overwrite and os.path.exists(graph_path):

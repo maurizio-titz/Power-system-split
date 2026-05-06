@@ -954,9 +954,19 @@ class Clustering(object):
                 # Select n_best
                 if n_best is not None:
                     sorted_results = sorted_results[:n_best]
-                    print(f"Plotting top {len(sorted_results)} results for {algorithm}")
+                    print(f"Plotting top {len(sorted_results)}" + \
+                        f" results for {algorithm}")
+                    
+                    for ele in sorted_results:
+                        hash_short_ele = ele["filename"].split(".pklz")[0].split("params_")[-1]
+                        silh_score_ele = ele["silhouette_score"]
+                        
+                        score_str = f"SilhScore for '{hash_short_ele}' is {silh_score_ele:.4f}"
+                        
+                        print("--> " + score_str)
                 else:
-                    print(f"Plotting all {len(sorted_results)} results for {algorithm}")
+                    print(f"Plotting all {len(sorted_results)}" +\
+                        f" results for {algorithm}")
 
                 # Apply relative score threshold if specified
                 if relative_score_threshold is not None:
@@ -977,7 +987,8 @@ class Clustering(object):
                 from itertools import groupby
 
                 # Group results by algorithm
-                all_results_sorted = sorted(all_results, key=lambda x: x["algorithm"])
+                all_results_sorted = sorted(all_results, 
+                                            key=lambda x: x["algorithm"])
                 grouped = {
                     alg: list(group)
                     for alg, group in groupby(
@@ -993,7 +1004,7 @@ class Clustering(object):
                         key=lambda x: x.get("silhouette_score", -1),
                         reverse=True,
                     )
-
+                    
                     # Select n_best from this algorithm
                     if n_best is not None:
                         selected = sorted_alg_results[:n_best]
@@ -1001,7 +1012,15 @@ class Clustering(object):
                     else:
                         selected = sorted_alg_results
                         print(f"Plotting all {len(selected)} results for {alg_name}")
-
+                    
+                    for ele in selected:
+                        hash_short_ele = ele["filename"].split(".pklz")[0].spilt("params_")[-1]
+                        silh_score_ele = ele["silhouette_score"]
+                        
+                        score_str = f"SilhScore for '{hash_short_ele}' is {silh_score_ele:.4f}"
+                        
+                        print("--> " + score_str)
+                    
                     result_filenames.extend([res["filename"] for res in selected])
 
         # Plot each result

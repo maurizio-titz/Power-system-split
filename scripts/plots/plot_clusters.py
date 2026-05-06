@@ -16,7 +16,9 @@ from utils.clustering.blackout_clustering_class import Clustering
 from utils.clustering.distance_metrics import geometric_mean
 from hdbscan import HDBSCAN
 
+# Logging
 from loguru import logger
+import time
 
 from scripts.cluster_blackouts import (
     distance_metric_kwargs,
@@ -62,26 +64,40 @@ def plot_best_clustering_results(n_nodes: int = 600,
         logger.info("Loading previously pickled cluster class")
         with gzip.open(fpath_cluster_class, "rb") as fh_in:
             cl = pickle.load(fh_in)
-    
+    t0 = time.time()
     logger.info("Plotting multiple clusters ordered by occurence")
     cl.plot_cluster_multiple(
-        # relative_score_threshold=0.1,
         n_best=n_best,
         average_over_classes=False,
         algorithm="agg",
         sort_by="frequency",
+        save_plot_data=True
     )
     # %%
     logger.info("Plotting multiple clusters ordered by accum. lost load")
     cl.plot_cluster_multiple(
         n_best=n_best,
-        # relative_score_threshold=0.1,
         average_over_classes=False,
         algorithm="agg",
         sort_by="accumulative_lost_load",
     )
-
+    
+    # Only lines
+    logger.info("Plot only lines sorted by occurence")
+    cl.plot_cluster_multiple(n_best=n_best, average_over_classes=False,
+                             algorithm="agg", 
+                             sort_by="frequency",
+                             use_only_lines=True)
+    
+    logger.info("Plot only lines sorted by accm. load")
+    cl.plot_cluster_multiple(n_best=n_best, average_over_classes=False,
+                             algorithm="agg", 
+                             sort_by="frequency",
+                             use_only_lines=True)
+    
+    duration_s = time.time() - t0
+    logger.info(f"Finished plotting in {duration_s/60.:.2f} min")
     # %%
 
 if __name__ == "__main__":
-    plot_best_clustering_results()
+    plot_best_clustering_results(calc_again=True)

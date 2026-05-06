@@ -30,6 +30,9 @@ from utils import plot_style
 
 plot_style.setup_matplotlib_style()
 
+# Paths
+from utils.config import path_to_sclopf_results
+
 for cluster_number in [11, 12]:
     # sort_by = "n_samples"
     sort_by = "weighted_lost_load"
@@ -44,12 +47,13 @@ for cluster_number in [11, 12]:
     # df = pd.DataFrame(df)
     # df.sort_values(by="silhouette_score", ascending=False)
     # %%
-    fpath = "/srv/data/jlange/power-system-split/no_extensions/results/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/agg_params_01bf408e.pklz"
+    fpath = path_to_sclopf_results + "/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/agg_params_01bf408e.pklz"
     with gzip.open(fpath, "rb") as f:
         res = pickle.load(f)
 
     with gzip.open(fpath.replace(".pklz", "_centroid_res.pklz"), "rb") as f:
         cluster_res = pickle.load(f)
+        
     # %%
     # %% load clustering results
     n_nodes = 600
@@ -141,7 +145,8 @@ for cluster_number in [11, 12]:
         plot_order = np.argsort(centroid[:, 2])  # Sort by the value of the third class
         colors_classes = ["blue", "lightgray", "red"]
         f, ax = plt.subplots(figsize=(8, 8))
-        nx_graph = data_handling.load_networkx_graph(snet_index=0, co2lvl=0.0)
+        nx_graph = data_handling.load_networkx_graph(snet_index='0', 
+                                                     co2lvl=0.0)
         pos = nx.get_node_attributes(nx_graph, "pos")
         nodes = np.array(list(nx_graph.nodes()))
         for i_node in plot_order:
@@ -191,7 +196,8 @@ for cluster_number in [11, 12]:
 
     # %%
     node_idxs_red = np.where(centroid[:, 2] > 0.5)
-    nx_graph = data_handling.load_networkx_graph(snet_index=0, co2lvl=0.0)
+    nx_graph = data_handling.load_networkx_graph(snet_index='0', 
+                                                 co2lvl=0.0)
     nodes_red = np.array(nx_graph.nodes)[node_idxs_red]
     cluster_mask = cluster_res["group_masks"][cluster_idx]
     split_properties = pd.read_hdf(

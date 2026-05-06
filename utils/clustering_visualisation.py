@@ -335,63 +335,66 @@ def plot_centroid_with_failures(
     failed_edges_prob,
     ax,
     colors_classes=None,
-    node_size=10,
-    edge_width=1,
-    radius=0.5,
+    node_size: float = 10.,
+    edge_width: float= 1.,
+    radius:float = 0.5,
     pie_nodes=True,
     edge_log_scale=True,
     plot_order=None,
-):
-    if len(centroid.shape) > 1:
-        if colors_classes is None:
-            raise ValueError("colors_classes must be provided for pie plot")
-        # majority_class = np.argmax(centroid, axis=0)
-        # probs_majority_class = np.max(centroid, axis=0)
-        # c = [
-        #     cmap[class_ind][proba]
-        #     for class_ind, proba in zip(majority_class, probs_majority_class)
-        # ]
-        if pie_nodes:
-            nodes = np.array(list(nx_graph.nodes()))
-            if plot_order is None:
-                plot_order = np.arange(len(nodes))
-            for i_node in plot_order:
-                node = nodes[i_node]
-                ax.pie(
-                    centroid[i_node, :],
-                    colors=colors_classes,
-                    radius=radius,
-                    center=(pos[node][0], pos[node][1]),
-                    # zorder=2,
-                )
-            pos_arr = np.array(list(pos.values()))
-            ax.set_xlim(pos_arr[:, 0].min() - 1, pos_arr[:, 0].max() + 1)
-            ax.set_ylim(pos_arr[:, 1].min() - 1, pos_arr[:, 1].max() + 1)
-        else:
-            for i_node, node in enumerate(nx_graph.nodes()):
-                for class_ind in np.argsort(centroid[i_node, :])[::-1]:
-
-                    a = ax.scatter(
-                        pos[node][0],
-                        pos[node][1],
-                        color=colors_classes[class_ind],
-                        s=centroid[i_node, class_ind] * node_size,
-                        zorder=2,
+    use_only_lines: bool = False,
+):  
+    
+    if not use_only_lines:
+        if len(centroid.shape) > 1:
+            if colors_classes is None:
+                raise ValueError("colors_classes must be provided for pie plot")
+            # majority_class = np.argmax(centroid, axis=0)
+            # probs_majority_class = np.max(centroid, axis=0)
+            # c = [
+            #     cmap[class_ind][proba]
+            #     for class_ind, proba in zip(majority_class, probs_majority_class)
+            # ]
+            if pie_nodes:
+                nodes = np.array(list(nx_graph.nodes()))
+                if plot_order is None:
+                    plot_order = np.arange(len(nodes))
+                for i_node in plot_order:
+                    node = nodes[i_node]
+                    ax.pie(
+                        centroid[i_node, :],
+                        colors=colors_classes,
+                        radius=radius,
+                        center=(pos[node][0], pos[node][1]),
+                        # zorder=2,
                     )
+                pos_arr = np.array(list(pos.values()))
+                ax.set_xlim(pos_arr[:, 0].min() - 1, pos_arr[:, 0].max() + 1)
+                ax.set_ylim(pos_arr[:, 1].min() - 1, pos_arr[:, 1].max() + 1)
+            else:
+                for i_node, node in enumerate(nx_graph.nodes()):
+                    for class_ind in np.argsort(centroid[i_node, :])[::-1]:
 
-    else:
-        nodes = nx.draw_networkx_nodes(
-            nx_graph,
-            pos=pos,
-            ax=ax,
-            node_color=centroid,
-            cmap=cmap,
-            vmax=vmax,
-            vmin=vmin,
-            node_size=10,
-        )
-        nodes.set_edgecolor("black")
-        nodes.set_linewidth(0.2)
+                        a = ax.scatter(
+                            pos[node][0],
+                            pos[node][1],
+                            color=colors_classes[class_ind],
+                            s=centroid[i_node, class_ind] * node_size,
+                            zorder=2,
+                        )
+
+        else:
+            nodes = nx.draw_networkx_nodes(
+                nx_graph,
+                pos=pos,
+                ax=ax,
+                node_color=centroid,
+                cmap=cmap,
+                vmax=vmax,
+                vmin=vmin,
+                node_size=10,
+            )
+            nodes.set_edgecolor("black")
+            nodes.set_linewidth(0.2)
 
     # if len(centroid.shape) == 1:
     if failed_edges_prob is None:
@@ -401,6 +404,7 @@ def plot_centroid_with_failures(
             ax=ax,
             edge_color="black",
             width=edge_width,
+
             # edge_cmap=cmap,
         )
     else:
@@ -432,8 +436,7 @@ def plot_centroid_with_failures(
     #             linewidth=edge_width,
     #             zorder=-1,
     #         )
-
-
+    
 def load_lost_load_share_broken(
     n_nodes=600, mask=None, co2l_list=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
 ):
