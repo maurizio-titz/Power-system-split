@@ -25,7 +25,7 @@ rule prepare_sclopf:
     input:
         network = "submodules/pypsa-eur/" + "results/networks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc",
         lookup = "data/np_lookup.csv"
-    output: path_to_sclopf_data + f"prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc"
+    output: path_to_sclopf_data + f"/prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc"
     resources: mem=4000
     threads: 4
     script: "scripts/prepare_sclopf.py"
@@ -34,7 +34,7 @@ rule prepare_sclopf:
 rule solve_sclopf:
     input: 
         prepared = path_to_sclopf_data + "/prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc",
-        previous = lambda w: path_to_sclopf_data + f"postnetworks/{w.opts}/sclopf-elec_s_" + NCLUSTERS + f"_ec_lv1.0-{int(w.i)-1}.nc" if int(w.i) > 0 else []
+        previous = lambda w: path_to_sclopf_data + f"/postnetworks/{w.opts}/sclopf-elec_s_" + NCLUSTERS + f"_ec_lv1.0-{int(w.i)-1}.nc" if int(w.i) > 0 else []
     output: path_to_sclopf_data + "/postnetworks/{opts}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-{i}.nc"
     resources: mem_mb=100000
     threads: 4
