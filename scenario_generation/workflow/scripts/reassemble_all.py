@@ -54,7 +54,7 @@ def reassemble(path,NCLUSTERS,Co2l,n_subnetworks,opts):
             output_network.loads_t[key].loc[snapshots, :] = sub_n.loads_t[key].loc[snapshots, :]
 
     # export network data
-    output_network.export_to_netcdf(f"{path_to_sclopf_data}/postnetworks/sclopf-elec_s_{NCLUSTERS}_ec_l{opts}_Co2L{Co2l}.nc")
+    output_network.export_to_netcdf(f"{path_to_sclopf_data}/sclopf-elec_s_{NCLUSTERS}_ec_l{opts}_Co2L{Co2l}.nc")
 
 
 
