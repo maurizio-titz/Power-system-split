@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from tqdm import tqdm
-
+from loguru import logger
 
 sys.path.append("./")
 # Post messages to mattermost
@@ -35,6 +35,10 @@ from utils.config import (
     path_to_pypsa_network_sclopf,
 )
 
+import logging
+import pypsa
+pypsa.network.io.logger.setLevel(logging.ERROR)
+
 save_path_sclopf = path_to_evaluation_results_sclopf
 
 # Dummy decorator to not get stuck on @profile
@@ -51,7 +55,7 @@ load_inertia_constant = 0.4  # in seconds, for load inertia approximation
 def evaluate_cascade(
     co2l: float,
     n_nodes: int,
-    snet_index: int = 0,
+    snet_index: str = '0',
     start_time_str=None,
     end_time_str=None,
     eval_indicator_vectors: bool = True,
@@ -104,31 +108,31 @@ def evaluate_cascade(
 
     # Load PyPSA network, the graph of the subnetwork and its matrices
     if verbose:
-        print("Loading PyPSA Network and converting it to NetworkX Graph.\n")
+        logger.info("Loading PyPSA Network and converting it to NetworkX Graph.\n")
 
     if use_sclopf:
         full_path_to_cascades = (
-            path_to_cascade_results_sclopf + f"system_splits_Co2L{co2l}_n{n_nodes}.pklz"
+            path_to_cascade_results_sclopf + f"/system_splits_Co2L{co2l}_n{n_nodes}.pklz"
         )
         save_path = save_path_sclopf
     else:
         raise NotImplementedError("LOPF based not supported anymore.")
         full_path_to_cascades = (
             path_to_cascade_results_lopf
-            + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}_lopf.pklz"
+            + f"/system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}_lopf.pklz"
         )
         save_path = save_path_lopf
 
-    print(f"saving results to {save_path}")
+    logger.info(f"saving results to {save_path}")
 
-    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
+    save_df_path = save_path + f"/component_properties_Co2L{co2l}_n{n_nodes}"
     if os.path.exists(save_df_path + ".h5"):
         if not overwrite:
             raise FileExistsError(
                 f"Results already exist at {save_df_path}.h5, skipping evaluation."
             )
         else:
-            print(f"Overwriting existing results at {save_df_path}.h5 as requested.")
+            logger.warning(f"Overwriting existing results at {save_df_path}.h5 as requested.")
 
     os.makedirs(save_path, exist_ok=True)
 
@@ -406,7 +410,7 @@ def evaluate_cascade(
     # Convert dictionary to component props pdDataFrame and save
     if eval_indicator_vectors:
         indi_vec_save_path = (
-            save_path + f"component_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
+            save_path + f"/component_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
         )
         with gzip.open(indi_vec_save_path, "wb") as fh_vec_out:
             pickle.dump(np.array(component_indicator_vectors_ls, dtype=int), fh_vec_out)
@@ -617,7 +621,7 @@ def process_timestamp_chunk(
 def evaluate_cascade_parallel(
     co2l: float,
     n_nodes: int,
-    snet_index: int = 0,
+    snet_index: str = '0',
     start_time_str=None,
     end_time_str=None,
     eval_indicator_vectors: bool = True,
@@ -665,7 +669,8 @@ def evaluate_cascade_parallel(
     # Check if correct format of start or end time has been given
     if start_time_str is not None:
         check_format_r = check_format_time_str(start_time_str)
-        assert check_format_r, "Provided start time does not have correct format. "
+        if not check_format_r:
+            raise ValueError("Provided start time does not have correct format.")
         start_time_dt = dt.strptime(start_time_str, "%Y-%m-%d %H:%M")
 
     if end_time_str is not None:
@@ -679,7 +684,7 @@ def evaluate_cascade_parallel(
 
     if use_sclopf:
         full_path_to_cascades = (
-            path_to_cascade_results_sclopf + f"system_splits_Co2L{co2l}_n{n_nodes}.pklz"
+            path_to_cascade_results_sclopf + f"/system_splits_Co2L{co2l}_n{n_nodes}.pklz"
         )
         save_path = save_path_sclopf
     else:
@@ -863,7 +868,7 @@ def evaluate_cascade_parallel(
     # Save results
     if eval_indicator_vectors:
         indi_vec_save_path = (
-            save_path + f"component_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
+            save_path + f"/component_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
         )
         with gzip.open(indi_vec_save_path, "wb") as fh_vec_out:
             pickle.dump(np.array(component_indicator_vectors_ls, dtype=int), fh_vec_out)
@@ -909,7 +914,8 @@ def evaluate_cascade_parallel(
     component_props.to_hdf(save_df_path + ".h5", key="df", mode="w")
 
     if cfg.mattermost_url is not None:
-        message_text = f"Evaluation of N={n_nodes}, C02_lvl={co2l} finished and results saved (parallel version)"
+        message_text = f"Evaluation of N={n_nodes}, " \
+            + "C02_lvl={co2l} finished and results saved (parallel version)"
         send_mattermost_messages.post_message(message_text, cfg.mattermost_url)
 
     return component_props
@@ -918,7 +924,7 @@ def evaluate_cascade_parallel(
 def evaluate_cascade_wrapper(
     co2l: float,
     n_nodes: int,
-    snet_index: int = 0,
+    snet_index: str = '0',
     start_time_str=None,
     end_time_str=None,
     eval_indicator_vectors: bool = True,
@@ -974,75 +980,6 @@ def evaluate_cascade_wrapper(
         load_inertia=load_inertia,
         show_progress_2=show_progress_2,
         sort_cascades=sort_cascades,
-    )
-
-
-def sort_comps_and_ind_vecs(co2l, n_nodes=600):
-    """if component properties are not sorted by time stamp and split number, sort them
-    and save sorted versions of component properties and indicator vectors, while
-    keeping the unsorted versions as well.
-    """
-    raise NotImplementedError("Not implemented anymore.")
-    fpath_comp = (
-        path_to_evaluation_results_sclopf
-        + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
-    )
-
-    component_props_level = pd.read_hdf(fpath_comp)
-    component_props_level.reset_index(inplace=True)
-    # sort components by time stamp and split number
-    component_props_level_sorted = component_props_level.sort_values(
-        by=["time_stamp", "split_number"], inplace=False
-    )
-    if component_props_level_sorted.equals(component_props_level):
-        print("Component properties are already sorted.")
-        return
-
-    if component_props_level_sorted.trigger_weighting.nunique() == 1:
-        raise ValueError("trigger weighting has only one unique value")
-    rocof_indi_vec_load_path = (
-        path_to_evaluation_results_sclopf
-        + f"rocof_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz"
-    )
-    with gzip.open(rocof_indi_vec_load_path, "rb") as fh_vec_out:
-        rocof_indicator_vectors = np.array(pickle.load(fh_vec_out), dtype=float)
-    rocof_indicator_vectors_sorted = rocof_indicator_vectors[
-        component_props_level_sorted.drop_duplicates(
-            subset=["split_number"]
-        ).split_number
-        - 1
-    ]
-    os.rename(
-        rocof_indi_vec_load_path,
-        rocof_indi_vec_load_path.replace(".pklz", "_unsorted.pklz"),
-    )
-    with open(
-        path_to_evaluation_results_sclopf
-        + f"rocof_indicator_vectors_Co2L{co2l}_n{n_nodes}.pklz",
-        "wb",
-    ) as fh_vec_out_sorted:
-        pickle.dump(
-            rocof_indicator_vectors_sorted,
-            fh_vec_out_sorted,
-            protocol=pickle.HIGHEST_PROTOCOL,
-        )
-    for new_num, old_num in enumerate(
-        component_props_level_sorted.split_number.unique()
-    ):
-        component_props_level_sorted.loc[
-            component_props_level_sorted.split_number == old_num, "split_number"
-        ] = new_num
-
-    # move file to ""..._unsorted.h5"
-    os.rename(
-        fpath_comp,
-        fpath_comp.replace(".h5", "_unsorted.h5"),
-    )
-    component_props_level_sorted.to_hdf(
-        path_to_evaluation_results_sclopf
-        + f"component_properties_Co2L{co2l}_n{n_nodes}.h5",
-        key="df",
-        mode="w",
     )
 
 

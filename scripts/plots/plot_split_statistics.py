@@ -44,7 +44,9 @@ from utils.plot_style import (
 
 
 def create_split_statistics_plot(
-    load_normalization=False, show_blackout_stats=True, secondary_proba_axis=False
+    load_normalization=False, 
+    show_blackout_stats=True, 
+    secondary_proba_axis=False
 ):
     """Create split statistics plot.
 
@@ -64,10 +66,10 @@ def create_split_statistics_plot(
     # Load network
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index='0')
     I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
         nx_graph
     )
@@ -86,12 +88,12 @@ def create_split_statistics_plot(
 
     # Load split component properties and split properties
     component_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"component_properties_all_n{n_nodes}.h5"
+        path_to_vis_results_sclopf + f"/component_properties_all_n{n_nodes}.h5"
     )
     component_props.time_stamp = pd.to_datetime(component_props.time_stamp)
 
     split_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
     )
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
@@ -402,7 +404,7 @@ def create_blackout_statistics_plot(
 
     # Load split properties
     split_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
     )
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
@@ -443,7 +445,7 @@ def create_blackout_statistics_plot(
         data.append(counts)
         if normalize_by_total_splits:
             file_path = (
-                data_handling.path_to_grid_data + f"n_2_failures_co2lvl{co2l}.pklz"
+                data_handling.path_to_grid_data + f"/n_2_failures_co2lvl{co2l}.pklz"
             )
             with gzip.open(file_path, "rb") as fh:
                 n_2_failures = pickle.load(fh)
@@ -545,13 +547,91 @@ def create_blackout_statistics_plot(
     plt.show()
 
 
+def ax_blackout_size_histogram(ax, 
+                               split_props_df: pd.DataFrame, 
+                               co2lvl: float, 
+                               n_bins: int = 100,
+                               bin_edges: tuple[float, float] | None = None,
+                               use_total_lost_load: bool = False, 
+                               xscale_log: bool = False,
+                               yscale_log: bool = False, 
+                               color="C0",
+                               linewidth: float = 2., 
+                               label_str: str | None = None):
+    """Draw the histogram of the blackout sizes on the axis ax"""
+    
+    mask_co2lvl = split_props_df.co2l == co2lvl
+    
+    needed_cols = ["lost_load_share_blackout",
+                   "load", 
+                   "snapshot_weighting", 
+                   "trigger_weighting"]
+    
+    dtype_dict = {xx: float for xx in needed_cols}
+    
+    split_props_df_cut = split_props_df.loc[mask_co2lvl, needed_cols]
+    split_props_df_cut = split_props_df_cut.astype(dtype_dict)
+    split_props_df_cut["total_weighting"] = split_props_df_cut["snapshot_weighting"] * \
+        split_props_df_cut["trigger_weighting"]
+    
+    
+    lost_load_val = split_props_df_cut["lost_load_share_blackout"].values
+    
+    if use_total_lost_load:
+        lost_load_val = (split_props_df_cut["lost_load_share_blackout"] * split_props_df_cut["load"]).values
+
+        if bin_edges is None:
+            if xscale_log:
+                bin_edges = (1, lost_load_val.max())
+            else:
+                bin_edges = (0, lost_load_val.max())
+    else: 
+        if bin_edges is None:
+            if xscale_log:
+                bin_edges = (1, 0)
+            else:
+                bin_edges = (0, 1)
+       
+    if xscale_log:
+        bin_arr = np.logspace(np.log10(min(bin_edges)), 
+                              np.log10(max(bin_edges)), 
+                              n_bins)
+        
+    else: 
+        bin_arr = np.linspace(min(bin_edges), 
+                              max(bin_edges), n_bins)
+            
+    # Plot it
+    ax.hist(lost_load_val, 
+            weights=split_props_df_cut.total_weighting,
+            bins=bin_arr, histtype="step", color=color,
+            linewidth=linewidth,
+            label=label_str)
+    
+    # Aesthetics
+    if xscale_log:
+        ax.set_xscale("log")
+    
+    if yscale_log:
+        ax.set_yscale("log")
+    
+    return
+    
+
 def plot_blackout_size_histograms(
-    save_path=path_to_figures_sclopf, log_scale=True, n_cols=1
+    save_path: str = path_to_figures_sclopf, 
+    yscale_log: bool = True, 
+    xscale_log: bool = False,
+    n_cols: int = 1,
+    n_bins: int = 101, 
+    n_nodes: int = 600, 
+    use_total_load_values: bool = False,
+    fname_suffix: str = "",
+    xlims: tuple[float, float] | None = None
 ):
     # load split properties
-    n_nodes = 600
     split_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
     )
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
@@ -575,12 +655,37 @@ def plot_blackout_size_histograms(
     )
     axes = np.atleast_1d(axes).flatten()
 
-    bins = np.linspace(0, 100, 101)
+    
+    if not use_total_load_values:
+        if xscale_log:
+            if xlims is None:
+                    xlims = (1e-2,  1e2)
+            bins = np.logspace(np.log10(min(xlims)), np.log10(max(xlims)),
+                               n_bins)
+        else:
+            if xlims is None:
+                xlims = (0, 100)
+            bins = np.linspace(min(xlims), max(xlims), n_bins)
 
     # First pass: collect all histogram data to determine global y-limits
     all_counts = []
     for idx, co2l in enumerate(co2ls):
-        vals = (
+        if use_total_load_values:
+            ll_share_blackout = split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
+            load = split_props[split_props.co2l == co2l].load
+            vals = ll_share_blackout * load
+            
+            if xscale_log:
+                if xlims is None:
+                    xlims = (1e-2,  max(vals))
+                bins = np.logspace(np.log10(min(xlims)), np.log10(max(xlims)), 
+                                   n_bins)
+            else:
+                if xlims is None:
+                    xlims = (0, max(vals))
+                bins = np.linspace(min(xlims), max(xlims), n_bins)
+        else:
+            vals = (
             split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
         )
         counts, _ = np.histogram(
@@ -591,7 +696,7 @@ def plot_blackout_size_histograms(
         all_counts.extend(counts)
 
     # Determine global y-limits
-    if log_scale:
+    if yscale_log:
         non_zero_counts = [c for c in all_counts if c > 0]
         ymin = min(non_zero_counts) if non_zero_counts else 0.1
         ymax = max(all_counts) if all_counts else 1
@@ -611,13 +716,15 @@ def plot_blackout_size_histograms(
             bins=bins,
             alpha=0.7,
             edgecolor="black",
-            log=log_scale,
+            log=yscale_log,
             label=rf"CO$_2$: {get_actual_co2_level(co2l, n_nodes=n_nodes, percent=True)}\%",
         )
-        if not log_scale:
-            ax.set_ylim(ymin, ymax * 1.1)  # Add 10% padding at top
-        else:
+        if yscale_log:
             ax.set_ylim(ymin, ymax * 10)  # Add padding in log scale
+            
+        else:
+            ax.set_ylim(ymin, ymax * 1.1)  # Add 10% padding at top
+            
         col_idx = idx % n_cols
         if col_idx == 0:
             ax.set_ylabel("Count", fontsize=AXIS_LABEL_FONTSIZE)
@@ -642,6 +749,9 @@ def plot_blackout_size_histograms(
                 boxstyle="round,pad=0.3", fc="white", ec="black", lw=0.2, alpha=1
             ),
         )
+        
+        if xscale_log:
+            ax.set_xscale('log')
 
     # hide any unused axes
     for ax in axes[len(co2ls) :]:
@@ -656,8 +766,10 @@ def plot_blackout_size_histograms(
     # add suptitle
     plt.suptitle("Blackout Size Distribution", fontsize=PANEL_LABEL_FONTSIZE + 2)
 
+    fname_fig = "blackout_size_histograms" + fname_suffix
+    
     plt.tight_layout()
-    save_figure(fig, "blackout_size_histograms", save_path)
+    save_figure(fig, fname_fig, save_path)
     plt.show()
 
 
@@ -666,7 +778,7 @@ def plot_component_number_vs_blackout_size(
 ):
     if split_properties is None:
         split_properties = pd.read_hdf(
-            path_to_vis_results_sclopf + f"split_properties_all_n600.h5", index_col=0
+            path_to_vis_results_sclopf + f"/split_properties_all_n600.h5", index_col=0
         )
     lls = split_properties["lost_load_share_blackout"].to_numpy() * 100
     n_comp = split_properties["n_components"].to_numpy()
@@ -723,7 +835,14 @@ if __name__ == "__main__":
             )
 
     # Create standalone blackout statistics plot
-    plot_blackout_size_histograms(log_scale=True, n_cols=2)
+    plot_blackout_size_histograms(yscale_log=True, n_cols=2)
+    plot_blackout_size_histograms(yscale_log=True, n_cols=2, n_bins=50,
+                                  fname_suffix="_lessbins")
+    
+    plot_blackout_size_histograms(yscale_log=True, xscale_log=True, n_cols=2,
+                                  xlims=(1e-2, 1e2), fname_suffix="_log")
+    plot_blackout_size_histograms(yscale_log=True, xscale_log=True, n_cols=2,
+                                  xlims=(1e-2, 1e2), n_bins=50, fname_suffix="_log_lessbins")
 
     # # create_split_statistics_plot(load_normalization=True, show_blackout_stats=False)
     for same_corridor_option in [None, True, False]:

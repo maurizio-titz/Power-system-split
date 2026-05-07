@@ -452,7 +452,8 @@ def compute_distance_matrix_vectorized(
     test_mode: bool = False,
 ) -> np.ndarray:
     """
-    Compute distance matrix using vectorized operations with chunking to manage memory.
+    Compute distance matrix using vectorized operations 
+    with chunking to manage memory.
 
     Returns:
         np.ndarray: Distance matrix of shape (n_samples, n_samples)

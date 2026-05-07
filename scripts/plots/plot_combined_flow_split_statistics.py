@@ -52,10 +52,10 @@ def create_combined_flow_and_split_statistics_plot(
     # Load network and data (flow/inertia)
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index='0')
 
     co2ls = get_co2_levels(n_nodes)
     networks = {
@@ -67,7 +67,7 @@ def create_combined_flow_and_split_statistics_plot(
 
     inertia_time = (
         np.load(
-            path_to_pre_outage_sclopf + f"inertia_time_series_all_co2ls_{n_nodes}.npy"
+            path_to_pre_outage_sclopf + f"/inertia_time_series_all_co2ls_{n_nodes}.npy"
         )
         / 1000
     )
@@ -82,12 +82,12 @@ def create_combined_flow_and_split_statistics_plot(
     )
 
     component_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"component_properties_all_n{n_nodes}.h5"
+        path_to_vis_results_sclopf + f"/component_properties_all_n{n_nodes}.h5"
     )
     component_props.time_stamp = pd.to_datetime(component_props.time_stamp)
 
     split_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5", index_col=0
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
     )
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
@@ -115,7 +115,9 @@ def create_combined_flow_and_split_statistics_plot(
     gs_outer = GridSpec(2, 1, figure=fig, hspace=0.3, height_ratios=[1, 1.05])
 
     # --- Top row: Flow & Inertia ---
-    gs_top_main = GridSpecFromSubplotSpec(1, 2, subplot_spec=gs_outer[0], wspace=0.23)
+    gs_top_main = GridSpecFromSubplotSpec(1, 2, 
+                                          subplot_spec=gs_outer[0], 
+                                          wspace=0.23)
 
     ax_flow = fig.add_subplot(gs_top_main[0])
     ax_inertia = fig.add_subplot(gs_top_main[1])
@@ -357,7 +359,8 @@ def create_combined_flow_and_split_statistics_plot(
     ax2_inertia.set_yscale("log")
     if load_normalization:
         ax2_inertia.set_xlabel(
-            "Norm. rotational energy [s]", fontsize=AXIS_LABEL_FONTSIZE
+            "Norm. rotational energy [s]", 
+            fontsize=AXIS_LABEL_FONTSIZE
         )
     else:
         ax2_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
@@ -403,9 +406,11 @@ def create_combined_flow_and_split_statistics_plot(
             )
         )
     else:
-        ax1_imbalance.set_xlabel("Power imbalance [GW]", fontsize=AXIS_LABEL_FONTSIZE)
+        ax1_imbalance.set_xlabel("Power imbalance [GW]", 
+                                 fontsize=AXIS_LABEL_FONTSIZE)
 
-    ax1_imbalance.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    ax1_imbalance.tick_params(axis="both", which="both", 
+                              labelsize=TICK_LABEL_FONTSIZE)
 
     h, l = ax2_inertia.get_legend_handles_labels()
     handles = [Line2D([], [], color="none")] + h[::-1]

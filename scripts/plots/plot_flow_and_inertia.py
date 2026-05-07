@@ -21,6 +21,7 @@ import matplotlib.colors as mplcolors
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 import cartopy.crs as ccrs
 
+
 sys.path.append("./")
 
 from utils.data_handling import get_actual_co2_level, get_co2_levels
@@ -52,7 +53,7 @@ def create_flow_and_inertia_plot(mean_distance=False):
     # Load network and data
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
         True,
     )
     nx_graph = data_handling.build_networkx_graph(network, snet_index=0)
@@ -70,7 +71,7 @@ def create_flow_and_inertia_plot(mean_distance=False):
     # Load pre-calculated data
     inertia_time = (
         np.load(
-            path_to_pre_outage_sclopf + f"inertia_time_series_all_co2ls_{n_nodes}.npy"
+            path_to_pre_outage_sclopf + f"/inertia_time_series_all_co2ls_{n_nodes}.npy"
         )
         / 1000
     )

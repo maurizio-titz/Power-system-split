@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 # %%
 import sys
 from scipy.stats import uniform
@@ -11,6 +14,8 @@ from utils.data_handling import get_co2_levels
 from utils.clustering.blackout_clustering_class import Clustering
 from utils.clustering.distance_metrics import geometric_mean
 from hdbscan import HDBSCAN
+
+from loguru import logger
 
 
 # Module-level worker function for parallel clustering (must be at top level for pickling)
@@ -55,8 +60,8 @@ def _fit_clustering_worker_script(
     return model, silhouette_avg
 
 
-n_jobs_distance = 32
-n_jobs_clustering = 32
+n_jobs_distance = 16
+n_jobs_clustering = 16
 distance_metric_kwargs = {
     "name": "composite",
     "metrics": [
@@ -79,8 +84,7 @@ distance_metric_kwargs = {
     "cache_components": True,
 }
 
-n_clusters_list = np.arange(32, 1025, step=32).tolist()
-# n_clusters_list = [16, 32, 64, 80]
+n_clusters_list = [16, 32, 64, 80, 96, 112]
 clustering_params = {
     "agg": {
         "n_iter": 1e4,
@@ -96,20 +100,6 @@ clustering_params = {
         },
         "calc_silhouette": True,
     },
-    ## HDBSCAN didn't work well.
-    # "hdbscan": {
-    #     "n_iter": 128,
-    #     "n_jobs": n_jobs_clustering,
-    #     "HPs": {
-    #         "min_cluster_size": np.arange(5, 1000),
-    #         "min_samples": np.arange(10, 1000),
-    #         "cluster_selection_epsilon": loguniform(0.005, 0.1),
-    #         "metric": ["precomputed"],
-    #         "cluster_selection_method": ["eom", "leaf"],
-    #         "core_dist_n_jobs": [32 // n_jobs_clustering],
-    #     },
-    #     "calc_silhouette": True,
-    # },
 }
 
 # %%
@@ -159,12 +149,19 @@ if __name__ == "__main__":
             random_subsample_size=random_subsample_size,
             clustering_worker_func=_fit_clustering_worker_script,  # Use script-level worker for pickling
         )
+        
         cl.load_data()
+        logger.info("Loaded data")
         cl.transform_vectors()
+        logger.info("Transformed Vectors")
         cl.filter_data()
+        logger.info("filtered data")
         cl.get_distance_matrix()
+        logger.info("Calculated distance matrix")
         cl.fit_clusters()
+        logger.info("fitted clusters")
         cl.create_clustering_results_index()
+        logger.info("created index")
         cl.plot_cluster_multiple(
             # relative_score_threshold=0.1,
             n_best=4,
@@ -172,6 +169,7 @@ if __name__ == "__main__":
             algorithm="agg",
             sort_by="frequency",
         )
+        logger.info("----Finished----(Plotting now)")
         cl.plot_cluster_multiple(
             n_best=4,
             # relative_score_threshold=0.1,
@@ -179,3 +177,5 @@ if __name__ == "__main__":
             algorithm="agg",
             sort_by="accumulative_lost_load",
         )
+        logger.info("Finishied plotting")
+        

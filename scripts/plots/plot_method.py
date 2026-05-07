@@ -1,6 +1,10 @@
 #!usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""Script that generate the parts of the figure describing the approach.
+The individual parts were used to generate a figure using inkscape."""
+
+import os
 import numpy as np
 import networkx as nx
 
@@ -16,6 +20,9 @@ plt.rcParams['axes.prop_cycle'] = cycler(color=plt.cm.Dark2.colors)
 from networkx.drawing.nx_agraph import to_agraph 
 
 from utils import data_handling
+from utils.config import path_to_figures_sclopf
+
+from loguru import logger
 
 
 def setup_network_with_layout(case_str='norm', 
@@ -135,33 +142,24 @@ def setup_network_with_layout(case_str='norm',
         #cbar.set_label("$F_{ij}$", fontsize=30)
         cbar.ax.set_yticklabels(['', ''], size=30)
 
-    
-
     if save_fig:
         fig_path = case_str + "_network.svg"
-        fig.savefig(fig_path, bbox_inches='tight', transparent=True)
+        fig.savefig(os.path.join(path_to_figures_sclopf, fig_path), bbox_inches='tight', transparent=True)
 
         fig.clear()
         plt.close(fig)
 
         if case_str == 'norm':
             fig_path_cbar = 'colorbar.svg'
-            fig2.savefig(fig_path_cbar, transparent=True)
+            fig2.savefig(os.path.join(path_to_figures_sclopf, fig_path_cbar), transparent=True)
             fig2.clear()
             plt.close(fig2)
 
     else:
         plt.show()
-
-
-
+        
     return gra, edge_exist_curved
 
-def all_networks():
-
-    setup_network_with_layout(case_str='norm', save_fig=True)
-    setup_network_with_layout(case_str='sec', save_fig=True)
-    setup_network_with_layout(case_str='split', save_fig=True)
 
 
 def ax_plot_split_network(nx_graph: nx.Graph, ax: plt.Axes | None, 
@@ -326,7 +324,7 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
             fig_path_full += "_rasterized.png"
         else:
             fig_path_full += ".svg"            
-        fig_full.savefig(fig_path_full, bbox_inches='tight',
+        fig_full.savefig(os.path.join(path_to_figures_sclopf, fig_path_full), bbox_inches='tight',
                          transparent=True, dpi=dpi_fig)
         fig_full.clear()
         plt.close(fig_full)
@@ -336,7 +334,7 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
             fig_path_split += "_rasterized.png"
         else:
             fig_path_split += ".svg"
-        fig_split.savefig(fig_path_split, bbox_inches='tight',
+        fig_split.savefig(os.path.join(path_to_figures_sclopf, fig_path_split), bbox_inches='tight',
                           transparent=True, dpi=dpi_fig)
         fig_split.clear()
         plt.close(fig_split)
@@ -357,7 +355,7 @@ def iterate_over_all_system_split_trigger(path_to_pypsa_network: str = "sclopf-e
     # Load network
     pypsa_nw = data_handling.load_pypsa_network_from_path(path_to_pypsa_network, 
                                                           use_sclopf=True)
-    nx_graph = data_handling.build_networkx_graph(pypsa_nw, snet_index=0)
+    nx_graph = data_handling.build_networkx_graph(pypsa_nw, snet_index='0')
     
     edge_list = list(nx_graph.edges)
     # Load cascade results
@@ -384,5 +382,14 @@ def iterate_over_all_system_split_trigger(path_to_pypsa_network: str = "sclopf-e
 
 
 if __name__ == "__main__":
+
+    # Principle netwok which splits into two compoments
+    logger.info("Starting to generate parts of method figure. Need to be put togehter, e.g., with inkscape!")
+    setup_network_with_layout(case_str='norm', save_fig=True)
+    setup_network_with_layout(case_str='sec', save_fig=True)
+    setup_network_with_layout(case_str='split', save_fig=True)
     
-    pass
+    logger.info("Finsihed parts of small abstract network")
+    
+    # TODO add spain split with new results
+    #plot_entire_network_n_split_components()

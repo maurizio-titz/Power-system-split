@@ -19,7 +19,7 @@ from utils.config import (
 
 n_nodes = 600
 split_props = pd.read_hdf(
-    path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5",
+    path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5",
     index_col=0,
 )
 # split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
@@ -43,6 +43,6 @@ most_dangerous_snapshots_df = pd.DataFrame.from_dict(
     most_dangerous_snapshots_by_co2l, orient="index"
 ).transpose()
 most_dangerous_snapshots_df.to_csv(
-    path_to_vis_results_sclopf + f"most_dangerous_snapshots_by_co2l_n{n_nodes}.csv",
+    path_to_vis_results_sclopf + f"/most_dangerous_snapshots_by_co2l_n{n_nodes}.csv",
     index=False,
 )

@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pypsa
+from loguru import logger
+
 from matplotlib.collections import LineCollection
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from sklearn.decomposition import PCA
@@ -72,7 +74,7 @@ def _build_generation_matrix_from_network(network, node_order=None):
             network.storage_units_t.p.T.groupby(network.storage_units["bus"]).sum().T
         )
         generation_by_bus = generation_by_bus.add(storage_by_bus, fill_value=0.0)
-        print("Included storage dispatch in generation matrix.")
+        logger.info("Included storage dispatch in generation matrix.")
 
     if node_order is None:
         node_order = list(generation_by_bus.columns)
@@ -226,11 +228,11 @@ def create_injection_pca_plot(n_nodes=600, node_data="effective_injections"):
 
 
 def create_injection_pca_component_profiles_plot(
-    n_nodes=600,
-    n_components=5,
-    snet_index=0,
-    rolling_days=14,
-    node_data="effective_injections",
+    n_nodes: int = 600,
+    n_components: int = 5,
+    snet_index: str = '0',
+    rolling_days: int = 14,
+    node_data: str = "effective_injections",
 ):
     """Create grid plot with one row per CO2 level and one column per PCA component.
 

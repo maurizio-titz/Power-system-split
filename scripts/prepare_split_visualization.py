@@ -1,16 +1,13 @@
 #!usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
 import gzip
 import pickle
 import sys
 import warnings
 
-
-# from glob import glob
-
-warnings.simplefilter(action="ignore", category=FutureWarning)
+warnings.simplefilter(action="ignore", 
+                      category=FutureWarning)
 
 import os
 
@@ -47,7 +44,7 @@ os.makedirs(save_path, exist_ok=True)
 
 # Select a particular subnetwork for calculations (if the pypsa network has different ones).
 # For our data set, "0" indicates the Continental European AC grid.
-snet_index = 0
+snet_index = '0'
 
 # Load arguments
 n_nodes = 600
@@ -67,14 +64,14 @@ component_props = pd.DataFrame()
 
 # Append all components props
 print("Concatenate components...")
-components_fpath = save_path + f"component_properties_all_n{n_nodes}.h5"
+components_fpath = save_path + f"/component_properties_all_n{n_nodes}.h5"
 if os.path.exists(components_fpath):
     print("Component properties file already exists. Skipping concatenation.")
 else:
     for co2l in tqdm(co2l_list):
         component_props_level = pd.read_hdf(
             path_to_evaluation_results_sclopf
-            + f"component_properties_Co2L{co2l}_n{n_nodes}.h5"
+            + f"/component_properties_Co2L{co2l}_n{n_nodes}.h5"
         )
         if component_props_level.trigger_weighting.nunique() == 1:
             raise ValueError("trigger weighting has only one unique value")
@@ -94,18 +91,18 @@ else:
         )
     component_props.to_hdf(components_fpath, key="df", mode="w")
 
-
 #### Extract split properties ####
 print("\n### Extracting split properties ###\n")
 print("Current time:", datetime.datetime.now())
 
-split_props_fpath = save_path + f"split_properties_all_n{n_nodes}.h5"
+# TODO why built it then before this line?
+split_props_fpath = save_path + f"/split_properties_all_n{n_nodes}.h5"
 if os.path.exists(split_props_fpath):
     print("Split properties file already exists. Skipping extraction.")
 else:
     if "component_props" not in locals():
         component_props = pd.read_hdf(
-            save_path + f"component_properties_all_n{n_nodes}.h5", key="df"
+            save_path + f"/component_properties_all_n{n_nodes}.h5", key="df"
         )
 
     snapshot_weightings = data_handling.load_pypsa_network(
@@ -164,7 +161,7 @@ else:
 
     for lvl in split_props["co2l"].unique():
         split_props_lvl = split_props[split_props["co2l"] == lvl]
-        split_props_lvl.to_csv(save_path + f"split_props_Co2L{lvl}_n{n_nodes}.csv")
+        split_props_lvl.to_csv(save_path + f"/split_props_Co2L{lvl}_n{n_nodes}.csv")
 
     split_props.to_hdf(split_props_fpath, key="df", mode="w")
 
@@ -224,7 +221,8 @@ for co2l in co2l_list:
     network = data_handling.load_pypsa_network(
         co2lvl=co2l, n_nodes=n_nodes, use_sclopf=use_sclopf
     )
-    nx_graph = data_handling.load_networkx_graph(co2lvl=co2l, snet_index=snet_index)
+    nx_graph = data_handling.load_networkx_graph(co2lvl=co2l, 
+                                                 snet_index=snet_index)
     I_m, B_d, num_parallels, line_limits = data_handling.load_grid_matrices(
         snet_index=snet_index, co2lvl=co2l
     )
@@ -253,12 +251,12 @@ for co2l in co2l_list:
 
     if use_sclopf:
         full_path_to_cascades = (
-            path_to_cascade_results_sclopf + f"system_splits_Co2L{co2l}_n{n_nodes}.pklz"
+            path_to_cascade_results_sclopf + f"/system_splits_Co2L{co2l}_n{n_nodes}.pklz"
         )
     else:
         full_path_to_cascades = (
             path_to_cascade_results_lopf
-            + f"system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}_lopf.pklz"
+            + f"/system_splits_singlelinefailures_Co2L{co2l}_n{n_nodes}_lopf.pklz"
         )
     # Load results
     with gzip.open(
@@ -281,16 +279,16 @@ for co2l in co2l_list:
 
 
 with open(
-    save_path + f"edge_likelihoods_primary_all_co2ls_n{n_nodes}.pickle", "wb"
+    save_path + f"/edge_likelihoods_primary_all_co2ls_n{n_nodes}.pickle", "wb"
 ) as handle:
     pickle.dump(likelihoods_primary, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 with open(
-    save_path + f"edge_likelihoods_secondary_all_co2ls_n{n_nodes}.pickle", "wb"
+    save_path + f"/edge_likelihoods_secondary_all_co2ls_n{n_nodes}.pickle", "wb"
 ) as handle:
     pickle.dump(likelihoods_secondary, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 with open(
-    save_path + f"edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle", "wb"
+    save_path + f"/edge_likelihoods_total_all_co2ls_n{n_nodes}.pickle", "wb"
 ) as handle:
     pickle.dump(likelihoods_total, handle, protocol=pickle.HIGHEST_PROTOCOL)

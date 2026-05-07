@@ -15,6 +15,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import sys
 
+# Logging
+from loguru import logger
+import logging
+import pypsa
+pypsa.network.io.logger.setLevel(logging.ERROR)
+
 sys.path.append("./")
 from utils.data_handling import get_actual_co2_level, get_co2_levels
 from utils.config import path_to_figures_sclopf, use_extensions

@@ -13,3 +13,4 @@ results/
 *.log
 *.pklz
 utils/config_local.py
+pyenv/*

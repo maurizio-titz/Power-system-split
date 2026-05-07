@@ -13,6 +13,12 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# Logging
+from loguru import logger
+import logging
+import pypsa
+pypsa.network.io.logger.setLevel(logging.ERROR)
+
 sys.path.append("./")
 
 from utils import data_handling
@@ -240,7 +246,7 @@ def create_inertia_by_country_plot(
     bus_country_map = _get_bus_country_map(network)
 
     split_properties = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5",
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5",
         index_col=0,
     )
 
@@ -370,7 +376,7 @@ def create_inertia_by_country_all_co2_plot(
     setup_matplotlib_style()
 
     split_properties = pd.read_hdf(
-        path_to_vis_results_sclopf + f"split_properties_all_n{n_nodes}.h5",
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5",
         index_col=0,
     )
     if co2_lvls is None:
