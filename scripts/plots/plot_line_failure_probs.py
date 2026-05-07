@@ -757,6 +757,7 @@ def create_total_line_failure_plot(
                                                 n_bins_line_loading, endpoint=True)
                 diff_bins = line_loading_bins[1] - line_loading_bins[0]
                 
+                # TODO move this data to plot_data folder and mkdir if neccesary
                 # Evaluate lineloadings for each snap_shot
                 fname_ll = f"/line_loadings_for_snapshots_Co2L{co2l:.2f}_n{n_nodes}"
                 if second_row_condition_on_split:

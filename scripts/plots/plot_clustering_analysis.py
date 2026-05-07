@@ -1201,8 +1201,9 @@ def dev_plot_pdata_example(cluster_rank: int, zoom_middle=(-0.07, 42.84), zoom_r
     # Data path
     fpath_pdata = path_to_figures_sclopf + "/plot_data/plot_data_agg_params_01bf408e.pklz"
     
-    #create_clustering_analysis_plot_from_data(fpath_pdata)
-    #create_clustering_analysis_plot_from_data(fpath_pdata, use_only_lines=True)
+    create_clustering_analysis_plot_from_data(fpath_pdata, sort_by="frequency")
+    create_clustering_analysis_plot_from_data(fpath_pdata, use_only_lines=True,
+                                              sort_by="frequency")
     
     create_cluster_plot_only_lines_with_zoom(fpath_pdata, cluster_rank,
                                              zoom_middle=zoom_middle, zoom_radius_x=zoom_radius_x)
