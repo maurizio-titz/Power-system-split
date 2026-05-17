@@ -97,102 +97,103 @@ logger.info(f"Saved min/max nodal inertia generation to {nodal_inertia_min_max_f
 
 # #### Calculate dipole vectors #### not used in the publication, but can be used for further analysis of the spatial power inhomogeneity
 
-# pos = nx.get_node_attributes(nx_graph, "pos")
-# dipole_vector = np.zeros((len(co2l_list), 2, len(network.snapshots)))
-# mean_consumption_vector = np.zeros((len(co2l_list), nx_graph.number_of_nodes()))
-# weighted_mean_consumption_vector = np.zeros(
-#     (len(co2l_list), nx_graph.number_of_nodes())
-# )
-# graph_net_mismatch = np.zeros((len(co2l_list), len(network.snapshots)))
+pos = nx.get_node_attributes(nx_graph, "pos")
+dipole_vector = np.zeros((len(co2l_list), 2, len(network.snapshots)))
+mean_consumption_vector = np.zeros((len(co2l_list), nx_graph.number_of_nodes()))
+weighted_mean_consumption_vector = np.zeros(
+    (len(co2l_list), nx_graph.number_of_nodes())
+)
+graph_net_mismatch = np.zeros((len(co2l_list), len(network.snapshots)))
 
-# for i, co2l in enumerate(co2l_list):
+for i, co2l in enumerate(co2l_list):
 
-#     print("Co2 level %.2f" % co2l)
+    print("Co2 level %.2f" % co2l)
 
-#     network = data_handling.load_pypsa_network(co2l, n_nodes, use_sclopf=use_sclopf)
-#     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    network = data_handling.load_pypsa_network(co2l, n_nodes, use_sclopf=use_sclopf)
+    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
 
-#     ### NOTE: Here, the mean position is subtracted from the coordinates
-#     position_vector = np.array([pos[n] for n in nx_graph.nodes()])
-#     position_vector[:, 1] -= np.mean(position_vector[:, 1])
-#     position_vector[:, 0] -= np.mean(position_vector[:, 0])
+    ### NOTE: Here, the mean position is subtracted from the coordinates
+    position_vector = np.array([pos[n] for n in nx_graph.nodes()])
+    position_vector[:, 1] -= np.mean(position_vector[:, 1])
+    position_vector[:, 0] -= np.mean(position_vector[:, 0])
 
-#     nodal_balance = (
-#         network.generators_t.p.mul(network.generators.sign)
-#         .T.groupby(network.generators["bus"])
-#         .sum()
-#     )
-#     nodal_balance = nodal_balance.add(
-#         network.storage_units_t.p.T.groupby(network.storage_units["bus"]).sum(),
-#         fill_value=0,
-#     ).add(-network.loads_t.p.T.groupby(network.loads["bus"]).sum(), fill_value=0)
+    nodal_balance = (
+        network.generators_t.p.mul(network.generators.sign)
+        .T.groupby(network.generators["bus"])
+        .sum()
+    )
+    nodal_balance = nodal_balance.add(
+        network.storage_units_t.p.T.groupby(network.storage_units["bus"]).sum(),
+        fill_value=0,
+    ).add(-network.loads_t.p.T.groupby(network.loads["bus"]).sum(), fill_value=0)
 
-#     ## add hvdc link subtraction/addition
-#     nodal_balance = nodal_balance.add(
-#         -network.links_t.p0.T.groupby(network.links["bus0"]).sum(), fill_value=0
-#     )
-#     nodal_balance = nodal_balance.add(
-#         -network.links_t.p1.T.groupby(network.links["bus1"]).sum(), fill_value=0
-#     )
+    ## add hvdc link subtraction/addition
+    nodal_balance = nodal_balance.add(
+        -network.links_t.p0.T.groupby(network.links["bus0"]).sum(), fill_value=0
+    )
+    nodal_balance = nodal_balance.add(
+        -network.links_t.p1.T.groupby(network.links["bus1"]).sum(), fill_value=0
+    )
 
-#     nodal_balance = -nodal_balance
+    nodal_balance = -nodal_balance
 
-#     for nodecount, node in enumerate(nx_graph.nodes()):
-#         mean_consumption_vector[i, nodecount] = nodal_balance.mean(axis=1).loc[node]
-#         weighted_mean_consumption_vector[i, nodecount] = (
-#             nodal_balance.mul(network.snapshot_weightings.generators, axis="columns")
-#             .mean(axis=1)
-#             .loc[node]
-#         )
-#         graph_net_mismatch[i] += nodal_balance.loc[node]
-#         dipole_vector[i] += np.outer(
-#             position_vector[nodecount], nodal_balance.loc[node].to_numpy()
-#         )
-#         if np.any(np.isnan(dipole_vector)):
-#             raise ValueError("SPI coordinates are not valid!")
+    for nodecount, node in enumerate(nx_graph.nodes()):
+        mean_consumption_vector[i, nodecount] = nodal_balance.mean(axis=1).loc[node]
+        weighted_mean_consumption_vector[i, nodecount] = (
+            nodal_balance.mul(network.snapshot_weightings.generators, axis="columns")
+            .mean(axis=1)
+            .loc[node]
+        )
+        graph_net_mismatch[i] += nodal_balance.loc[node]
+        dipole_vector[i] += np.outer(
+            position_vector[nodecount], nodal_balance.loc[node].to_numpy()
+        )
+        if np.any(np.isnan(dipole_vector)):
+            raise ValueError("SPI coordinates are not valid!")
 
-# np.save(
-#     path_to_pre_outage + f"/dipole_vector_time_series_all_co2ls_{n_nodes}.npy",
-#     dipole_vector,
-# )
-# np.save(
-#     path_to_pre_outage + f"/mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
-#     mean_consumption_vector,
-# )
-# np.save(
-#     path_to_pre_outage + f"/weighted_mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
-#     weighted_mean_consumption_vector,
-# )
-# np.save(
-#     path_to_pre_outage
-#     + f"/graph_net_power_mismatch_time_series_all_co2ls_{n_nodes}.npy",
-#     graph_net_mismatch,
-# )
+np.save(
+    path_to_pre_outage + f"/dipole_vector_time_series_all_co2ls_{n_nodes}.npy",
+    dipole_vector,
+)
+np.save(
+    path_to_pre_outage + f"/mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
+    mean_consumption_vector,
+)
+np.save(
+    path_to_pre_outage + f"/weighted_mean_nodal_consumption_all_co2ls_{n_nodes}.npy",
+    weighted_mean_consumption_vector,
+)
+np.save(
+    path_to_pre_outage
+    + f"/graph_net_power_mismatch_time_series_all_co2ls_{n_nodes}.npy",
+    graph_net_mismatch,
+)
 
-# #### Calculate spatial power inhomogeneity ####
-# # (To calculate the spatial power inhomogeneity (spi) we rescale the spi vector
-# # by the below scale factor, since it has the units of power and positions in long and lat
-# # We then evaluate the geodesic distance between the mean position (given in logitude and latitude)
-# # and the end point of the rescaled spi vector)
+#### Calculate spatial power inhomogeneity ####
+# (To calculate the spatial power inhomogeneity (spi) we rescale the spi vector
+# by the below scale factor, since it has the units of power and positions in long and lat
+# We then evaluate the geodesic distance between the mean position (given in logitude and latitude)
+# and the end point of the rescaled spi vector)
 
-# logger.info("\nCalculate spatial power inhomogeneity...")
-# vec_norm = np.zeros((len(co2l_list), len(network.snapshots)))
-# positions = np.array([pos[n] for n in nx_graph.nodes()])
-# mean_pos = np.array([np.mean(positions[:, 0]), np.mean(positions[:, 1])])
-# scale_factor = 1e6
+logger.info("\nCalculate spatial power inhomogeneity...")
+vec_norm = np.zeros((len(co2l_list), len(network.snapshots)))
+positions = np.array([pos[n] for n in nx_graph.nodes()])
+mean_pos = np.array([np.mean(positions[:, 0]), np.mean(positions[:, 1])])
+scale_factor = 1e6
 
-# k = gd.Geodesic()
+k = gd.Geodesic()
 
-# for i, co2l in enumerate(co2l_list):
-#     print("Co2 level %.2f" % co2l)
+for i, co2l in enumerate(co2l_list):
+    print("Co2 level %.2f" % co2l)
 
-#     for j in range(len(network.snapshots)):
-#         shapely_pos = Point(dipole_vector[i, :, j] / scale_factor + mean_pos)
-#         distance = k.inverse(shapely_pos.coords, mean_pos)[0, 0] / 1000
-#         vec_norm[i, j] = distance
-#         if np.any(np.isnan(vec_norm)):
-#             raise ValueError("SPI coordinates are not valid!")
-# np.save(path_to_pre_outage + f"/spi_time_series_all_co2ls_{n_nodes}.npy", vec_norm)
+    for j in range(len(network.snapshots)):
+        shapely_pos = Point(dipole_vector[i, :, j] / scale_factor + mean_pos)
+        distance = k.inverse(shapely_pos.coords, mean_pos)[0, 0] / 1000
+        vec_norm[i, j] = distance
+        if np.any(np.isnan(vec_norm)):
+            raise ValueError("SPI coordinates are not valid!")
+np.save(path_to_pre_outage + f"/spi_time_series_all_co2ls_{n_nodes}.npy", 
+        vec_norm)
 
 
 #### get actual co2 emission lvls ####
@@ -214,7 +215,6 @@ from utils.config import (
     path_to_sclopf_results,
 )
 
-n_nodes = 600
 
 # # Load network graph and node positions
 # # (it is equal for all CO2 levels)
@@ -242,7 +242,7 @@ co2ls = get_co2_levels(n_nodes)
 # %%
 networks = {
     co2l: data_handling.load_pypsa_network(
-        n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+        n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
     )
     for co2l in co2ls
 }

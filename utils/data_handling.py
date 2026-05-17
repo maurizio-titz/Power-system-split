@@ -32,6 +32,7 @@ from utils.config import (
     path_to_cascade_results_sclopf,
     path_to_cascade_results_lopf,
     path_to_grid_data,
+    path_to_sclopf_results
 )
 
 if not os.path.exists(path_to_grid_data):
@@ -673,7 +674,7 @@ def get_co2_levels(n_nodes, ignore_lvls=()):
     return np.array(sorted(co2l_list, reverse=True))
 
 # FIXME n_nodes goes not into this. Maybe other names filenames.
-def get_actual_co2_level(lvls, n_nodes=600, percent=False):
+def get_actual_co2_level(lvls, n_nodes=600, percent=False) -> np.ndarray:
     """Get actual CO2 levels from results file.
 
     Args:
@@ -684,14 +685,19 @@ def get_actual_co2_level(lvls, n_nodes=600, percent=False):
     Returns:
         Actual CO2 level(s)
     """
-    from utils.config import path_to_sclopf_results
 
+    if n_nodes != 600:
+        raise NotImplementedError("Actual Co2 Levels only calculated for n=600!")
+    
+    # TODO why squeeze?
     lvls_actual = (
-        pd.read_csv(path_to_sclopf_results + "/actual_co2_levels.csv", index_col=0)
+        pd.read_csv(path_to_sclopf_results + "/actual_co2_levels.csv", 
+                    index_col=0)
         .loc[lvls]
         .values.squeeze()
     )
 
+    # TODO rounding here seems weird
     if percent:
         lvls_actual = (lvls_actual * 100).round().astype(int)
 

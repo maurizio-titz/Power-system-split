@@ -262,6 +262,38 @@ def add_panel_label(
         get_panel_label(label_index, lowercase=lowercase),
         **default_kwargs,
     )
+    
+    
+def add_panel_label_fig_position(fig: mpl.figure.Figure, 
+                                   label_index: int, 
+                                   fig_pos_xx: float, fig_pos_yy: float, 
+                                   lowercase: bool | None = None, **kwargs):
+    """Add panel label to position on the fig supplied.
+
+    Args:
+        fig: pyplot Figure obejct
+        label_index: index for panel label (0=A, 1=B, etc.)
+        fig_pos_xx, fig_pos_yy ( both float): x and y position in figure coordinates
+        lowercase: if True, use lowercase labels; if False, use uppercase;
+                  if None, use environment variable PLOT_PANEL_LOWERCASE
+        **kwargs: additional text formatting arguments
+    """
+
+    # Use environment variable if lowercase not explicitly set
+    if lowercase is None:
+        config = get_plot_config()
+        lowercase = config["panel_lowercase"]
+
+    default_kwargs = {
+        "fontsize": PANEL_LABEL_FONTSIZE,
+        "weight": PANEL_LABEL_WEIGHT,
+        "verticalalignment": "center"
+    }
+    default_kwargs.update(kwargs)
+    
+    fig.text(fig_pos_xx, fig_pos_yy,
+        get_panel_label(label_index, lowercase=lowercase),
+        **default_kwargs)
 
 
 def setup_map_axes(ax, xlim=MAP_XLIM, ylim=MAP_YLIM):
