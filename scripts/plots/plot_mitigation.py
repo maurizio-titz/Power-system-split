@@ -1193,7 +1193,8 @@ def blackout_size_histogram_after_mitigation(
     xlims: tuple[float, float] = (0, 100),
     ylog_scale: bool = True,
     calc_inertia_again: bool = False,
-    linewidth: float = 1.5):
+    linewidth: float = 1.5,
+    alpha=.8):
     """Plot the size of blackouts after mitigation and compare it with before."""
     
     # Load data
@@ -1245,9 +1246,11 @@ def blackout_size_histogram_after_mitigation(
     
     ## Orignal Plots
     all_counts = list()
-    for idx, co2l_r in tqdm(enumerate(co2_lvls_picked_ls), 
-                            total=len(co2_lvls_picked_ls), 
-                            desc="Drawing"):
+    pbar = tqdm(enumerate(co2_lvls_picked_ls), 
+                            total=len(co2_lvls_picked_ls))
+    for idx, co2l_r in pbar:
+        pbar.set_description(f"Co2={co2l_r:.2f}")
+        pbar.update()
         co2_mask = split_props.co2l == co2l_r
         split_props_co2 = split_props[co2_mask]
         vals =(
@@ -1256,7 +1259,7 @@ def blackout_size_histogram_after_mitigation(
         
         ax_ls_line[idx].hist(vals, bins=bins, 
                             weights=split_props_co2.total_weighting,
-                            alpha=.7, 
+                            alpha=alpha, 
                             histtype="step",
                             log=ylog_scale,
                             label=rf"CO$_2$: {get_actual_co2_level(co2l_r, n_nodes=n_nodes, percent=True)}\%" ,
@@ -1265,7 +1268,7 @@ def blackout_size_histogram_after_mitigation(
                             color=color_ls[0])
         ax_ls_inertia[idx].hist(vals, bins=bins, 
                             weights=split_props_co2.total_weighting,
-                            alpha=.7, 
+                            alpha=alpha, 
                             histtype="step",
                             log=ylog_scale,
                             label=rf"CO$_2$: {get_actual_co2_level(co2l_r, n_nodes=n_nodes, percent=True)}\%",
@@ -1300,7 +1303,7 @@ def blackout_size_histogram_after_mitigation(
             
             ax_ls_line[idx].hist(vals_lines, bins=bins,
                                 weights=split_props_co2_lines.total_weighting,
-                                alpha=.7,
+                                alpha=alpha,
                                 histtype="step",
                                 log=ylog_scale,
                                 zorder=0,
@@ -1362,17 +1365,14 @@ def blackout_size_histogram_after_mitigation(
                 
                 inertia_last_step = inertia_budget_row.idx_step
                 
-                inertia_comps_miti_r = comp_mitigated_step[comp_mitigated_step < inertia_last_step].index.values
+                # TODO should this effectively reordering take place of should it just be cut outs?
+                inertia_comps_miti_index = comp_mitigated_step[comp_mitigated_step < inertia_last_step].index
                 
-                # Remove the components from the comp prop df
-                
-                mask_cprops = ~comp_property_df["component_number"].isin(inertia_comps_miti_r)
-                
-                mod_comp_property_df = comp_property_df[mask_cprops]
-                
-                inertia_split_groups = mod_comp_property_df.groupby(["time_stamp", "split_number"])
+                # Set the 'blackout_load_loss_share' to zero where it was mitigated               
+                comp_property_df.loc[inertia_comps_miti_index, "blackout_load_loss_share"] = 0
+                logger.info(f"---> {len(inertia_comps_miti_index)} components were mitigated")
+                inertia_split_groups = comp_property_df.groupby(["time_stamp", "split_number"])
 
-                
                 inertia_split_props_r = pd.DataFrame(index=inertia_split_groups.groups.keys())
                 inertia_split_props_r.index = inertia_split_props_r.index.rename(
                     ["time_stamp", "split_number_snapshot"]
@@ -1409,7 +1409,7 @@ def blackout_size_histogram_after_mitigation(
             #color_i_r = f"C{idx_budget_i + 1}"
             ax_ls_inertia[idx].hist(vals_inertia, bins=bins,
                                     weights=inertia_split_props_r.total_weighting,
-                                    alpha=.7,
+                                    alpha=alpha,
                                     histtype="step",
                                     log=ylog_scale,
                                     zorder=0,
@@ -1427,7 +1427,7 @@ def blackout_size_histogram_after_mitigation(
     [xx.sharey(ax_ls_inertia[0]) for xx in ax_ls_inertia[1:]]
     
     for idx_r, ax_r in enumerate(ax_arr[:, 0]):
-        ax_r.set_ylabel(f"CO$_2$ Level $= {co2_lvls_picked_ls[idx_r]}$\nCount", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_r.set_ylabel(f"CO$_2$ Level $= {round(co2_lvls_picked_ls[idx_r]*100)}$\\%\nCount", fontsize=AXIS_LABEL_FONTSIZE)
     
     for ax_r in [ax_ls_line[0],ax_ls_inertia[0]]:
         ax_r.set_xlim(left=min(bins), right=max(bins))
