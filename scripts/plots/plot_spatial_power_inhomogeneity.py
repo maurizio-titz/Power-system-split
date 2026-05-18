@@ -145,7 +145,7 @@ def draw_monthly_average_spi_vectors(fig: Figure,
             center_pos = position_vector.mean(axis=0)
         else:
             center_pos = (0, 0)
-        if diff_list[idx_co2_list] > 1e-6 or np.count_nonzero(diff_list < 1e-6) > 1:
+        if diff_list[idx_co2_list] > 1e-6 or np.count_nonzero(diff_list < 1e-6) != 1:
             raise ValueError("co2 value either not in list or duplicate in list.")
         
         for month_nr in range(12):

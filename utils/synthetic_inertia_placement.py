@@ -651,7 +651,7 @@ def run_different_parameters_for_co2lvl(
     max_iter=10000,
     nr_processes: int = 5,
     revert_chrotE_fac: bool = False,
-    resolve_equality_method_ls: list = (
+    resolve_equality_method_ls: tuple[str, ...] = (
         "random",
         "concentrate",
         "hindsight",

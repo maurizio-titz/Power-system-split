@@ -95,7 +95,6 @@ else:
 print("\n### Extracting split properties ###\n")
 print("Current time:", datetime.datetime.now())
 
-# TODO why built it then before this line?
 split_props_fpath = save_path + f"/split_properties_all_n{n_nodes}.h5"
 if os.path.exists(split_props_fpath):
     print("Split properties file already exists. Skipping extraction.")

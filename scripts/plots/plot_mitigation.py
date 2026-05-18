@@ -11,7 +11,12 @@ import copy
 import os
 import warnings
 
+import glob
+
 warnings.simplefilter(action="ignore", category=FutureWarning)
+
+from tqdm import tqdm
+from loguru import logger
 
 import networkx as nx
 import pandas as pd
@@ -21,6 +26,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from matplotlib.ticker import MaxNLocator
+from matplotlib.lines import Line2D
+
 
 sys.path.append("./")
 
@@ -32,6 +39,7 @@ from utils.config import (
     path_to_line_extension_mitigation_sclopf,
     path_to_pre_outage_sclopf,
     path_to_inertia_mitigation_results_sclopf,
+    path_to_evaluation_results_sclopf
 )
 from utils import data_handling, cascade_simulation
 from utils.cascade_simulation import LOOKUP_TABLE_NP
@@ -59,7 +67,10 @@ AXIS_LABELSIZE = AXIS_LABEL_FONTSIZE
 TICK_LABELSIZE = TICK_LABEL_FONTSIZE
 SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 
-from utils.config import path_to_line_extension_mitigation_sclopf
+# Plot data path
+path_plot_data = path_to_figures_sclopf + "/plot_data"
+if not os.path.exists(path_plot_data):
+    os.makedirs(path_plot_data, exist_ok=True)
 
 annualized_cost_per_MWs_max_DE = 888.5  # € per MWs/a of synthetic intertia as per https://www.netztransparenz.de/de-de/Systemdienstleistungen/Frequenzhaltung/Marktgest%C3%BCtzte-Beschaffung-von-Momentanreserve
 # annualized_cost_per_MVAs_GB = (
@@ -1171,6 +1182,306 @@ def create_combined_mitigation_plot(
     save_figure(f, f_name, save_path)
     plt.show()
 
+
+# TODO remove input split props...this is only 
+# for developement to not load it with every style change
+def blackout_size_histogram_after_mitigation(
+    n_nodes: int = 600,
+    co2_lvls_tup: tuple[float, ...] | None = (0.0, .2),
+    budget_invest_bn_tup: tuple[float, ...] = (2, .3),
+    n_bins: int = 101,
+    xlims: tuple[float, float] = (0, 100),
+    ylog_scale: bool = True,
+    calc_inertia_again: bool = False,
+    linewidth: float = 1.5):
+    """Plot the size of blackouts after mitigation and compare it with before."""
+    
+    # Load data
+    ## Original
+    split_props = pd.read_hdf(path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0)
+    split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(float)
+    
+    split_props["total_weighting"] = (
+        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    )
+    
+    # Plot it
+    setup_matplotlib_style()
+    color_ls = ['#1b9e77',
+                '#d95f02',
+                '#7570b3',
+                '#e7298a']
+    linestyle_ls = ["--", ":", "-."]
+    
+    if len(budget_invest_bn_tup) > 3:
+        raise ValueError("Only a maximum of 3 different budget values is reasonable!")
+    
+    co2_lvls_available = np.array(get_co2_levels(n_nodes))
+    
+    if co2_lvls_tup is None:
+        co2_lvls_tup = co2_lvls_available
+    
+    # Pick the co2lvls from the list and check if everything in in the list
+    co2_lvls_picked_ls = list()
+    for idx, co2l_r in enumerate(co2_lvls_tup):
+        diff_list = abs(co2_lvls_available - co2l_r)
+        idx_co2_list = np.argmin(diff_list)
+        
+        if diff_list[idx_co2_list] > 1e-6 or np.count_nonzero(diff_list < 1e-6) != 1:
+            raise ValueError(f"The co2 value {co2l_r} is not in the available co2 levels!")
+        co2_lvls_picked_ls.append(co2_lvls_available[idx_co2_list])
+    
+    # Sort provided lists/tuples
+    co2_lvls_picked_ls = sorted(co2_lvls_picked_ls)[::-1]
+    budget_invest_bn_tup = sorted(budget_invest_bn_tup)
+    
+    n_rows = len(co2_lvls_picked_ls)
+    
+    fig, ax_arr = plt.subplots(n_rows, 2, figsize=(8, 2*n_rows))
+    ax_ls_line = ax_arr[:, 1].flatten()
+    ax_ls_inertia = ax_arr[:, 0].flatten()
+    
+    bins = np.linspace(min(xlims), max(xlims), n_bins)
+    
+    ## Orignal Plots
+    all_counts = list()
+    for idx, co2l_r in tqdm(enumerate(co2_lvls_picked_ls), 
+                            total=len(co2_lvls_picked_ls), 
+                            desc="Drawing"):
+        co2_mask = split_props.co2l == co2l_r
+        split_props_co2 = split_props[co2_mask]
+        vals =(
+            split_props_co2.lost_load_share_blackout.values * 100.
+        )
+        
+        ax_ls_line[idx].hist(vals, bins=bins, 
+                            weights=split_props_co2.total_weighting,
+                            alpha=.7, 
+                            histtype="step",
+                            log=ylog_scale,
+                            label=rf"CO$_2$: {get_actual_co2_level(co2l_r, n_nodes=n_nodes, percent=True)}\%" ,
+                            zorder=-2,
+                            linewidth=linewidth,
+                            color=color_ls[0])
+        ax_ls_inertia[idx].hist(vals, bins=bins, 
+                            weights=split_props_co2.total_weighting,
+                            alpha=.7, 
+                            histtype="step",
+                            log=ylog_scale,
+                            label=rf"CO$_2$: {get_actual_co2_level(co2l_r, n_nodes=n_nodes, percent=True)}\%",
+                            zorder=-2,
+                            linewidth=linewidth,
+                            color=color_ls[0])
+        
+        
+        # Line mitigation
+        fname_line_mitigation = os.path.join(path_to_line_extension_mitigation_sclopf, 
+                                             f"heuristic_costMin_GSS_mitigation_annualized_Co2L{co2l_r}_n{n_nodes}_380kVonly_blackoutthres0.8.pkl")
+        with open(fname_line_mitigation, 'rb') as fh_line_in:
+            reinforced_lines, loss_w_mitigation, num_blackouts_with_mitigation, \
+                cost =  pickle.load(fh_line_in)
+                
+        cumu_cost = np.cumsum(cost)
+        
+        for idx_budget, budget_invest_bn_r in enumerate(budget_invest_bn_tup):
+            idxs_under_budget = np.where(cumu_cost <= (budget_invest_bn_r*1e9))
+
+            lines_reinforced_under_budget = np.array(reinforced_lines)[idxs_under_budget]
+            
+            if len(lines_reinforced_under_budget) == len(reinforced_lines):
+                logger.warning("Chosen line extenstion budget is over the value that was calculated")
+            
+            mask_sprops_lines = (split_props_co2.init_failure_0.isin(lines_reinforced_under_budget)) |\
+                (split_props_co2.init_failure_1.isin(lines_reinforced_under_budget))
+            
+            split_props_co2_lines = split_props_co2[~mask_sprops_lines]
+            
+            vals_lines = split_props_co2_lines.lost_load_share_blackout.values * 100.
+            
+            ax_ls_line[idx].hist(vals_lines, bins=bins,
+                                weights=split_props_co2_lines.total_weighting,
+                                alpha=.7,
+                                histtype="step",
+                                log=ylog_scale,
+                                zorder=0,
+                                linestyle=linestyle_ls[idx_budget],
+                                label=f"{budget_invest_bn_r}",
+                                linewidth=linewidth,
+                                color=color_ls[1+idx_budget])
+        
+        # Additional inertia mitigation
+        search_pattern = os.path.join(path_to_inertia_mitigation_results_sclopf, 
+                                                f"synthetic_inertia_placement_Co2{co2l_r}_N{n_nodes}_deltarotE*_rocofthres1_lshare0_maxiter1000_random_blackoutthres0.8.pklz")
+        fname_inertia_ls = glob.glob(search_pattern)
+        if len(fname_inertia_ls) != 1:
+            print(search_pattern)
+            raise IOError(f"Either not file found or multiple found. List has lenght {len(fname_inertia_ls)}")
+        else:
+            fname_inertia = fname_inertia_ls[0]
+        
+        inertia_step_delta_rotE_MWs = float(fname_inertia.split("deltarotE")[-1].split("_rocofthres")[0])
+        
+        with gzip.open(fname_inertia, 'rb') as fh_inertia_in:
+            _, _, inertia_placed_loss_mitigated_ls, comp_mitigated_step, _, _ = pickle.load(fh_inertia_in)
+        
+        fname_comp_property_df = os.path.join(path_to_evaluation_results_sclopf, 
+                                              f"component_properties_Co2L{co2l_r}_n{n_nodes}.h5")
+        
+        comp_property_df = pd.read_hdf(fname_comp_property_df, key="df")
+        # Get how much inertia is placed before reaching budges. Get number of steps
+        # TODO check if index of comp_mitigated... is really comp idx in comp properites
+        
+        comp_mitigated_step = comp_mitigated_step.sort_values()
+        comp_mitigated_step = comp_mitigated_step[comp_mitigated_step != 1]
+        
+        inertia_unit_fac = 1e-3
+        inertia_placed_df = pd.DataFrame(inertia_placed_loss_mitigated_ls,
+                                         columns=["idx_step", "idx_node", "delta_Erot_fac", 
+                                                  "max_change", 
+                                                  "components_beyond_threshold"])
+        inertia_placed_df["delta_Erot_GWs"] = inertia_placed_df.loc[:, "delta_Erot_fac"] * inertia_step_delta_rotE_MWs * inertia_unit_fac
+        inertia_placed_df["cum_Erot_GWs"] = inertia_placed_df["delta_Erot_GWs"].cumsum()
+        
+        scale_Erot_to_bn = annualized_cost_per_GWs_max / 1e9
+        
+        inertia_placed_df["cost_bn"] = inertia_placed_df["delta_Erot_GWs"] * scale_Erot_to_bn 
+        inertia_placed_df["cum_cost_bn"] = inertia_placed_df["cost_bn"].cumsum()
+        
+        for idx_budget_i, budget_inertia in enumerate(budget_invest_bn_tup):
+            
+            fname_inertia_sprops = f"mitigated_compoments_Co2L{co2l_r}_n{n_nodes}_budget{budget_inertia:.4f}.h5"
+            fpath_inertia_mitigated_sprops = os.path.join(path_plot_data, 
+                                                          fname_inertia_sprops)
+            
+            if not os.path.exists(fpath_inertia_mitigated_sprops) or calc_inertia_again:
+                logger.info(f"Finding sprops for inertia mitigation w. budget {budget_inertia}")
+                # Find out components that have been mitigated with the current budget
+                inertia_mask_under_budget = inertia_placed_df.cum_cost_bn <= budget_inertia
+            
+                inertia_budget_row = inertia_placed_df[inertia_mask_under_budget].iloc[-1]
+                
+                inertia_last_step = inertia_budget_row.idx_step
+                
+                inertia_comps_miti_r = comp_mitigated_step[comp_mitigated_step < inertia_last_step].index.values
+                
+                # Remove the components from the comp prop df
+                
+                mask_cprops = ~comp_property_df["component_number"].isin(inertia_comps_miti_r)
+                
+                mod_comp_property_df = comp_property_df[mask_cprops]
+                
+                inertia_split_groups = mod_comp_property_df.groupby(["time_stamp", "split_number"])
+
+                
+                inertia_split_props_r = pd.DataFrame(index=inertia_split_groups.groups.keys())
+                inertia_split_props_r.index = inertia_split_props_r.index.rename(
+                    ["time_stamp", "split_number_snapshot"]
+                )
+                
+                inertia_split_props_r["lost_load_share_blackout"] = (
+                    inertia_split_groups.blackout_load_loss_share.sum().astype(float)
+                )
+                trigger_weighting = inertia_split_groups.trigger_weighting.unique().astype(int)
+                inertia_split_props_r["trigger_weighting"] = trigger_weighting
+                
+                inertia_split_props_r["load"] = inertia_split_groups.load.sum().astype(float)
+                
+                snapshot_weightings = data_handling.load_pypsa_network(
+                    co2lvl=co2l_r, n_nodes=n_nodes, use_sclopf=True
+                    ).snapshot_weightings
+                inertia_split_props_r["snapshot_weighting"] = snapshot_weightings.generators.loc[
+                    inertia_split_props_r.index.get_level_values("time_stamp")
+                    ].values.astype(int)
+                inertia_split_props_r["total_weighting"] = (
+                    inertia_split_props_r["snapshot_weighting"] * \
+                        inertia_split_props_r["trigger_weighting"]
+                )
+                
+                inertia_split_props_r.to_hdf(fpath_inertia_mitigated_sprops, key="df",
+                                            complib='zlib', complevel=9)
+                logger.info("Finished sprops calc.")
+            else:
+                inertia_split_props_r = pd.read_hdf(fpath_inertia_mitigated_sprops, key="df")
+            
+            # Plot it
+            vals_inertia = inertia_split_props_r.lost_load_share_blackout * 100.
+            
+            #color_i_r = f"C{idx_budget_i + 1}"
+            ax_ls_inertia[idx].hist(vals_inertia, bins=bins,
+                                    weights=inertia_split_props_r.total_weighting,
+                                    alpha=.7,
+                                    histtype="step",
+                                    log=ylog_scale,
+                                    zorder=0,
+                                    linestyle=linestyle_ls[idx_budget_i],
+                                    label=f"{budget_inertia:.2f}",
+                                    linewidth=linewidth,
+                                    color=color_ls[1+idx_budget_i])
+            
+        
+    # Aesthetics
+    [xx.sharex(ax_ls_line[0]) for xx in ax_ls_line[1:]]
+    [xx.sharex(ax_ls_inertia[0]) for xx in ax_ls_inertia[1:]]
+    
+    [xx.sharey(ax_ls_line[0]) for xx in ax_ls_line[1:]]
+    [xx.sharey(ax_ls_inertia[0]) for xx in ax_ls_inertia[1:]]
+    
+    for idx_r, ax_r in enumerate(ax_arr[:, 0]):
+        ax_r.set_ylabel(f"CO$_2$ Level $= {co2_lvls_picked_ls[idx_r]}$\nCount", fontsize=AXIS_LABEL_FONTSIZE)
+    
+    for ax_r in [ax_ls_line[0],ax_ls_inertia[0]]:
+        ax_r.set_xlim(left=min(bins), right=max(bins))
+        
+    for ax_r in ax_arr[:-1, :].flatten():
+        ax_r.tick_params(labelbottom=False)
+        
+    for ax_r in ax_arr[:, 1:].flatten():
+        ax_r.tick_params(labelleft=False)
+    
+    for ax_r in ax_arr[-1, :].flatten():
+        ax_r.set_xlabel(
+                r"Share of load not served [\%]", fontsize=AXIS_LABEL_FONTSIZE
+            )
+    
+    xlabel = ax_arr[-1, 0].xaxis.get_label()
+    xlabel_bbox = xlabel.get_window_extent(fig.canvas.get_renderer())
+    xlabel_fig_pos = xlabel_bbox.transformed(fig.transFigure.inverted())
+    
+    y_pos = xlabel_fig_pos.y0 - 0.0  # 5% below xlabel
+    
+    labels_fig_legend = [f"{0:.2f}"] + [f"{xx:.2f}" for xx in budget_invest_bn_tup]
+    
+    leg = fig.legend(labels_fig_legend,
+               loc="upper center",
+               ncols=3,
+               title="Mitigation Budget [bn €]",
+               bbox_to_anchor=(0.5, y_pos ),
+               fontsize=LEGEND_FONTSIZE,
+               )
+    
+    for handle in leg.legend_handles:
+        if hasattr(handle, 'set_linewidth'):
+            handle.set_linewidth(2.5)
+
+        
+    pos_inertia_top = ax_ls_inertia[0].get_position()
+    pos_lines_top = ax_ls_line[0].get_position()
+    
+    ax_ls_inertia[0].text(.5, 1.075, "Additional Inertia",
+                          transform=ax_ls_inertia[0].transAxes,
+                          ha="center", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_ls_line[0].text(.5, 1.05, "Line Reinforcement",
+                       transform=ax_ls_line[0].transAxes,
+                       ha="center", fontsize=AXIS_LABEL_FONTSIZE)
+    
+    for idx_r, ax_r in enumerate(ax_arr.flatten()):
+        add_panel_label(ax_r, idx_r, x_offset=-.15, y_offset=.075)
+    
+    # Save it
+    fname_fig = f"blackout_sizes_after_mitigation_n{n_nodes}"
+    save_figure(fig, fname_fig, path_to_figures_sclopf)
+    
+    return
 
 if __name__ == "__main__":
     params = [

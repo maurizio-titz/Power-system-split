@@ -43,17 +43,17 @@ for co2l in pbar:
         # because it contains the information about the original and updated s_nom values
         # we need the original s_nom values to update the other line limits
         network_LOPF = data_handling.load_pypsa_network(
-            n_nodes=600, co2lvl=co2l, use_sclopf=False, lopt=use_extensions
+            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=False, lopt=use_extensions
         )
         nx_graph = data_handling.build_networkx_graph(
             network_LOPF, snet_index=snet_index, update_lines=use_extensions
         )
         network = data_handling.load_pypsa_network(
-            n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
         )
     else:
         network = data_handling.load_pypsa_network(
-            n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
         )
         nx_graph = data_handling.build_networkx_graph(
             network, snet_index=snet_index, update_lines=False
