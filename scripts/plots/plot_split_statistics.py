@@ -25,6 +25,10 @@ from cycler import cycler
 
 sys.path.append("./")
 
+# Logging
+from tqdm import tqdm
+from loguru import logger
+
 from utils import config
 from utils.data_handling import get_actual_co2_level, get_co2_levels
 from utils.config import (
@@ -773,6 +777,347 @@ def plot_blackout_size_histograms(
     plt.show()
 
 
+def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 600,
+                                                                  use_normalized: bool = True,
+                                                                  use_steps: bool = True,
+                                                                  cmap_blackout_categories: str = "inferno_r",
+                                                                  show_ratio: bool = False,
+                                                                  show_number_and_normalized: bool = True):
+    """Create the plot that shows both the blackout statistics (Number of System Splits)
+    for both common corridor (left panel) and common corridor (right panel).
+    This is using in essence the same approach as 'create_blackout_statistics_plot'"""
+    
+    co2_lvls_all = get_co2_levels(n_nodes)[::-1]
+    actual_co2_lvl = get_actual_co2_level(co2_lvls_all, percent=True)
+    
+    # Load split properties
+    split_props = pd.read_hdf(
+        os.path.join(path_to_vis_results_sclopf, f"split_properties_all_n{n_nodes}.h5"), key="df"
+    )
+    split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(float)
+    
+    split_props["total_weighting"] = (
+        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    )
+    
+    mask_same_corridor = split_props.init_failure_0 == split_props.init_failure_1
+    
+    # Create histograms
+    bins = np.linspace(0, 100, 6, dtype=int)
+    bin_centers = .5 * (bins[:-1] + bins[1:])
+    
+    # Find normalization factor if needed
+    if use_normalized or show_number_and_normalized:
+        for idx_co2, co2l_r in enumerate(co2_lvls_all):
+            file_path = (
+                        os.path.join(data_handling.path_to_grid_data, f"n_2_failures_co2lvl{co2l_r}.pklz")
+                    )
+            with gzip.open(file_path, "rb") as fh_n2:
+                n_2_failures = pickle.load(fh_n2)
+                
+        
+            network = data_handling.load_pypsa_network(n_nodes=n_nodes, co2lvl=co2l_r,
+                                                    use_sclopf=True, lopt=False)
+            
+            n_2_failures_same = [n2_f for n2_f in n_2_failures 
+                                if (n2_f["failures"][0][0] == n2_f["failures"][1][0])]
+            n_2_failures_different = [n2_f for n2_f in n_2_failures 
+                                     if (n2_f["failures"][0][0] != n2_f["failures"][1][0])]   
+            
+            # Trigger and Snapshot weights
+            weighted_trigger_count_same = sum([init_failure["weight"] 
+                                               for init_failure in n_2_failures_same])
+            weighted_trigger_count_different = sum([init_failure["weight"] 
+                                               for init_failure in n_2_failures_different])
+            
+            number_of_simulations_same = weighted_trigger_count_same * network.snapshot_weightings.generators.sum()
+            number_of_simulations_different = weighted_trigger_count_different * network.snapshot_weightings.generators.sum()
+            
+            
+    # Same + different corridor
+    split_props_same = split_props[mask_same_corridor]
+    split_props_different = split_props[~mask_same_corridor]
+    
+    data_same = list()
+    data_different = list()
+    if show_number_and_normalized:
+        data_same_norm = list()
+        data_diff_norm = list()
+    
+    for co2l_r in tqdm(co2_lvls_all, total=len(co2_lvls_all), desc="CO2 Lvls"):
+        split_props_same_co2r = split_props_same[split_props_same.co2l == co2l_r]
+        vals = split_props_same_co2r.lost_load_share_blackout.values * 100.
+        
+        counts_same, _ = np.histogram(vals, bins=bins, weights=split_props_same_co2r.total_weighting)
+            
+        split_props_different_co2_r = split_props_different[split_props_different.co2l == co2l_r]
+        
+        vals = split_props_different_co2_r.lost_load_share_blackout.values * 100.
+        
+        counts_different, _ = np.histogram(vals, bins=bins, 
+                                           weights=split_props_different_co2_r.total_weighting)
+        
+        if show_number_and_normalized:
+            data_same.append(counts_same)
+            data_different.append(counts_different)
+            
+            data_same_norm.append(counts_same / number_of_simulations_same) 
+            data_diff_norm.append(counts_different / number_of_simulations_different)
+            
+        elif use_normalized:
+            data_same.append(counts_same / number_of_simulations_same) 
+            data_different.append(counts_different / number_of_simulations_different)
+        else:
+            data_same.append(counts_same)
+            data_different.append(counts_different)
+            
+        
+        
+    df_same = pd.DataFrame(np.stack(data_same), index=co2_lvls_all, columns=bin_centers)
+    df_different = pd.DataFrame(np.stack(data_different), index=co2_lvls_all, columns=bin_centers)
+    
+    if show_number_and_normalized:
+        df_same_norm = pd.DataFrame(np.stack(data_same_norm), 
+                                    index=co2_lvls_all, columns=bin_centers)
+        df_diff_norm = pd.DataFrame(np.stack(data_diff_norm), 
+                                    index=co2_lvls_all, columns=bin_centers)
+    
+    # Plot it
+    setup_matplotlib_style()
+    markers = ["o", "s", "D", "^", "v", "."]
+    if show_number_and_normalized:
+        fig, ax_ls = plt.subplots(2, 2,figsize=(8, 6),
+                                  sharex='all', sharey='row')
+        [[ax_same, ax_different],
+         [ax_same_norm, ax_diff_norm]] = ax_ls
+        ax_right_most = ax_different
+    
+    
+    elif show_ratio:
+        fig,  ax_ls = plt.subplots(1, 3,figsize=(10, 3.5),
+                                                sharex='all')
+
+        [ax_same, ax_different, ax_ratio] = ax_ls
+        ax_same.sharey(ax_different)
+        ax_right_most = ax_ratio
+    else:
+        fig, ax_ls = plt.subplots(1, 2,figsize=(8, 3.5),
+                                                sharex='all', sharey='all')
+        [ax_same, ax_different] = ax_ls
+        ax_right_most = ax_different
+    
+    cmap = plt.get_cmap(cmap_blackout_categories).copy()
+    for ii, bin_c_r in enumerate(bin_centers):
+        color_r = cmap((ii+1) / (len(bin_centers) + 1))
+        
+        counts_same_r = df_same.loc[:, bin_c_r]
+        counts_diff_r = df_different.loc[:, bin_c_r]
+        if use_steps:
+            if not show_number_and_normalized:
+                ax_same.step(
+                actual_co2_lvl, counts_same_r,
+                where='mid',
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+        
+                ax_different.step(
+                actual_co2_lvl, counts_diff_r,
+                where='mid',
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+            
+            else:
+                counts_same_r_norm = df_same_norm.loc[:, bin_c_r]
+                counts_diff_r_norm = df_diff_norm.loc[:, bin_c_r]
+                ax_same.step(
+                actual_co2_lvl, counts_same_r,
+                where='mid',
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+        
+                ax_different.step(
+                actual_co2_lvl, counts_diff_r,
+                where='mid',
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+                
+                ax_same_norm.step(
+                actual_co2_lvl, counts_same_r_norm,
+                where='mid',
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+        
+                ax_diff_norm.step(
+                actual_co2_lvl, counts_diff_r_norm,
+                where='mid',
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+            
+        else:
+            if not show_number_and_normalized:
+                ax_same.plot(
+                actual_co2_lvl, counts_same_r,
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+        
+                ax_different.plot(
+                actual_co2_lvl, counts_diff_r,
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+                
+            else:
+                counts_same_r_norm = df_same_norm.loc[:, bin_c_r]
+                counts_diff_r_norm = df_diff_norm.loc[:, bin_c_r]
+                ax_same.plot(
+                actual_co2_lvl, counts_same_r,
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+        
+                ax_different.plot(
+                actual_co2_lvl, counts_diff_r,
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+                
+                ax_same_norm.plot(
+                actual_co2_lvl, counts_same_r_norm,
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+        
+                ax_different_norm.plot(
+                actual_co2_lvl, counts_diff_r_norm,
+                label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                alpha=0.8,
+                color=color_r,
+                marker=markers[ii % len(markers)],
+                markersize=5,
+                )
+            
+        if show_ratio and not show_number_and_normalized:
+            ratio = counts_same_r / counts_diff_r
+            if use_steps:
+                ax_ratio.step(actual_co2_lvl, ratio,
+                        label=rf"{bins[ii]}-{bins[ii+1]}\%",
+                        where="mid",
+                        alpha=0.8,
+                        color=color_r,
+                        marker=markers[ii % len(markers)],
+                        markersize=5,)
+            else:
+                ax_ratio.plot(actual_co2_lvl, ratio,
+                        label=rf"{bins[ii]}-{bins[ii+1]}\%", 
+                        alpha=0.8,
+                        color=color_r,
+                        marker=markers[ii % len(markers)],
+                        markersize=5,)
+                
+        
+    # Aesthetics
+    if show_number_and_normalized:
+        ax_iter = ax_ls.flatten()
+    else:
+        ax_iter = ax_ls
+    for ax_r in ax_iter:
+        ax_r.set_xlabel(r"CO$_2$ level [\% of 1990]", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_r.set_xticks([0, 20, 40, 60])
+        ax_r.set_xticks([10, 30, 50], minor=True)
+        ax_r.grid(False)
+        ax_r.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    
+    for ax_r in [ax_same, ax_different]:
+        ax_r.set_yscale('log')
+    xlim = ax_same.get_xlim()
+    ax_same.set_xlim(left=max(xlim), right=min(xlim))
+    if show_number_and_normalized:
+        ax_same_norm.set_xlim(left=max(xlim), right=min(xlim))
+    
+    ax_same.set_title("Same Corridor")
+    ax_different.set_title("Different Corridor")
+    
+    if show_ratio and not show_number_and_normalized:
+        ax_ratio.set_ylabel("Ratio Fraction Same / Different")
+        ax_ratio.axhline(y=1., linestyle="--", lw=2., color="k")
+        ax_ratio.set_yscale('log')
+        
+    if show_number_and_normalized:
+        ax_same.set_ylabel("Number of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_same_norm.set_ylabel("Fraction of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_same_norm.set_yscale("log")
+        
+    elif use_normalized:
+        ax_same.set_ylabel("Fraction of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
+    else:
+        ax_same.set_ylabel("Number of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
+    
+    fig.tight_layout()
+    pos_ax_right = ax_right_most.get_position()
+    handles, leg = ax_right_most.get_legend_handles_labels()
+    leg_f = fig.legend(handles, leg, title="Share of load\n not served",
+               bbox_to_anchor=(pos_ax_right.x1, pos_ax_right.y0 + pos_ax_right.height *.5),
+               loc="center left",
+               ncols=1)
+    leg_f.get_title().set_multialignment("center")
+    
+    # Save figure
+    fname_fig = "blackout_statistics_common_vs_different_corridor"
+    if use_normalized:
+        fname_fig += "_normalized"
+    if show_ratio:
+        fname_fig += "_ratio"
+    if show_number_and_normalized:
+        fname_fig += "_show_num_n_normalized"
+        
+    for idx_ax, ax_r in enumerate(ax_iter):
+        add_panel_label(ax_r, idx_ax)
+        
+    save_figure(fig, fname_fig, path_to_figures_sclopf)
+    
+    return
+    
+
 def plot_component_number_vs_blackout_size(
     split_properties=None, save_dir=path_to_figures_sclopf
 ):
@@ -795,7 +1140,8 @@ def plot_component_number_vs_blackout_size(
     # )  # remove second to last bin edge to avoid tiny last bin
 
     # histogram and column normalization (per lost_load_share_blackout bin)
-    hist2d, x_edges, y_edges = np.histogram2d(lls, n_comp, bins=[lls_bins, n_comp_bins])
+    hist2d, x_edges, y_edges = np.histogram2d(lls, n_comp, 
+                                              bins=[lls_bins, n_comp_bins])
     col_sums = hist2d.sum(axis=1, keepdims=True)
     hist2d_norm = np.divide(
         hist2d, col_sums, out=np.zeros_like(hist2d), where=col_sums != 0
