@@ -27,6 +27,10 @@ from loguru import logger
 from matplotlib import pyplot as plt
 import matplotlib.colors as mplcolors
 import pandas as pd
+import matplotlib.pyplot as plt
+from utils.plot_style import FOUR_PANEL_SIZE,LEGEND_FONTSIZE,TICK_LABEL_FONTSIZE,setup_matplotlib_style
+from matplotlib import ticker
+
 
 def histogram_lineloading_accross_co2lvls(n_nodes: int = 600, calc_again: bool = False,
                                           condition_on_split: bool = False,
@@ -179,7 +183,17 @@ def graph_with_num_parallel(co2lvl: float = .6, n_nodes: int = 600,
 
 
 
-def plot_investments_capital_costs(n_nodes,agg_solar = True, agg_gas = True):
+def plot_investments_capital_costs(n_nodes,agg_solar:bool = True, agg_gas:bool = True):
+
+
+    '''Plot the capital and operational costs for different co2 levels.
+    This function loads the PyPSA networks for different CO2 levels, calculates the operational and capital costs for generators and storage units, and plots the costs as stacked bar charts for each CO2 level. The resulting figure shows how the cost composition changes with CO2 levels.
+    args:
+    n_nodes (int): The number of nodes in the PyPSA networks to load and analyze.
+    agg_solar (bool): Whether to aggregate solar and solar-hsat costs into a single "solar" category.
+    agg_gas (bool): Whether to aggregate CCGT and OCGT costs into a single "gas" category.
+
+    '''
     co2ls = get_co2_levels(n_nodes=n_nodes)
     networks = {
         c:   load_pypsa_network(co2lvl=c, n_nodes=n_nodes)
@@ -193,6 +207,7 @@ def plot_investments_capital_costs(n_nodes,agg_solar = True, agg_gas = True):
     short_nice_names = {"battery": "Battery", "hydro": "Hydro", "PHS": "Pumped hydro"}
     for name, nicename in short_nice_names.items():
         nice_names[name] = nicename
+
 
     opex = {}
     capex = {}
@@ -279,7 +294,9 @@ def plot_investments_capital_costs(n_nodes,agg_solar = True, agg_gas = True):
     capex_df = capex_df.drop(columns=["offwind-dc", "offwind-ac",'offwind-float'])
     capex_df['offwind'] = capex_df_offwind
 
-
+    capex_df /= 1e9
+    opex_df /= 1e9
+    storage_df /= 1e9
     colors_gens['offwind'] =  colors_gens['offwind-dc']
     nice_names['offwind'] = 'Offshore Wind'
 
@@ -303,7 +320,7 @@ def plot_investments_capital_costs(n_nodes,agg_solar = True, agg_gas = True):
 
     )
 
-    axes[0].set_ylabel(r"Cost [€/a]", fontsize=AXIS_LABEL_FONTSIZE)
+    axes[0].set_ylabel(r"Cost [bn €/a]", fontsize=AXIS_LABEL_FONTSIZE)
 
     # CAPEX
     capex_df.plot(
@@ -315,7 +332,7 @@ def plot_investments_capital_costs(n_nodes,agg_solar = True, agg_gas = True):
 
     )
 
-    axes[1].set_ylabel(r"Cost [€/a]", fontsize=AXIS_LABEL_FONTSIZE)
+    axes[1].set_ylabel(r"Cost [bn €/a]", fontsize=AXIS_LABEL_FONTSIZE)
 
     # STORAGE CAPEX
     storage_df.plot(
@@ -351,7 +368,8 @@ def plot_investments_capital_costs(n_nodes,agg_solar = True, agg_gas = True):
 
 
     co2_order = np.array(sorted(co2ls))
-    x_labels = [f"{get_actual_co2_level(c, percent=True):g}%" for c in co2_order]
+    x_labels = co2_order.copy()#[f"{get_actual_co2_level(c, percent=True):g}%" for c in co2_order]
+    x_labels[-1] = 0.58
     axes[2].set_xticklabels(x_labels, rotation=0)
 
     for idx, ax in enumerate(axes):
@@ -365,3 +383,139 @@ def plot_investments_capital_costs(n_nodes,agg_solar = True, agg_gas = True):
 
     return
 
+
+
+
+setup_matplotlib_style()
+
+def plot_load_dispatch(n_nodes,agg_solar:bool = True, agg_gas:bool = True, agg_offwind:bool = True,drop_carriers:bool = True):
+
+    '''Plot the average load and dispatch profiles for different seasons and co2 levels.
+
+    This function loads the PyPSA networks for different CO2 levels, aggregates the generator and storage dispatch profiles by carrier, and plots the average profiles for each season (winter, spring, summer, autumn). The resulting figure shows how the supply and load profiles change with CO2 levels and seasons.
+
+    args:
+        n_nodes (int): The number of nodes in the PyPSA networks to load and analyze.
+        agg_solar (bool): Whether to aggregate solar and solar-hsat profiles into a single "solar" category.
+        agg_gas (bool): Whether to aggregate CCGT and OCGT profiles into a single "gas" category.
+        agg_offwind (bool): Whether to aggregate offwind-dc, offwind-ac, and offwind-float profiles into a single "offwind" category.
+        drop_carriers (bool): Whether to drop certain carriers (geothermal, art_load, load) from the profiles before plotting.
+    '''
+    # Load networks for all CO2 levels
+    co2ls = get_co2_levels(n_nodes=n_nodes)
+    networks = {
+        c:   load_pypsa_network(co2lvl=c, n_nodes=n_nodes)
+        for c in co2ls
+    }
+
+    n_ref = networks[co2ls[0]]
+
+    nice_names = n_ref.carriers.nice_name
+    colors_gens = n_ref.carriers.set_index("nice_name").color
+
+    colors_gens["Offshore Wind"] = n_ref.carriers.color.get("offwind-dc", "#1f77b4")
+    colors_gens['Hydrogen Storage'] = "green"
+    colors_gens['Battery Storage'] = "tab:olive"
+    nice_names['gas'] = 'Gas'
+    nice_names['offwind'] = 'Offshore Wind'
+    colors_gens['Gas'] =   "#cc0099"
+
+
+    idx = n_ref.snapshots
+
+    winter = idx.month.isin([12, 1, 2])
+    spring = idx.month.isin([3, 4, 5])
+    summer = idx.month.isin([6, 7, 8])
+    autumn = idx.month.isin([9, 10, 11])
+
+
+
+    for co2, n in networks.items():
+        fig, axes = plt.subplots(2,2,sharex=True, sharey=True, figsize=FOUR_PANEL_SIZE)
+        for ax, season,title in zip(axes.flatten(), [winter, spring, summer, autumn],["Winter", "Spring", "Summer", "Autumn"]):
+            gen = n.generators_t.p.groupby(n.generators.carrier, axis=1).sum()
+            sto = n.storage_units_t.p.groupby(n.storage_units.carrier, axis=1).sum()
+            supply = sto.add(gen, fill_value=0)
+
+            load = n.loads_t.p.sum(axis=1)
+
+            def _agg_carriers(df, agg_solar, agg_gas, agg_offwind,drop_carriers):
+                df = df.copy()
+                if drop_carriers:
+                    drop_cols = ["geothermal", "art_load","load"]
+                    df = df.drop(columns=drop_cols)
+                if agg_gas:
+                    cols = [c for c in ["CCGT", "OCGT"] if c in df.columns]
+                    if cols:
+                        df["gas"] = df[cols].sum(axis=1)
+                        df = df.drop(columns=cols)
+                if agg_solar:
+                    cols = [c for c in ["solar", "solar-hsat"] if c in df.columns]
+                    if len(cols) > 1:
+                        df["solar"] = df[cols].sum(axis=1)
+                        df = df.drop(columns=[c for c in cols if c != "solar"])
+                if agg_offwind:
+                    cols = [c for c in ["offwind-ac", "offwind-dc", "offwind-float"]
+                            if c in df.columns]
+                    if cols:
+                        df["offwind"] = df[cols].sum(axis=1)
+                        df = df.drop(columns=cols)
+                return df
+
+            supply = _agg_carriers(supply, agg_solar=True, agg_gas=True, agg_offwind=True,drop_carriers=True)
+            supply_season = supply.loc[season]
+            load_season = load.loc[season]
+
+
+
+            hour = supply_season.index.hour
+            avg_profile = supply_season.groupby(hour).mean()
+            load = n_ref.loads_t.p.sum(axis=1)
+            load_season = load.loc[season]
+            avg_load = load_season.groupby(load_season.index.hour).mean()
+
+            def stackedplot(ax, df, colors, x_col=None, alpha=0.8):
+                if x_col is not None:
+                    x = df[x_col].values
+                    data_cols = [c for c in df.columns if c != x_col]
+                else:
+                    x = df.index.values
+                    data_cols = list(df.columns)
+                # split into pos and neg values for stacking
+                pos_bottoms = np.zeros(len(x))
+                neg_bottoms = np.zeros(len(x))
+
+                #  plot each column separately
+                for i, col in enumerate(data_cols):
+                    vals = df[col].values
+                    pos_vals = np.clip(vals, 0, None)
+                    neg_vals = np.clip(vals, None, 0)
+
+                    ax.bar(x, pos_vals, bottom=pos_bottoms, label=col,  color=colors[i], alpha=alpha)
+                    ax.bar(x, neg_vals, bottom=neg_bottoms, color=colors[i], alpha=alpha)
+
+                    pos_bottoms += pos_vals
+                    neg_bottoms += neg_vals
+
+                ax.axhline(0, color="black", linewidth=0.8)
+                ax.set_xlim(x[0] - 0.5, x[-1] + 0.5)
+            # plot supply and load
+            stackedplot(ax, avg_profile/1e3, colors=[colors_gens.get(c, "#333333") for c in nice_names[avg_profile.columns]], x_col=None, alpha=0.8)
+            ax.plot(avg_load.index, avg_load/1e3, color="black", linewidth=2,label="Load")
+
+            ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+            ax.set_xlabel("Hour of day")
+            ax.set_ylabel("GW")
+            ax.set_title(f"{title}")
+
+        # add legend
+        legend_ax = fig.add_axes([0.1, -0.05, 0.8, 0.12])
+        legend_ax.axis("off")
+        handles, labels = axes[0,0].get_legend_handles_labels()
+        labels = [nice_names.get(l, l) for l in labels]
+        labels = [name.capitalize() for name in labels]
+        legend_ax.legend(handles, labels, ncol=4, loc="center", frameon=True,fontsize = LEGEND_FONTSIZE)
+
+        save_figure(fig, f"load_dispatch_{n_nodes}_{co2}.pdf", path_to_figures_sclopf)
+
+    return
