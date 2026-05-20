@@ -368,8 +368,7 @@ def plot_investments_capital_costs(n_nodes,agg_solar:bool = True, agg_gas:bool =
 
 
     co2_order = np.array(sorted(co2ls))
-    x_labels = co2_order.copy()#[f"{get_actual_co2_level(c, percent=True):g}%" for c in co2_order]
-    x_labels[-1] = 0.58
+    x_labels = [f"{get_actual_co2_level(c, percent=True):g}%" for c in co2_order]
     axes[2].set_xticklabels(x_labels, rotation=0)
 
     for idx, ax in enumerate(axes):
