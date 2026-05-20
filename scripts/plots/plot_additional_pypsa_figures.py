@@ -508,6 +508,10 @@ def plot_load_dispatch(n_nodes,agg_solar:bool = True, agg_gas:bool = True, agg_o
             ax.set_ylabel("GW")
             ax.set_title(f"{title}")
 
+        for idx, ax in enumerate(axes.flatten()):
+            add_panel_label(ax, idx, x_offset=-0.-0.03)
+            ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+
         # add legend
         legend_ax = fig.add_axes([0.1, -0.05, 0.8, 0.12])
         legend_ax.axis("off")
