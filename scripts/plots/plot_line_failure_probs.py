@@ -37,6 +37,11 @@ from utils.config import (
     path_to_figures_sclopf,
     path_to_vis_results_sclopf,
 )
+path_plot_data = os.path.join(path_to_figures_sclopf + "plot_data")
+if not os.path.exists(path_plot_data):
+    os.mkdir(path_plot_data)
+
+
 from utils import data_handling
 from utils.calculate_line_loadings import calculate_line_loadings_for_all_snapshots
 from scripts.plots import plot_split_statistics
@@ -53,6 +58,8 @@ from utils.plot_style import (
     setup_colormap_scientific_notation,
     save_figure,
 )
+
+
 
 
 _COUNTRY_3_TO_2 = {
@@ -488,15 +495,17 @@ def create_secondary_line_failure_plot():
 
 
 def create_total_line_failure_plot(
-    unified_colorbar: bool = False,
-    cmap: str =" crameri:roma_r",
+    unified_colorbar: bool = True,
+    cmap: str ="crameri:Batlow_r",
     powernorm: bool = False,
-    scale_width: bool = False,
-    width_scale_sqrt: bool = False,
-    in_second_row: str | None = None,
-    second_row_condition_on_split: bool = True,
+    scale_width: bool = True,
+    width_scale_sqrt: bool = True,
+    in_second_row: str | None = 'both',
     save_fig: bool = True,
-    calc_line_loading_gain: bool = False
+    calc_line_loading_gain: bool = False,
+    n_bins_line_loading: int = 100,
+    n_bins_blackout_sizes: int = 50,
+    n_nodes: int = 600
 ):
     """Create line failure probabilities plot showing only secondary failures.
 
@@ -505,15 +514,26 @@ def create_total_line_failure_plot(
                          If False, use individual colorscales and colorbars for each subplot.
         powernorm: If True and unified_colorbar is True, use PowerNorm for colorbar scaling.
         scale_width: If True, scale edge widths by failure probability values.
-        width_scale_log: If True and scale_width is True, use logarithmic scaling for widths.
+        width_scale_log: 
+        width_scale_sqrt (bool, optional): If True and scale_width is True, use squre scaling for widths. Defaults to False.
+        in_second_row (str | None, optional): Determine if additional
+            info is shown in the second row. Either 'blackout' for blackout sizes
+            'line_loading' for line loadings or 'both'. Defaults to None.
+        save_fig (bool, optional): _description_. Defaults to True.
+        calc_line_loading_gain (bool, optional): _description_. Defaults to False.
+        n_bins_line_loading (int, optional): Number of bins in the case, where histogram
+            of line loadings is shown. Defaults to 100.
+        n_bins_blackout_sizes (int): Number of bins in the case, where histogram of blackout sizes
+            is shown.
+        n_nodes (int): Number of nodes of the pypsa network
+
     """
 
-    if in_second_row is not None and in_second_row not in ["line_loading", "blackout_sizes"]:
-        raise ValueError("Only 'line_loading', 'black_sizes' or None (to only have one row)" +
+    if in_second_row is not None and in_second_row not in ["line_loading", "blackout_sizes", "both"]:
+        raise ValueError("Only 'line_loading', 'black_sizes', 'both' or None (to only have one row)" +
                          "are availabel for argument 'in_second_row'.")
 
     # Setup
-    n_nodes = 600
     save_path = path_to_figures_sclopf
     os.makedirs(save_path, exist_ok=True)
 
@@ -553,8 +573,8 @@ def create_total_line_failure_plot(
     )
 
     # Setup figure layout based on colorbar option
-    if unified_colorbar:
-        if in_second_row is None:
+    if in_second_row is None:
+        if unified_colorbar:
             # Single colorbar on the right
             f = plt.figure(figsize=(16, 4))
             gs_main = GridSpec(
@@ -573,7 +593,34 @@ def create_total_line_failure_plot(
             ax_colorbar_unified = f.add_subplot(gs_colorbar[1])
             axs_colorbars_secondary = None
             
+            
+            
         else:
+            # Individual colorbars for each subplot
+            f = plt.figure(figsize=(24, 5))
+            gs_main = GridSpec(
+                1,
+                3,
+                figure=f,
+                width_ratios=[1, 1, 1],
+                wspace=0.05,
+            )
+
+            # Create subplots with space for individual colorbars
+            axs_secondary = []
+            axs_colorbars_secondary = []
+
+            for i in range(3):
+                # Create subplot with colorbar space
+                gs_sub_secondary = GridSpecFromSubplotSpec(
+                    1, 2, subplot_spec=gs_main[0, i], width_ratios=[1, 0.05], wspace=-0.05
+                )
+
+                axs_secondary.append(f.add_subplot(gs_sub_secondary[0]))
+                axs_colorbars_secondary.append(f.add_subplot(gs_sub_secondary[1]))
+            
+    else:
+        if unified_colorbar:
             # Single colorbar on the right
             f = plt.figure(figsize=(16, 8))
             gs_main = GridSpec(
@@ -592,39 +639,21 @@ def create_total_line_failure_plot(
             elif in_second_row == "blackout_sizes":
                 gs_bottom_plot = GridSpecFromSubplotSpec(1, 1, subplot_spec=gs_main[2])
                 axs_bottom = f.add_subplot(gs_bottom_plot[0])
-                #axs_bottom = [f.add_subplot(gs_bottom_plot[0])]
-                #axs_bottom.extend([f.add_subplot(gs_bottom_plot[ii], sharey=axs_bottom[0]) for ii in range(1, 3)])
-            #axs_bottom.extend([f.add_subplot(gs_bottom_plot[ii+1], sharey=axs_bottom[0]) for ii in range(2)])
-            # Create colorbar subplot with vertical padding to reduce its height
+            
+            elif in_second_row == "both":
+                gs_bottom_plot = GridSpecFromSubplotSpec(1, 2, subplot_spec=gs_main[2])
+                axs_bottom_line_loading = f.add_subplot(gs_bottom_plot[0])
+                axs_bottom_blackout =  f.add_subplot(gs_bottom_plot[1])
+            
             gs_colorbar = GridSpecFromSubplotSpec(
                 3, 1, subplot_spec=gs_main[1], height_ratios=[0.2, 1, 0.2], hspace=0
             )
             ax_colorbar_unified = f.add_subplot(gs_colorbar[1])
             axs_colorbars_secondary = None
+        else:
+            raise NotImplementedError("Additional bottom row not implemented for individual colorbars")
             
-    else:
-        # Individual colorbars for each subplot
-        f = plt.figure(figsize=(24, 5))
-        gs_main = GridSpec(
-            1,
-            3,
-            figure=f,
-            width_ratios=[1, 1, 1],
-            wspace=0.05,
-        )
-
-        # Create subplots with space for individual colorbars
-        axs_secondary = []
-        axs_colorbars_secondary = []
-
-        for i in range(3):
-            # Create subplot with colorbar space
-            gs_sub_secondary = GridSpecFromSubplotSpec(
-                1, 2, subplot_spec=gs_main[0, i], width_ratios=[1, 0.05], wspace=-0.05
-            )
-
-            axs_secondary.append(f.add_subplot(gs_sub_secondary[0]))
-            axs_colorbars_secondary.append(f.add_subplot(gs_sub_secondary[1]))
+    
 
     # Setup matplotlib styling
     setup_matplotlib_style()
@@ -752,20 +781,16 @@ def create_total_line_failure_plot(
             color_r = cmap_co2(np.where(co2ls == co2l)[0][0] / (len(co2ls) - 1))
             # line loading
             if in_second_row == "line_loading":
-                n_bins_line_loading = 100
-                line_loading_bins = np.linspace(0.5, 1., 
+                line_loading_bins = np.linspace(0., 1., 
                                                 n_bins_line_loading, endpoint=True)
                 diff_bins = line_loading_bins[1] - line_loading_bins[0]
                 
-                # TODO move this data to plot_data folder and mkdir if neccesary
-                # Evaluate lineloadings for each snap_shot
                 fname_ll = f"/line_loadings_for_snapshots_Co2L{co2l:.2f}_n{n_nodes}"
-                if second_row_condition_on_split:
-                    fname_ll += "_only_splits"
-                fpath_to_line_loading = path_to_figures_sclopf + fname_ll + ".pklz"
+                
+                fpath_to_line_loading = path_plot_data + fname_ll + ".pklz"
                 if not os.path.exists(fpath_to_line_loading) or calc_line_loading_gain:
                     flow_dict, line_loading_dict = calculate_line_loadings_for_all_snapshots(co2lvl=co2l, n_nodes=n_nodes,
-                                                                                             condition_on_split=True,
+                                                                                             condition_on_split=False,
                                                                                              verbose=False)
                     with gzip.open(fpath_to_line_loading, "wb") as fh_ll_out:
                         pickle.dump((flow_dict, line_loading_dict), fh_ll_out)
@@ -780,7 +805,7 @@ def create_total_line_failure_plot(
                 axs_bottom.hist(all_line_loadings, bins=line_loading_bins,
                                 histtype='step', density=True,
                                 color=color_r,
-                                linewidth=3., label=f"{co2l * 100}\\%")
+                                linewidth=3., label=f"{(actual_co2_level * 100)}\\%")
                 
                 
             elif in_second_row == "blackout_sizes":
@@ -791,11 +816,49 @@ def create_total_line_failure_plot(
                 plot_split_statistics.ax_blackout_size_histogram(axs_bottom,
                                                split_props, co2l, yscale_log=True,
                                                xscale_log=True, use_total_lost_load=True,
-                                               color=color_r,
-                                               label_str=f"{co2l * 100}\\%")
-            
+                                               color=color_r, n_bins=n_bins_blackout_sizes,
+                                               label_str=f"{(actual_co2_level)}\\%")
+                
+            elif in_second_row == "both":
+                # Line Loadings in left column
+                line_loading_bins = np.linspace(0., 1., 
+                                                n_bins_line_loading, endpoint=True)
+                
+                fname_ll = f"/line_loadings_for_snapshots_Co2L{co2l:.2f}_n{n_nodes}"
+                
+                fpath_to_line_loading = path_plot_data + fname_ll + ".pklz"
+                if not os.path.exists(fpath_to_line_loading) or calc_line_loading_gain:
+                    flow_dict, line_loading_dict = calculate_line_loadings_for_all_snapshots(co2lvl=co2l, n_nodes=n_nodes,
+                                                                                             condition_on_split=False,
+                                                                                             verbose=False)
+                    with gzip.open(fpath_to_line_loading, "wb") as fh_ll_out:
+                        pickle.dump((flow_dict, line_loading_dict), fh_ll_out)
+                    logger.info(f"Calc. LineLoadings Co2L={co2l} and saved")
+                else:
+                    with gzip.open(fpath_to_line_loading, "rb") as fh_ll_in:
+                        flow_dict, line_loading_dict = pickle.load(fh_ll_in)
+                        
+                all_line_loadings = [item for sublist in line_loading_dict.values() for item in sublist]
+                
+                axs_bottom_line_loading.hist(all_line_loadings, bins=line_loading_bins,
+                                             histtype='step', density=False,
+                                             color=color_r,
+                                             linewidth=3., label=f"{(actual_co2_level)}\\%")
+                
+                
+                # Blackout Sizes in right column
+                path_to_split_props = path_to_vis_results_sclopf +  f"/split_properties_all_n{n_nodes}.h5"
+                split_props = pd.read_hdf(path_to_split_props, index_col=0)
+                
+                plot_split_statistics.ax_blackout_size_histogram(axs_bottom_blackout,
+                                               split_props, co2l, yscale_log=True,
+                                               xscale_log=True, use_total_lost_load=True,
+                                               color=color_r,n_bins=n_bins_blackout_sizes,
+                                               label_str=f"{(actual_co2_level)}\\%",
+                                               linewidth=3)
+
             else:
-                raise ValueError("")
+                raise ValueError("'in_second_row' has to be 'blackout_sizes', 'line_loading' or 'both'")
 
     # Add unified colorbar if requested
     if unified_colorbar:
@@ -823,10 +886,8 @@ def create_total_line_failure_plot(
         axs_bottom.legend(loc="upper right", title="CO$_2$ level [\\% of 1990]")
         
         axs_bottom.set_xlabel("Line Loading $\\ell_{\\text{load}}$")
-        if second_row_condition_on_split:
-            axs_bottom.set_ylabel("$P(\\ell_{\\text{load}} \\vert {\\text{split}})$")
-        else:
-            axs_bottom.set_ylabel("$P(\\ell_{\\text{load}})$")
+
+        axs_bottom.set_ylabel("$P(\\ell_{\\text{load}})$")
             
         add_panel_label(axs_bottom, 3)
         
@@ -842,7 +903,36 @@ def create_total_line_failure_plot(
         
         axs_bottom.tick_params(axis="both", labelsize=20)
         
-        add_panel_label(axs_bottom, 3)
+        
+    elif in_second_row == "both":
+        # line loading
+        axs_bottom_line_loading.set_xlim(left=0.5, right=1.)
+        axs_bottom_line_loading.set_yscale('log')
+        
+        axs_bottom_line_loading.legend(loc="lower left", title="CO$_2$ level [\\% of 1990]")
+        
+        axs_bottom_line_loading.set_xlabel("Line Loading", 
+                                           size=AXIS_LABEL_FONTSIZE)
+        axs_bottom_line_loading.set_ylabel("Count", size=AXIS_LABEL_FONTSIZE)
+        
+        axs_bottom_line_loading.tick_params(axis="both", labelsize=TICK_LABEL_FONTSIZE)
+
+        add_panel_label(axs_bottom_line_loading, 3)
+        
+        # Blackout sizes
+        axs_bottom_blackout.set_xlim(left=5)
+        
+        axs_bottom_blackout.set_ylabel("Count", size=AXIS_LABEL_FONTSIZE)
+        axs_bottom_blackout.set_xlabel("Load not served [MW]", size=AXIS_LABEL_FONTSIZE)
+        
+        """axs_bottom_blackout.legend(loc="upper left", 
+                          title="CO$_2$ level [\\% of 1990]",
+                          fontsize=18, title_fontsize=16)"""
+        
+        axs_bottom_blackout.tick_params(axis="both", labelsize=TICK_LABEL_FONTSIZE)
+        
+        add_panel_label(axs_bottom_blackout, 4)
+        
     
     cmap_name = cmap if isinstance(cmap, str) else cmap.name
     suffix = "_unified" if unified_colorbar else ""

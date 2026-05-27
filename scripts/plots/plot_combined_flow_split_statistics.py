@@ -37,10 +37,11 @@ from utils.plot_style import (
 
 
 def create_combined_flow_and_split_statistics_plot(
-    mean_distance=False,
-    load_normalization=False,
-    show_blackout_stats=True,
-    secondary_proba_axis=True,
+    mean_distance: bool = False,
+    load_normalization: bool = False,
+    show_blackout_stats: bool = True,
+    secondary_proba_axis: bool = True,
+    use_steps_load_loss: bool = False,
 ):
     """Create combined figure with flow/inertia (top) and split statistics (bottom)."""
 
@@ -251,15 +252,26 @@ def create_combined_flow_and_split_statistics_plot(
         for i, bin_center in enumerate(bin_centers):
             color = cmap(i / (len(bin_centers) + 1) + (1 / (len(bin_centers) + 1)))
             counts = data.loc[:, bin_center]
-            plt.plot(
+            if use_steps_load_loss:
+                plt.step(
                 get_actual_co2_level(co2ls[::-1], percent=True),
                 counts,
+                where="mid",
                 label=rf"{bins[i]}-{bins[i+1]}\%",
                 alpha=0.8,
                 color=color,
                 marker=markers[i % len(markers)],
-                markersize=5,
-            )
+                markersize=5,)
+            else:
+                plt.plot(
+                    get_actual_co2_level(co2ls[::-1], percent=True),
+                    counts,
+                    label=rf"{bins[i]}-{bins[i+1]}\%",
+                    alpha=0.8,
+                    color=color,
+                    marker=markers[i % len(markers)],
+                    markersize=5,
+                )
 
         ax3_num_splits.set_xlabel(
             r"CO$_2$ level [\% of 1990]", fontsize=AXIS_LABEL_FONTSIZE
@@ -444,10 +456,11 @@ def create_combined_flow_and_split_statistics_plot(
         save_name += "_with_blackout_stats"
     if secondary_proba_axis:
         save_name += "_with_secondary_proba_axis"
+        
+    if use_steps_load_loss:
+        save_name += "_steps_lloss"
 
     save_figure(fig, save_name, save_path)
-    plt.show()
-
 
 if __name__ == "__main__":
     create_combined_flow_and_split_statistics_plot(

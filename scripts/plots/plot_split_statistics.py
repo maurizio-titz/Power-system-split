@@ -575,8 +575,9 @@ def ax_blackout_size_histogram(ax,
     
     split_props_df_cut = split_props_df.loc[mask_co2lvl, needed_cols]
     split_props_df_cut = split_props_df_cut.astype(dtype_dict)
-    split_props_df_cut["total_weighting"] = split_props_df_cut["snapshot_weighting"] * \
-        split_props_df_cut["trigger_weighting"]
+    if "total_weighting" not in split_props_df_cut.columns:
+        split_props_df_cut["total_weighting"] = split_props_df_cut["snapshot_weighting"] * \
+            split_props_df_cut["trigger_weighting"]
     
     
     lost_load_val = split_props_df_cut["lost_load_share_blackout"].values
@@ -774,7 +775,85 @@ def plot_blackout_size_histograms(
     
     plt.tight_layout()
     save_figure(fig, fname_fig, save_path)
-    plt.show()
+    
+    
+def plot_blackout_size_distributions_with_zoom_in(
+    split_props: pd.DataFrame,
+    co2_lvls: tuple[float] = (.6, .2, .0),
+    n_nodes: int = 600,
+    cut_off_val: float | None = 2e4,
+    use_abs_vals: bool = False):
+    """Plot a X by 2 plot that shows the blackout size distributions that
+    shows the different requested CO2 levels in the rows. First column shows 
+    the entire distribtuion while the second column shows the distribution beyond 
+    a chosen cut-off in log-log scale."""
+    
+    setup_matplotlib_style()
+    
+    available_co2_lvls = get_co2_levels(n_nodes=n_nodes)
+    
+    nr_chosen_co2_lvls = len(co2_lvls)
+    
+    figsize = (10, 4)
+    
+    fig, ax_arr = plt.subplots(1, 2, 
+                           figsize=figsize, sharey='all',
+                           )
+    
+    ax_overview = ax_arr[0]
+    ax_zoom = ax_arr[1]
+    
+    cmap_co2 = plt.get_cmap('cividis').copy()
+    
+    for idx, co2_lvl_r in enumerate(sorted(co2_lvls)[::-1]):
+        diff_ls = abs(np.array(available_co2_lvls) - co2_lvl_r)
+        idx_co2_ls = np.argmin(diff_ls)
+        co2_lvl_from_list_r = available_co2_lvls[idx_co2_ls]
+        
+        if diff_ls[idx_co2_ls] > 1e-6 or np.count_nonzero(diff_ls < 1e-6) > 1:
+            raise ValueError("co2 value either not in list or duplicate in list.")
+        
+        actual_co2_lvl = get_actual_co2_level(co2_lvl_from_list_r, 
+                                              n_nodes=n_nodes)
+        color_r = cmap_co2(idx_co2_ls / (len(available_co2_lvls) -1))
+        
+        ax_blackout_size_histogram(ax_overview, split_props,
+                                   co2_lvl_from_list_r,
+                                   use_total_lost_load=True,
+                                   color=color_r,
+                                   yscale_log=True,
+                                   xscale_log=True)
+        
+        ax_blackout_size_histogram(ax_zoom, split_props,
+                                   co2_lvl_from_list_r,
+                                   use_total_lost_load=True,
+                                   color=color_r,
+                                   yscale_log=True,
+                                   xscale_log=True,
+                                   label_str=f"{round(actual_co2_lvl*100)}\\%")
+    
+    # Aesthetics
+    if cut_off_val is not None:
+    
+        ax_zoom.set_xlim(left=cut_off_val)
+        ax_overview.axvline(x=cut_off_val, ls="--", lw=2.,
+                         color='k')
+            
+
+    ax_arr[0].set_ylabel("Count", size=AXIS_LABEL_FONTSIZE)
+    
+    """handles, leg = ax_zoom.get_legend_handles_labels()
+    leg_fig = fig.legend(handles, leg, title="CO$_2$ level [\\% of 1990]",
+                         bbox_anchor"center")
+    """
+    ax_zoom.legend(title="CO$_2$ level [\\% of 1990]",
+                   loc="lower left")
+    for ax_r in ax_arr:
+        ax_r.set_xlabel("Lost Load [MW]")
+    
+    fname = "blackout_sizes_three_lvls_w_zoom"
+    
+    save_figure(fig, fname, path_to_figures_sclopf, organize_plots=False)
 
 
 def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 600,
@@ -782,7 +861,7 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
                                                                   use_steps: bool = True,
                                                                   cmap_blackout_categories: str = "inferno_r",
                                                                   show_ratio: bool = False,
-                                                                  show_number_and_normalized: bool = True):
+                                                                  show_number_and_normalized: bool = False):
     """Create the plot that shows both the blackout statistics (Number of System Splits)
     for both common corridor (left panel) and common corridor (right panel).
     This is using in essence the same approach as 'create_blackout_statistics_plot'"""
@@ -1074,8 +1153,10 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
     if show_number_and_normalized:
         ax_same_norm.set_xlim(left=max(xlim), right=min(xlim))
     
-    ax_same.set_title("Same Corridor")
-    ax_different.set_title("Different Corridor")
+    fig.text(.5, 1.1, "Same Corridor", transform=ax_same.transAxes,
+             fontsize=PANEL_LABEL_FONTSIZE, ha='center')
+    fig.text(.5, 1.1, "Different Corridor", transform=ax_different.transAxes,
+             fontsize=PANEL_LABEL_FONTSIZE, ha='center')
     
     if show_ratio and not show_number_and_normalized:
         ax_ratio.set_ylabel("Ratio Fraction Same / Different")
@@ -1083,12 +1164,15 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
         ax_ratio.set_yscale('log')
         
     if show_number_and_normalized:
-        ax_same.set_ylabel("Number of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
-        ax_same_norm.set_ylabel("Fraction of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_same.set_ylabel("Number of System Splits", 
+                           fontsize=AXIS_LABEL_FONTSIZE)
+        ax_same_norm.set_ylabel("Fraction of total contingencies", 
+                                fontsize=AXIS_LABEL_FONTSIZE)
         ax_same_norm.set_yscale("log")
         
     elif use_normalized:
-        ax_same.set_ylabel("Fraction of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_same.set_ylabel("Fraction of total contingencies", 
+                           fontsize=AXIS_LABEL_FONTSIZE)
     else:
         ax_same.set_ylabel("Number of System Splits", fontsize=AXIS_LABEL_FONTSIZE)
     
@@ -1111,9 +1195,14 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
         fname_fig += "_show_num_n_normalized"
         
     for idx_ax, ax_r in enumerate(ax_iter):
-        add_panel_label(ax_r, idx_ax)
+        add_panel_label(ax_r, idx_ax, y_offset=0.1, x_offset=-0.075)
+    
+    if show_number_and_normalized:
+        fig.align_ylabels([ax_same, ax_same_norm])
+        ax_same.set_xlabel("")
+        ax_different.set_xlabel("")
         
-    save_figure(fig, fname_fig, path_to_figures_sclopf)
+    save_figure(fig, fname_fig, path_to_figures_sclopf, organize_plots=False)
     
     return
     
@@ -1198,3 +1287,5 @@ if __name__ == "__main__":
                 normalize_by_total_splits=normalize_option,
             )
     plot_component_number_vs_blackout_size()
+    
+    create_blackout_statistics_common_vs_different_corridor_plot(use_normalized=True)

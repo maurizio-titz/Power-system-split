@@ -12,14 +12,17 @@ from scripts.plots.plot_mitigation import create_combined_mitigation_plot
 from scripts.plots.plot_line_failure_probs import create_total_line_failure_plot
 
 def plot_all_figures(also_supplementary_figures: bool=False):
-    """Plot the figures for the paper, which mainly calls functions from 'scripty/plots/'"""
+    """Plot the figures for the paper, which mainly calls functions from 'scripts/plots/'"""
     ## Main fiugres
     # Fig. 1: Scenarios for decarbonisation of The European power system
     create_combined_generation_storage_plot()
     
     # Fig. 2: Evolution of risks during decarbonistaion
-    create_combined_flow_and_split_statistics_plot(mean_distance=False, load_normalization=False, 
-                                                   show_blackout_stats=True, secondary_proba_axis=True)
+    create_combined_flow_and_split_statistics_plot(mean_distance=False, 
+                                                   load_normalization=False, 
+                                                   show_blackout_stats=True, 
+                                                   secondary_proba_axis=True,
+                                                   use_steps_load_loss=True)
     
     # Fig. 3: Characteristic geographic patterns of system split
     
@@ -30,7 +33,7 @@ def plot_all_figures(also_supplementary_figures: bool=False):
         powernorm=False,
         scale_width=True,
         width_scale_sqrt=True,
-        cmap="crameri:Batlow_r"
+        cmap="crameri:Batlow_r",
     )
     
     # Fig. 5: Mitigation of split-induced blackouts via inertia and grid reinforcements
