@@ -80,6 +80,8 @@ def evaluate_cascade(
                     done between start_time and end_time.
     """
 
+    raise NotImplementedError("Please use 'evaluate_cascade_parallel' as it is both faster and includes more options")
+    
     if start_time_str is not None or end_time_str is not None:
         raise NotImplementedError(
             "Not implemented anymore. comp_props is referenced before assignement..."
