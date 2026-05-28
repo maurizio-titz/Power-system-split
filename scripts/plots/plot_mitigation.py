@@ -373,6 +373,7 @@ def create_combined_mitigation_plot(
     blackoutthreshold=0.0,
     target: str = "num_GSS",
     plot_rows: str = "both",
+    n_nodes: int = 600,
 ):
     """Create combined mitigation plot with inertia on top and line extension below.
 
@@ -383,7 +384,6 @@ def create_combined_mitigation_plot(
     """
 
     # Setup
-    n_nodes = 600
     save_path = path_to_figures_sclopf
     os.makedirs(save_path, exist_ok=True)
     os.makedirs(path_to_line_extension_mitigation_sclopf, exist_ok=True)
@@ -1195,11 +1195,29 @@ def blackout_size_histogram_after_mitigation(
     calc_inertia_again: bool = False,
     linewidth: float = 1.5,
     alpha=.8):
-    """Plot the size of blackouts after mitigation and compare it with before."""
+    """Plot the size of blackouts after mitigation and compare it with before.
+
+    Args:
+        n_nodes (int, optional): Number of nodes of the PyPSA network. Defaults to 600.
+        co2_lvls_tup (tuple[float, ...] | None, optional): CO2 levels that are supposed 
+            to be shown. Defaults to (0.0, .2).
+        budget_invest_bn_tup (tuple[float, ...], optional): Tuple with different budgets in 
+            bn euro that can be used for mitigation. Defaults to (2, .3).
+        n_bins (int, optional): Number of bins for the blackout sizes. Defaults to 101.
+        xlims (tuple[float, float], optional): x-limits that is being plotted. 
+            Defaults to (0, 100).
+        ylog_scale (bool, optional): Is the y axis in log_scale? Defaults to True.
+        calc_inertia_again (bool, optional): If 'True', the calculation 
+            of the split properites dataframe for a given budget is repeated. 
+            Defaults to False.
+        linewidth (float, optional): Line width to the plot. Defaults to 1.5.
+        alpha (float, optional): Color alpha of the lines. Defaults to .8.
+    """
     
     # Load data
     ## Original
-    split_props = pd.read_hdf(path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0)
+    split_props = pd.read_hdf(path_to_vis_results_sclopf + 
+                              f"/split_properties_all_n{n_nodes}.h5", index_col=0)
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(float)
     
     split_props["total_weighting"] = (
@@ -1335,14 +1353,15 @@ def blackout_size_histogram_after_mitigation(
         # TODO check if index of comp_mitigated... is really comp idx in comp properites
         
         comp_mitigated_step = comp_mitigated_step.sort_values()
-        comp_mitigated_step = comp_mitigated_step[comp_mitigated_step != 1]
+        comp_mitigated_step = comp_mitigated_step[comp_mitigated_step != -1]
         
         inertia_unit_fac = 1e-3
         inertia_placed_df = pd.DataFrame(inertia_placed_loss_mitigated_ls,
                                          columns=["idx_step", "idx_node", "delta_Erot_fac", 
                                                   "max_change", 
                                                   "components_beyond_threshold"])
-        inertia_placed_df["delta_Erot_GWs"] = inertia_placed_df.loc[:, "delta_Erot_fac"] * inertia_step_delta_rotE_MWs * inertia_unit_fac
+        inertia_placed_df["delta_Erot_GWs"] = inertia_placed_df.loc[:, "delta_Erot_fac"] \
+            * inertia_step_delta_rotE_MWs * inertia_unit_fac
         inertia_placed_df["cum_Erot_GWs"] = inertia_placed_df["delta_Erot_GWs"].cumsum()
         
         scale_Erot_to_bn = annualized_cost_per_GWs_max / 1e9
@@ -1351,8 +1370,8 @@ def blackout_size_histogram_after_mitigation(
         inertia_placed_df["cum_cost_bn"] = inertia_placed_df["cost_bn"].cumsum()
         
         for idx_budget_i, budget_inertia in enumerate(budget_invest_bn_tup):
-            
-            fname_inertia_sprops = f"mitigated_compoments_Co2L{co2l_r}_n{n_nodes}_budget{budget_inertia:.4f}.h5"
+            comp_property_r = comp_property_df.copy()
+            fname_inertia_sprops = f"mitigated_split_properties_Co2L{co2l_r}_n{n_nodes}_budget{budget_inertia:.4f}.h5"
             fpath_inertia_mitigated_sprops = os.path.join(path_plot_data, 
                                                           fname_inertia_sprops)
             
@@ -1369,9 +1388,9 @@ def blackout_size_histogram_after_mitigation(
                 inertia_comps_miti_index = comp_mitigated_step[comp_mitigated_step < inertia_last_step].index
                 
                 # Set the 'blackout_load_loss_share' to zero where it was mitigated               
-                comp_property_df.loc[inertia_comps_miti_index, "blackout_load_loss_share"] = 0
+                comp_property_r.loc[inertia_comps_miti_index, "blackout_load_loss_share"] = 0
                 logger.info(f"---> {len(inertia_comps_miti_index)} components were mitigated")
-                inertia_split_groups = comp_property_df.groupby(["time_stamp", "split_number"])
+                inertia_split_groups = comp_property_r.groupby(["time_stamp", "split_number"])
 
                 inertia_split_props_r = pd.DataFrame(index=inertia_split_groups.groups.keys())
                 inertia_split_props_r.index = inertia_split_props_r.index.rename(
@@ -1427,7 +1446,15 @@ def blackout_size_histogram_after_mitigation(
     [xx.sharey(ax_ls_inertia[0]) for xx in ax_ls_inertia[1:]]
     
     for idx_r, ax_r in enumerate(ax_arr[:, 0]):
-        ax_r.set_ylabel(f"CO$_2$ Level $= {round(co2_lvls_picked_ls[idx_r]*100)}$\\%\nCount", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_r.set_ylabel("Count", fontsize=AXIS_LABEL_FONTSIZE)
+        ax_r.text(
+            -0.175, 0.5,
+            f"CO$_2$ Level $= {round(co2_lvls_picked_ls[idx_r]*100)}$\\%",
+            transform=ax_r.transAxes,
+            fontsize=AXIS_LABEL_FONTSIZE,
+            ha="center", va="center",
+            rotation=90,
+        )
     
     for ax_r in [ax_ls_line[0],ax_ls_inertia[0]]:
         ax_r.set_xlim(left=min(bins), right=max(bins))

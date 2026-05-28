@@ -42,11 +42,12 @@ def create_combined_flow_and_split_statistics_plot(
     show_blackout_stats: bool = True,
     secondary_proba_axis: bool = True,
     use_steps_load_loss: bool = False,
-):
-    """Create combined figure with flow/inertia (top) and split statistics (bottom)."""
+    n_nodes: int = 600,
+    use_equal_panels: bool = False):
+    """Create combined figure with flow/inertia (top) and 
+    split statistics (bottom)."""
 
     # Setup
-    n_nodes = 600
     save_path = path_to_figures_sclopf
     os.makedirs(save_path, exist_ok=True)
 
@@ -61,7 +62,7 @@ def create_combined_flow_and_split_statistics_plot(
     co2ls = get_co2_levels(n_nodes)
     networks = {
         co2l: data_handling.load_pypsa_network(
-            n_nodes=600, co2lvl=co2l, use_sclopf=True
+            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True
         )
         for co2l in co2ls
     }
@@ -112,16 +113,34 @@ def create_combined_flow_and_split_statistics_plot(
     setup_matplotlib_style()
 
     # Figure layout: two stacked rows (top: flow/inertia, bottom: split stats)
-    fig = plt.figure(figsize=(12, 9))
-    gs_outer = GridSpec(2, 1, figure=fig, hspace=0.3, height_ratios=[1, 1.05])
+    
+    
+    if use_equal_panels:
+        if not show_blackout_stats:
+            raise NotImplementedError("Not implemented for not 'show_blackout_stats'" + 
+                                      " and 'equal_panels'")
+        fig, [[ax_flow, ax_inertia, ax_empty],
+              [ax1_imbalance, ax2_inertia, ax3_num_splits]] = plt.subplots(2, 3, figsize=(12, 9))
+        height_ratios_main = [1, 1]
+    else:
+        fig = plt.figure(figsize=(12, 9))
+        height_ratios_main = [1, 1.05]
+        
+    gs_outer = GridSpec(2, 1, figure=fig, hspace=0.3, 
+                        height_ratios=height_ratios_main)
 
     # --- Top row: Flow & Inertia ---
-    gs_top_main = GridSpecFromSubplotSpec(1, 2, 
+    if use_equal_panels:
+        gs_top_main = GridSpecFromSubplotSpec(1, 3, 
+                                          subplot_spec=gs_outer[0], 
+                                          wspace=0.2)
+    else:
+        gs_top_main = GridSpecFromSubplotSpec(1, 2, 
                                           subplot_spec=gs_outer[0], 
                                           wspace=0.23)
-
-    ax_flow = fig.add_subplot(gs_top_main[0])
-    ax_inertia = fig.add_subplot(gs_top_main[1])
+        
+        ax_flow = fig.add_subplot(gs_top_main[0])
+        ax_inertia = fig.add_subplot(gs_top_main[1])
 
     cmap = plt.get_cmap("cividis")
     unit_factor = 1e6
@@ -201,33 +220,36 @@ def create_combined_flow_and_split_statistics_plot(
     add_panel_label(ax_inertia, 1, y_offset=0.08)
 
     # --- Bottom row: Split Statistics ---
-    if show_blackout_stats:
-        n_cols = 4
-        width_ratios = [1, 1, 1, 1]
-        wspace = 0.40 if secondary_proba_axis else 0.4
-    else:
-        n_cols = 2
-        width_ratios = [1, 1]
-        wspace = 0.3
+    if not use_equal_panels:
+        if show_blackout_stats:
+            n_cols = 4
+            width_ratios = [1, 1, 1, 1]
+            wspace = 0.40 if secondary_proba_axis else 0.4
+        else:
+            n_cols = 2
+            width_ratios = [1, 1]
+            wspace = 0.3
+        
+    
+    if not use_equal_panels:
+        gs_bottom = GridSpecFromSubplotSpec(
+            2, 1, subplot_spec=gs_outer[1], hspace=0.55, height_ratios=[1, 0.15]
+        )
+        gs_bottom_main = GridSpecFromSubplotSpec(
+            1,
+            n_cols,
+            subplot_spec=gs_bottom[0],
+            width_ratios=width_ratios,
+            hspace=0,
+            wspace=wspace,
+        )
 
-    gs_bottom = GridSpecFromSubplotSpec(
-        2, 1, subplot_spec=gs_outer[1], hspace=0.55, height_ratios=[1, 0.15]
-    )
-    gs_bottom_main = GridSpecFromSubplotSpec(
-        1,
-        n_cols,
-        subplot_spec=gs_bottom[0],
-        width_ratios=width_ratios,
-        hspace=0,
-        wspace=wspace,
-    )
-
-    if show_blackout_stats:
-        ax3_num_splits = fig.add_subplot(gs_bottom_main[2])
-        ax3_num_splits_legend = fig.add_subplot(gs_bottom_main[3])
-    else:
-        ax3_num_splits = None
-        ax3_num_splits_legend = None
+        if show_blackout_stats:
+            ax3_num_splits = fig.add_subplot(gs_bottom_main[2])
+            ax3_num_splits_legend = fig.add_subplot(gs_bottom_main[3])
+        else:
+            ax3_num_splits = None
+            ax3_num_splits_legend = None
 
     # Panel c: loss of load share distribution
     if show_blackout_stats:
@@ -312,31 +334,35 @@ def create_combined_flow_and_split_statistics_plot(
             )
 
         h, l = ax3_num_splits.get_legend_handles_labels()
-        if secondary_proba_axis:
-            ax3_num_splits_legend.legend(
-                h,
-                l,
-                title="Share of load\n not served",
-                loc="center left",
-                bbox_to_anchor=(0.1, 0.5),
-                ncols=1,
-                columnspacing=0.5,
-            )
-        else:
-            ax3_num_splits_legend.legend(
-                h,
-                l,
-                title="Share of load\n not served",
-                loc="center",
-                ncols=1,
-                columnspacing=0.5,
-            )
-        ax3_num_splits_legend.axis("off")
+        if not use_equal_panels:
+            
+            if secondary_proba_axis:
+                ax3_num_splits_legend.legend(
+                    h,
+                    l,
+                    title="Share of load\n not served",
+                    loc="center left",
+                    bbox_to_anchor=(0.1, 0.5),
+                    ncols=1,
+                    columnspacing=0.5,
+                )
+            else:
+                ax3_num_splits_legend.legend(
+                    h,
+                    l,
+                    title="Share of load\n not served",
+                    loc="center",
+                    ncols=1,
+                    columnspacing=0.5,
+                )
+            ax3_num_splits_legend.axis("off")            
+            
 
     # Panel b: Inertia histograms
     cmap = plt.get_cmap("cividis")
-    ax2_inertia = fig.add_subplot(gs_bottom_main[1])
-    ax2_inertia_legend = fig.add_subplot(gs_bottom[1, :])
+    if not use_equal_panels:
+        ax2_inertia = fig.add_subplot(gs_bottom_main[1])
+        ax2_inertia_legend = fig.add_subplot(gs_bottom[1, :])
 
     rot_energy = component_props_filtered.rot_energy / 1000
     if load_normalization:
@@ -347,10 +373,12 @@ def create_combined_flow_and_split_statistics_plot(
         rot_energy[component_props_filtered.co2l == co2l].max()
         for co2l in selected_co2ls
     ]
+    
     min_vals = [
         rot_energy[component_props_filtered.co2l == co2l].min()
         for co2l in selected_co2ls
     ]
+    
     bins = np.linspace(min(min_vals), max(max_vals), 15)
 
     for co2l in selected_co2ls:
@@ -380,7 +408,9 @@ def create_combined_flow_and_split_statistics_plot(
     ax2_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
 
     # Panel a: power imbalance histograms
-    ax1_imbalance = fig.add_subplot(gs_bottom_main[0])
+    if not use_equal_panels:
+        ax1_imbalance = fig.add_subplot(gs_bottom_main[0])
+        
     if load_normalization:
         power_imbalance = (
             component_props_filtered.power_imbalance / component_props_filtered.load
@@ -424,41 +454,84 @@ def create_combined_flow_and_split_statistics_plot(
     ax1_imbalance.tick_params(axis="both", which="both", 
                               labelsize=TICK_LABEL_FONTSIZE)
 
+    
     h, l = ax2_inertia.get_legend_handles_labels()
     handles = [Line2D([], [], color="none")] + h[::-1]
     labels = [r"CO$_2$ level [\% of 1990]"] + l[::-1]
-    ax2_inertia_legend.legend(
-        handles,
-        labels,
-        loc="center left",
-        bbox_to_anchor=(-0.08, 0.45),
-        ncols=4,
-        columnspacing=1,
-        handletextpad=0.5,
-    )
-    ax2_inertia_legend.axis("off")
+    if not use_equal_panels:
+        
+        ax2_inertia_legend.legend(
+            handles,
+            labels,
+            loc="center left",
+            bbox_to_anchor=(-0.08, 0.45),
+            ncols=4,
+            columnspacing=1,
+            handletextpad=0.5,
+        )
+        ax2_inertia_legend.axis("off")
+        
 
     axes_to_label = [ax1_imbalance, ax2_inertia]
     if show_blackout_stats and ax3_num_splits is not None:
         axes_to_label.append(ax3_num_splits)
 
     for idx, ax_loss_lvl in enumerate(axes_to_label, start=2):
-        add_panel_label(ax_loss_lvl, idx, y_offset=0.07)
+        add_panel_label(ax_loss_lvl, idx, y_offset=0.1, 
+                        x_offset=-.125)
 
     plt.tight_layout()
+    
+    # Legend in the case for equal panel size
+    if use_equal_panels:
+        ax_empty.axis('off')
+        
+        pos_ax_inertia = ax_inertia.get_position()
+        
+        leg_co2 = ax_inertia.legend(h, l,
+                   title="CO$_2$ level \n[\\% of 1990]",
+                   loc="upper left",
+                   bbox_to_anchor=(1, 1.05),
+                   fontsize=18, title_fontsize=20)
+        leg_title = leg_co2.get_title()
+        leg_title.set_horizontalalignment('center')
+        
+        pos_ax3 = ax3_num_splits.get_position()
+        h, l = ax3_num_splits.get_legend_handles_labels()
+        leg_sp = ax3_num_splits.legend(h, l, title="Share of load\n not served",
+                loc="lower right",
+                bbox_to_anchor=(1.05, 1.),
+                fontsize=20, title_fontsize=18)
+        title_sp = leg_sp.get_title()
+        title_sp.set_horizontalalignment('center')
+        
+    # Align x and ylabel
+    fig.align_ylabels([ax1_imbalance, ax_flow])
+    fig.align_ylabels([ax2_inertia, ax_inertia])
+    
+    if show_blackout_stats:
+        fig.align_xlabels([ax1_imbalance, ax2_inertia, ax3_num_splits])
+    else:
+        fig.align_xlabels([ax1_imbalance, ax2_inertia])
 
     save_name = "combined_flow_inertia_split_statistics"
     if mean_distance:
         save_name += "_mean_distance"
+        
     if load_normalization:
         save_name += "_normalized"
+        
     if show_blackout_stats:
         save_name += "_with_blackout_stats"
+        
     if secondary_proba_axis:
         save_name += "_with_secondary_proba_axis"
         
     if use_steps_load_loss:
         save_name += "_steps_lloss"
+        
+    if use_equal_panels:
+        save_name += "_equal_panels"
 
     save_figure(fig, save_name, save_path)
 

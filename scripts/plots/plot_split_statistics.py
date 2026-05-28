@@ -659,7 +659,6 @@ def plot_blackout_size_histograms(
         sharey=True,
     )
     axes = np.atleast_1d(axes).flatten()
-
     
     if not use_total_load_values:
         if xscale_log:
@@ -781,8 +780,7 @@ def plot_blackout_size_distributions_with_zoom_in(
     split_props: pd.DataFrame,
     co2_lvls: tuple[float] = (.6, .2, .0),
     n_nodes: int = 600,
-    cut_off_val: float | None = 2e4,
-    use_abs_vals: bool = False):
+    cut_off_val: float | None = 2e4):
     """Plot a X by 2 plot that shows the blackout size distributions that
     shows the different requested CO2 levels in the rows. First column shows 
     the entire distribtuion while the second column shows the distribution beyond 

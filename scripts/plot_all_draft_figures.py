@@ -22,7 +22,8 @@ def plot_all_figures(also_supplementary_figures: bool=False):
                                                    load_normalization=False, 
                                                    show_blackout_stats=True, 
                                                    secondary_proba_axis=True,
-                                                   use_steps_load_loss=True)
+                                                   use_steps_load_loss=True,
+                                                   use_equal_panels=True)
     
     # Fig. 3: Characteristic geographic patterns of system split
     

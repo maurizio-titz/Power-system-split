@@ -37,7 +37,7 @@ from utils.config import (
     path_to_figures_sclopf,
     path_to_vis_results_sclopf,
 )
-path_plot_data = os.path.join(path_to_figures_sclopf + "plot_data")
+path_plot_data = os.path.join(path_to_figures_sclopf, "plot_data")
 if not os.path.exists(path_plot_data):
     os.mkdir(path_plot_data)
 
