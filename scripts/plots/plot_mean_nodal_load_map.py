@@ -17,7 +17,7 @@ import cartopy.crs as ccrs
 sys.path.append("./")
 
 from utils import data_handling
-from utils.config import path_to_figures_sclopf, use_extensions
+from utils.config import path_to_figures_sclopf
 from utils.plot_style import (
     setup_matplotlib_style,
     TITLE_FONTSIZE,
@@ -50,7 +50,7 @@ def create_mean_nodal_load_map(n_nodes=600, co2l=0.0):
         n_nodes=n_nodes,
         co2lvl=co2l,
         use_sclopf=True,
-        lopt=use_extensions,
+        lopt=False,
     )
 
     weights = _get_snapshot_weights(network)

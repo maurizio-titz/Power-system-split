@@ -36,10 +36,11 @@ from utils.config import (
     path_to_pypsa_network_sclopf,
     path_to_figures_sclopf,
     path_to_vis_results_sclopf,
+    path_to_plot_data
 )
-path_plot_data = os.path.join(path_to_figures_sclopf, "plot_data")
-if not os.path.exists(path_plot_data):
-    os.mkdir(path_plot_data)
+
+if not os.path.exists(path_to_plot_data):
+    os.mkdir(path_to_plot_data)
 
 
 from utils import data_handling
@@ -787,7 +788,7 @@ def create_total_line_failure_plot(
                 
                 fname_ll = f"/line_loadings_for_snapshots_Co2L{co2l:.2f}_n{n_nodes}"
                 
-                fpath_to_line_loading = path_plot_data + fname_ll + ".pklz"
+                fpath_to_line_loading = path_to_plot_data + fname_ll + ".pklz"
                 if not os.path.exists(fpath_to_line_loading) or calc_line_loading_gain:
                     flow_dict, line_loading_dict = calculate_line_loadings_for_all_snapshots(co2lvl=co2l, n_nodes=n_nodes,
                                                                                              condition_on_split=False,
@@ -826,7 +827,7 @@ def create_total_line_failure_plot(
                 
                 fname_ll = f"/line_loadings_for_snapshots_Co2L{co2l:.2f}_n{n_nodes}"
                 
-                fpath_to_line_loading = path_plot_data + fname_ll + ".pklz"
+                fpath_to_line_loading = path_to_plot_data + fname_ll + ".pklz"
                 if not os.path.exists(fpath_to_line_loading) or calc_line_loading_gain:
                     flow_dict, line_loading_dict = calculate_line_loadings_for_all_snapshots(co2lvl=co2l, n_nodes=n_nodes,
                                                                                              condition_on_split=False,

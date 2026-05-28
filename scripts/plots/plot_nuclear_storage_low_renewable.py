@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 sys.path.append("./")
 
 from utils import data_handling
-from utils.config import path_to_figures_sclopf, use_extensions
+from utils.config import path_to_figures_sclopf
 from utils.data_handling import get_actual_co2_level, get_co2_levels
 from utils.plot_style import (
     setup_matplotlib_style,
@@ -112,7 +112,7 @@ def create_low_renewable_histograms(
 
     networks = {
         co2l: data_handling.load_pypsa_network(
-            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=False
         )
         for co2l in selected_levels
     }

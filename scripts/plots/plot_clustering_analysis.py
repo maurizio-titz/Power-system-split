@@ -41,10 +41,9 @@ sys.path.append(root_path)
 # Import project utilities
 from utils.clustering.data_handling import get_path_to_clustering_dir, load_clustering
 from utils.data_handling import get_co2_levels, get_actual_co2_level
-from utils.config import path_to_clustering_results_sclopf, path_to_vis_results_sclopf
 from utils.clustering_visualisation import *
 from utils import data_handling
-from utils.config import path_to_pypsa_network_sclopf, path_to_figures_sclopf
+from utils.config import path_to_figures_sclopf, path_to_plot_data
 from utils import cascade_simulation
 from scripts.plots.plot_combined_generation_storage import LABEL_FONTSIZE
 from utils.plot_style import *
@@ -53,9 +52,8 @@ from utils.plot_style import *
 setup_matplotlib_style()
 
 # Plot data path
-path_plot_data = path_to_figures_sclopf + "/plot_data"
-if not os.path.exists(path_plot_data):
-    os.makedirs(path_plot_data, exist_ok=True)
+if not os.path.exists(path_to_plot_data):
+    os.makedirs(path_to_plot_data, exist_ok=True)
 
 
 def load_clustering_data(
@@ -352,7 +350,7 @@ def create_clustering_analysis_plot(
 
     
     if save_plot_data:
-        fpath_plot_cluster_fname = path_plot_data + f"/plot_data_{fname}"
+        fpath_plot_cluster_fname = path_to_plot_data + f"/plot_data_{fname}"
             
         plot_data_dict = {
             "graph": nx_graph,
@@ -730,7 +728,8 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
     plot_dir: str = path_to_figures_sclopf,
     sort_by: str="accumulative_lost_load",
     use_only_lines: bool = False,
-    fig_scaling: float = 4.
+    fig_scaling: float = 4.,
+    save_prefix: str | None = None
     ):
     """Use the functions from 'create_clustering_analysis_plot'"""
     
@@ -989,6 +988,9 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
     if use_only_lines:
         save_name += "_onlyLines"    
     
+    if save_prefix is not None:
+        save_name = save_prefix + "_" + save_name
+    
     save_figure(fig, 
                 save_name, 
                 plot_dir)
@@ -1192,21 +1194,6 @@ def create_cluster_plot_only_lines_with_zoom(fpath_plot_data: str,
     save_figure(fig, save_name, plot_dir)
     
     logger.info(f"Plot saved to: {os.path.join(plot_dir, f'{save_name}.pdf')}")
-    
-    return
-    
-#TODO remove later
-def dev_plot_pdata_example(cluster_rank: int, zoom_middle=(-0.07, 42.84), zoom_radius_x=5.2):
-    
-    # Data path
-    fpath_pdata = path_to_figures_sclopf + "/plot_data/plot_data_agg_params_01bf408e.pklz"
-    
-    create_clustering_analysis_plot_from_data(fpath_pdata, sort_by="frequency")
-    create_clustering_analysis_plot_from_data(fpath_pdata, use_only_lines=True,
-                                              sort_by="frequency")
-    
-    create_cluster_plot_only_lines_with_zoom(fpath_pdata, cluster_rank,
-                                             zoom_middle=zoom_middle, zoom_radius_x=zoom_radius_x)
     
     return
     

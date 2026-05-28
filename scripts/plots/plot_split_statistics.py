@@ -457,7 +457,7 @@ def create_blackout_statistics_plot(
                 n_nodes=n_nodes,
                 co2lvl=co2l,
                 use_sclopf=True,
-                lopt=config.use_extensions,
+                lopt=False,
             )
             if same_corridor is not None:
                 n_2_failures = [

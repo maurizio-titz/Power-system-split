@@ -22,7 +22,6 @@ from tqdm import tqdm
 
 
 from utils import cascade_simulation, data_handling
-from utils.config import use_extensions
 from utils.data_handling import get_co2_levels
 
 n_nodes = 600
@@ -34,6 +33,7 @@ if overwrite:
 
 co2ls = get_co2_levels(n_nodes)
 snet_index = '0'
+use_extensions = False
 
 pbar = tqdm(co2ls, total=len(co2ls))
 for co2l in pbar:

@@ -104,7 +104,7 @@ net = data_handling.load_pypsa_network(
     n_nodes=n_nodes,
     co2lvl=0.0,
     use_sclopf=True,
-    lopt=config.use_extensions,
+    lopt=False,
 )
 weather_regimes = load_weather_regimes()
 if "weather_regime" not in weather_regimes.columns:
@@ -301,7 +301,7 @@ network = data_handling.load_pypsa_network(
     n_nodes=n_nodes,
     co2lvl=0.0,
     use_sclopf=True,
-    lopt=config.use_extensions,
+    lopt=False,
 )
 solar_cf = _get_capacity_factor_series(network, "solar")
 wind_cf = _get_capacity_factor_series(network, "wind")

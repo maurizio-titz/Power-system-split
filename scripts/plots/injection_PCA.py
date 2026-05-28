@@ -26,7 +26,6 @@ from sklearn.decomposition import PCA
 sys.path.append("./")
 
 from utils.config import path_to_figures_sclopf
-from utils.config import use_extensions
 from utils import data_handling
 from utils.data_handling import (
     get_actual_co2_level,
@@ -164,7 +163,7 @@ def _get_node_matrix_for_co2lvl(co2lvl, node_data, n_nodes=600, node_order=None)
             n_nodes=n_nodes,
             co2lvl=co2lvl,
             use_sclopf=True,
-            lopt=use_extensions,
+            lopt=False,
         )
         snapshots = pd.to_datetime(network.snapshots)
         matrix = _build_generation_matrix_from_network(network, node_order)

@@ -32,9 +32,7 @@ sys.path.append("./")
 
 from utils.data_handling import get_actual_co2_level, get_co2_levels
 from utils.config import (
-    path_to_pypsa_network_sclopf,
     path_to_figures_sclopf,
-    use_extensions,
 )
 from utils import data_handling
 from utils.clustering_visualisation import truncate_colormap
@@ -201,7 +199,7 @@ def create_generation_by_country_stacked_bar_plot(n_nodes: int = 600):
     co2ls = get_co2_levels(n_nodes)
     networks = {
         co2l: data_handling.load_pypsa_network(
-            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=False
         )
         for co2l in co2ls
     }
@@ -280,27 +278,30 @@ def create_generation_by_country_stacked_bar_plot(n_nodes: int = 600):
     plt.show()
 
 
-def create_combined_generation_storage_plot(plot_battery_power=False):
+def create_combined_generation_storage_plot(plot_battery_power: bool = False,
+                                            n_nodes: int = 600,
+                                            save_prefix: str | None = None):
     """Create combined generation and storage map plot."""
 
     # Setup
-    n_nodes = 600
     save_path = path_to_figures_sclopf
     os.makedirs(save_path, exist_ok=True)
 
     # Load network graph and node positions
-    snet_index = 0
+    snet_index = '0'
     network = data_handling.load_pypsa_network(
-        n_nodes=n_nodes, co2lvl=0.0, use_sclopf=True, lopt=use_extensions
+        n_nodes=n_nodes, co2lvl=0.0, use_sclopf=True, 
+        lopt=False
     )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
+    nx_graph = data_handling.build_networkx_graph(network, 
+                                                  snet_index=snet_index)
     pos = nx.get_node_attributes(nx_graph, "pos")
 
     # Get CO2 levels
     co2ls = get_co2_levels(n_nodes)
     networks = {
         co2l: data_handling.load_pypsa_network(
-            n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+            n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=False
         )
         for co2l in co2ls
     }
@@ -696,7 +697,7 @@ def create_combined_generation_storage_plot(plot_battery_power=False):
 
     for target_level in co2ls:
         n = networks[target_level]
-        logger.info(f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{target_level}-2920SEG.nc")
+        #logger.info(f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{target_level}-2920SEG.nc")
         storage_capacities_all_lvl = pd.Series(index=multi_index, data=0)
         storage_capacities_lvl = n.storage_units.max_hours * n.storage_units.p_nom
         if plot_output_capacity:
@@ -782,8 +783,10 @@ def create_combined_generation_storage_plot(plot_battery_power=False):
     )
     ax_line_legend_storage.axis("off")
 
+    if save_prefix is not None:
+        file_name = save_prefix + "_" + file_name
+
     save_figure(f, file_name, save_path)
-    plt.show()
 
 
 def create_generation_capacity_plot(show_pie_charts=False):
@@ -804,7 +807,7 @@ def create_generation_capacity_plot(show_pie_charts=False):
     co2ls = get_co2_levels(n_nodes)
     networks = {
         co2l: data_handling.load_pypsa_network(
-            n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+            n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=False
         )
         for co2l in co2ls
     }

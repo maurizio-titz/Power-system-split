@@ -271,7 +271,7 @@ def create_blackout_statistics_plot(
             n_nodes=n_nodes,
             co2lvl=co2l,
             use_sclopf=True,
-            lopt=config.use_extensions,
+            lopt=False,
         )
 
         if "p_nom_opt" in network.generators.columns:
@@ -306,7 +306,7 @@ def create_blackout_statistics_plot(
                 n_nodes=n_nodes,
                 co2lvl=co2l,
                 use_sclopf=True,
-                lopt=config.use_extensions,
+                lopt=False,
             )
             if same_corridor is not None:
                 n_2_failures = [
@@ -499,7 +499,7 @@ def create_capacity_factor_grid(
             n_nodes=n_nodes,
             co2lvl=co2l,
             use_sclopf=True,
-            lopt=config.use_extensions,
+            lopt=False,
         )
         gen_by_type = _get_renewable_generation_series(network)
 

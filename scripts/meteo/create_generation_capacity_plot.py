@@ -1,6 +1,6 @@
 from scripts.plots.plot_combined_generation_storage import aggregate_carriers
 from utils import data_handling
-from utils.config import path_to_figures_sclopf, use_extensions
+from utils.config import path_to_figures_sclopf
 from utils.data_handling import get_actual_co2_level, get_co2_levels
 from utils.plot_style import (
     LEGEND_FONTSIZE,
@@ -43,7 +43,7 @@ def create_generation_capacity_plot(show_pie_charts=False):
     co2ls = get_co2_levels(n_nodes)
     networks = {
         co2l: data_handling.load_pypsa_network(
-            n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+            n_nodes=600, co2lvl=co2l, use_sclopf=True, lopt=False
         )
         for co2l in co2ls
     }

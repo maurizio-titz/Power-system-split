@@ -17,8 +17,6 @@ from utils import data_handling, subgraph_evaluation
 from utils.config import (
     path_to_pre_outage_sclopf,
     path_to_pypsa_network_sclopf,
-    path_to_sclopf_data,
-    use_extensions,
 )
 from scripts.evaluate_cascade import load_inertia_constant
 
@@ -242,7 +240,7 @@ co2ls = get_co2_levels(n_nodes)
 # %%
 networks = {
     co2l: data_handling.load_pypsa_network(
-        n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+        n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=False
     )
     for co2l in co2ls
 }

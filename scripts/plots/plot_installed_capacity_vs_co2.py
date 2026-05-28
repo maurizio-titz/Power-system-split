@@ -23,7 +23,7 @@ pypsa.network.io.logger.setLevel(logging.ERROR)
 
 sys.path.append("./")
 from utils.data_handling import get_actual_co2_level, get_co2_levels
-from utils.config import path_to_figures_sclopf, use_extensions
+from utils.config import path_to_figures_sclopf
 from utils import data_handling
 from utils.plot_style import (
     setup_matplotlib_style,
@@ -89,7 +89,7 @@ def create_installed_capacity_plot(aggregate_wind=False, add_nuclear=False, save
     co2ls = get_co2_levels(n_nodes)
     networks = {
         co2l: data_handling.load_pypsa_network(
-            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+            n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=False
         )
         for co2l in co2ls
     }

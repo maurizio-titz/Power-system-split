@@ -5,9 +5,6 @@ from pathlib import Path
 
 project_folder_path = str(Path(__file__).parent.parent)
 
-# TODO remove this
-use_extensions = False  # legacy, do not use
-
 # Base paths configuration for different datasets
 root_path = project_folder_path
 
@@ -41,6 +38,8 @@ path_to_line_extension_mitigation_sclopf = (
 path_to_vis_results_sclopf = path_to_sclopf_results + "/split_visualization"
 path_to_pre_outage_sclopf = path_to_sclopf_results + "/pre_outage_data"
 path_to_figures_sclopf = results_path + "/figures"
+# Intermediate data that is created while running plot script for the first time
+path_to_plot_data = path_to_figures_sclopf + "/plot_data"
 
 # Allow plot output directory override via environment variable
 _plot_output_dir = os.getenv("PLOT_OUTPUT_DIR", "").strip()

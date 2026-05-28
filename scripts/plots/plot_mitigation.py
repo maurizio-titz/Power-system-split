@@ -39,7 +39,8 @@ from utils.config import (
     path_to_line_extension_mitigation_sclopf,
     path_to_pre_outage_sclopf,
     path_to_inertia_mitigation_results_sclopf,
-    path_to_evaluation_results_sclopf
+    path_to_evaluation_results_sclopf,
+    path_to_plot_data
 )
 from utils import data_handling, cascade_simulation
 from utils.cascade_simulation import LOOKUP_TABLE_NP
@@ -68,9 +69,8 @@ TICK_LABELSIZE = TICK_LABEL_FONTSIZE
 SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 
 # Plot data path
-path_plot_data = path_to_figures_sclopf + "/plot_data"
-if not os.path.exists(path_plot_data):
-    os.makedirs(path_plot_data, exist_ok=True)
+if not os.path.exists(path_to_plot_data):
+    os.makedirs(path_to_plot_data, exist_ok=True)
 
 annualized_cost_per_MWs_max_DE = 888.5  # € per MWs/a of synthetic intertia as per https://www.netztransparenz.de/de-de/Systemdienstleistungen/Frequenzhaltung/Marktgest%C3%BCtzte-Beschaffung-von-Momentanreserve
 # annualized_cost_per_MVAs_GB = (
@@ -374,6 +374,7 @@ def create_combined_mitigation_plot(
     target: str = "num_GSS",
     plot_rows: str = "both",
     n_nodes: int = 600,
+    organize_plots: bool = True
 ):
     """Create combined mitigation plot with inertia on top and line extension below.
 
@@ -1179,8 +1180,7 @@ def create_combined_mitigation_plot(
     if plot_rows != "both":
         f_name = f_name + f"_{plot_rows}"
 
-    save_figure(f, f_name, save_path)
-    plt.show()
+    save_figure(f, f_name, save_path, organize_plots=organize_plots)
 
 
 def blackout_size_histogram_after_mitigation(
@@ -1368,7 +1368,7 @@ def blackout_size_histogram_after_mitigation(
         for idx_budget_i, budget_inertia in enumerate(budget_invest_bn_tup):
             comp_property_r = comp_property_df.copy()
             fname_inertia_sprops = f"mitigated_split_properties_Co2L{co2l_r}_n{n_nodes}_budget{budget_inertia:.4f}.h5"
-            fpath_inertia_mitigated_sprops = os.path.join(path_plot_data, 
+            fpath_inertia_mitigated_sprops = os.path.join(path_to_plot_data, 
                                                           fname_inertia_sprops)
             
             if not os.path.exists(fpath_inertia_mitigated_sprops) or calc_inertia_again:

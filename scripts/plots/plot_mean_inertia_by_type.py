@@ -17,7 +17,7 @@ import matplotlib as mpl
 sys.path.append("./")
 
 from utils import data_handling, subgraph_evaluation
-from utils.config import path_to_figures_sclopf, use_extensions
+from utils.config import path_to_figures_sclopf
 from utils.data_handling import get_co2_levels, get_actual_co2_level
 from utils.plot_style import (
     setup_matplotlib_style,
@@ -139,7 +139,7 @@ def create_mean_inertia_by_type_plot(
     os.makedirs(cache_dir, exist_ok=True)
     cache_name = (
         f"mean_inertia_by_type_n{n_nodes}_snet{snet_index}"
-        f"_pt{participation_threshold}_load{load_inertia_constant}_ext{use_extensions}.pklz"
+        f"_pt{participation_threshold}_load{load_inertia_constant}_ext{False}.pklz"
     )
     cache_path = os.path.join(cache_dir, cache_name)
 
@@ -159,7 +159,7 @@ def create_mean_inertia_by_type_plot(
         inertia_by_type_by_co2 = {}
         for co2l in co2_levels:
             network = data_handling.load_pypsa_network(
-                n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=use_extensions
+                n_nodes=n_nodes, co2lvl=co2l, use_sclopf=True, lopt=False
             )
             if sample_network is None:
                 sample_network = network
@@ -175,7 +175,7 @@ def create_mean_inertia_by_type_plot(
                 n_nodes=n_nodes,
                 co2lvl=co2_levels[0],
                 use_sclopf=True,
-                lopt=use_extensions,
+                lopt=False,
             )
 
         if use_cache:
