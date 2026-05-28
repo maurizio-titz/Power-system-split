@@ -1183,8 +1183,6 @@ def create_combined_mitigation_plot(
     plt.show()
 
 
-# TODO remove input split props...this is only 
-# for developement to not load it with every style change
 def blackout_size_histogram_after_mitigation(
     n_nodes: int = 600,
     co2_lvls_tup: tuple[float, ...] | None = (0.0, .2),
@@ -1350,8 +1348,6 @@ def blackout_size_histogram_after_mitigation(
         
         comp_property_df = pd.read_hdf(fname_comp_property_df, key="df")
         # Get how much inertia is placed before reaching budges. Get number of steps
-        # TODO check if index of comp_mitigated... is really comp idx in comp properites
-        
         comp_mitigated_step = comp_mitigated_step.sort_values()
         comp_mitigated_step = comp_mitigated_step[comp_mitigated_step != -1]
         
@@ -1448,8 +1444,8 @@ def blackout_size_histogram_after_mitigation(
     for idx_r, ax_r in enumerate(ax_arr[:, 0]):
         ax_r.set_ylabel("Count", fontsize=AXIS_LABEL_FONTSIZE)
         ax_r.text(
-            -0.175, 0.5,
-            f"CO$_2$ Level $= {round(co2_lvls_picked_ls[idx_r]*100)}$\\%",
+            -0.3, 0.5,
+            f"CO$_2$ level $= {round(get_actual_co2_level(co2_lvls_picked_ls[idx_r], n_nodes=n_nodes)*100)}$\\%",
             transform=ax_r.transAxes,
             fontsize=AXIS_LABEL_FONTSIZE,
             ha="center", va="center",
@@ -1489,17 +1485,13 @@ def blackout_size_histogram_after_mitigation(
     for handle in leg.legend_handles:
         if hasattr(handle, 'set_linewidth'):
             handle.set_linewidth(2.5)
-
-        
-    pos_inertia_top = ax_ls_inertia[0].get_position()
-    pos_lines_top = ax_ls_line[0].get_position()
     
-    ax_ls_inertia[0].text(.5, 1.075, "Additional Inertia",
+    ax_ls_inertia[0].text(.5, 1.25, "Additional Inertia",
                           transform=ax_ls_inertia[0].transAxes,
-                          ha="center", fontsize=AXIS_LABEL_FONTSIZE)
-    ax_ls_line[0].text(.5, 1.05, "Line Reinforcement",
+                          ha="center", fontsize=TITLE_FONTSIZE)
+    ax_ls_line[0].text(.5, 1.25, "Line Reinforcement",
                        transform=ax_ls_line[0].transAxes,
-                       ha="center", fontsize=AXIS_LABEL_FONTSIZE)
+                       ha="center", fontsize=TITLE_FONTSIZE)
     
     for idx_r, ax_r in enumerate(ax_arr.flatten()):
         add_panel_label(ax_r, idx_r, x_offset=-.15, y_offset=.075)
