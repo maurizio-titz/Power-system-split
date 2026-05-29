@@ -43,7 +43,8 @@ def create_combined_flow_and_split_statistics_plot(
     secondary_proba_axis: bool = True,
     use_steps_load_loss: bool = False,
     n_nodes: int = 600,
-    use_equal_panels: bool = False):
+    use_equal_panels: bool = False,
+    save_prefix: str | None = None):
     """Create combined figure with flow/inertia (top) and 
     split statistics (bottom)."""
 
@@ -533,6 +534,9 @@ def create_combined_flow_and_split_statistics_plot(
     if use_equal_panels:
         save_name += "_equal_panels"
 
+    if save_prefix is not None:
+        save_name = save_prefix + "_" + save_name
+    
     save_figure(fig, save_name, save_path)
 
 if __name__ == "__main__":

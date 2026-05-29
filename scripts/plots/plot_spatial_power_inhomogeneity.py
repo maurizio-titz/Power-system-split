@@ -208,7 +208,8 @@ def draw_monthly_average_spi_vectors(fig: Figure,
 
     
 def plot_spi_histograms_n_mean_spi_per_month(selected_co2_lvls: tuple[float, ...] = (.6, .2, 0.),
-                              n_nodes: int=600, verbose: bool = True):
+                              n_nodes: int=600, verbose: bool = True, 
+                              save_prefix: str | None = None):
     """Plot the complete picture with histograms of SPI vectors and the vectors for each month
     for a selected subset of CO2 levels."""
     
@@ -241,6 +242,9 @@ def plot_spi_histograms_n_mean_spi_per_month(selected_co2_lvls: tuple[float, ...
                                  pos_ax_hist.y1 + label_offset_y)
     add_panel_label_fig_position(fig, 1, label_pos_x, 
                                  ax_vec_all[0].get_position().y1 + label_offset_y)
+    
+    if save_prefix is not None:
+        fig_fname = save_prefix + "_" + fig_fname
     
     save_figure(fig, fig_fname, path_to_figures_sclopf)
     

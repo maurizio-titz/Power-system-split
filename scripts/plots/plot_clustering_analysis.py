@@ -1007,7 +1007,8 @@ def create_cluster_plot_only_lines_with_zoom(fpath_plot_data: str,
                                   edge_log_scale: bool = True,
                                   colors_classes: list[str] = ["blue", "lightgray", "red"],
                                   figsize=(10, 4),
-                                  plot_dir: str = path_to_figures_sclopf):
+                                  plot_dir: str = path_to_figures_sclopf,
+                                  save_prefix: str | None = None):
     """Plot the cluster with rank 'cluster_rank' (as sortedy by 'sort_by') 
     with only lines and additionally zoom if 'zoom_window' is provided."""
     
@@ -1190,6 +1191,10 @@ def create_cluster_plot_only_lines_with_zoom(fpath_plot_data: str,
         save_name += f"_sortedBy{sort_by.replace('_', ' ').title().replace(' ', '')[0].lower() + sort_by.replace('_', ' ').title().replace(' ', '')[1:]}"
     
     save_name += f"_cluster{cluster_rank}_{agg_hash_str}"
+    
+    if save_prefix:
+        save_name = save_prefix + "_" + save_name
+    
     
     save_figure(fig, save_name, plot_dir)
     

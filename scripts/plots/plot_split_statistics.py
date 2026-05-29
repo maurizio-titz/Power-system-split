@@ -632,7 +632,8 @@ def plot_blackout_size_histograms(
     n_nodes: int = 600, 
     use_total_load_values: bool = False,
     fname_suffix: str = "",
-    xlims: tuple[float, float] | None = None
+    xlims: tuple[float, float] | None = None,
+    save_prefix: str | None = None
 ):
     # load split properties
     split_props = pd.read_hdf(
@@ -773,24 +774,37 @@ def plot_blackout_size_histograms(
     fname_fig = "blackout_size_histograms" + fname_suffix
     
     plt.tight_layout()
+    
+    if save_prefix is not None:
+        fname_fig = save_prefix + "_" + fname_fig
+    
     save_figure(fig, fname_fig, save_path)
     
     
 def plot_blackout_size_distributions_with_zoom_in(
-    split_props: pd.DataFrame,
     co2_lvls: tuple[float] = (.6, .2, .0),
     n_nodes: int = 600,
-    cut_off_val: float | None = 2e4):
+    cut_off_val: float | None = 2e4,
+    save_prefix: str | None = None):
     """Plot a X by 2 plot that shows the blackout size distributions that
     shows the different requested CO2 levels in the rows. First column shows 
     the entire distribtuion while the second column shows the distribution beyond 
     a chosen cut-off in log-log scale."""
     
+    # load split properties
+    split_props = pd.read_hdf(
+        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
+    )
+    split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
+        float
+    )
+    split_props["total_weighting"] = (
+        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    )
+    
     setup_matplotlib_style()
     
     available_co2_lvls = get_co2_levels(n_nodes=n_nodes)
-    
-    nr_chosen_co2_lvls = len(co2_lvls)
     
     figsize = (10, 4)
     
@@ -850,6 +864,9 @@ def plot_blackout_size_distributions_with_zoom_in(
         ax_r.set_xlabel("Lost Load [MW]")
     
     fname = "blackout_sizes_three_lvls_w_zoom"
+    
+    if save_prefix is not None:
+        fname = save_prefix + "_" + fname
     
     save_figure(fig, fname, path_to_figures_sclopf, organize_plots=False)
 

@@ -8,14 +8,22 @@ from utils.plot_style import *
 
 from scripts.plots.plot_combined_generation_storage import create_combined_generation_storage_plot
 from scripts.plots.plot_combined_flow_split_statistics import create_combined_flow_and_split_statistics_plot
-from scripts.plots.plot_mitigation import create_combined_mitigation_plot
+from scripts.plots.plot_clustering_analysis import create_clustering_analysis_plot_from_data, create_cluster_plot_only_lines_with_zoom
+from scripts.plots.plot_mitigation import create_combined_mitigation_plot, blackout_size_histogram_after_mitigation
 from scripts.plots.plot_line_failure_probs import create_total_line_failure_plot
+from scripts.plots.plot_spatial_power_inhomogeneity import plot_spi_histograms_n_mean_spi_per_month
+from scripts.plots.plot_additional_pypsa_figures import histogram_lineloading_accross_co2lvls, graph_with_num_parallel
+from scripts.plots.plot_split_statistics import plot_blackout_size_histograms, plot_blackout_size_distributions_with_zoom_in
+
+# Paths
+from utils.config import path_to_plot_data
 
 def plot_all_figures(also_supplementary_figures: bool=False):
     """Plot the figures for the paper, which mainly calls functions from 'scripts/plots/'"""
+    
     ## Main fiugres
     # Fig. 1: Scenarios for decarbonisation of The European power system
-    create_combined_generation_storage_plot()
+    create_combined_generation_storage_plot(save_prefix="fig1")
     
     # Fig. 2: Evolution of risks during decarbonistaion
     create_combined_flow_and_split_statistics_plot(mean_distance=False, 
@@ -23,9 +31,15 @@ def plot_all_figures(also_supplementary_figures: bool=False):
                                                    show_blackout_stats=True, 
                                                    secondary_proba_axis=True,
                                                    use_steps_load_loss=True,
-                                                   use_equal_panels=True)
+                                                   use_equal_panels=True,
+                                                   save_prefix="fig2")
     
     # Fig. 3: Characteristic geographic patterns of system split
+    # This requires data that is created when 'plot_clusts.py' is run. So please run it first
+    fpath_cluster_plot_data = os.path.join(path_to_plot_data, 
+                                           "plot_data_agg_params_01bf408e.pklz")
+    create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, sort_by="frequency",
+                                              save_prefix="fig3")
     
     
     # Fig. 4: Conditional probability of transmission lines participating in casc. failures
@@ -35,6 +49,7 @@ def plot_all_figures(also_supplementary_figures: bool=False):
         scale_width=True,
         width_scale_sqrt=True,
         cmap="crameri:Batlow_r",
+        save_prefix="fig4"
     )
     
     # Fig. 5: Mitigation of split-induced blackouts via inertia and grid reinforcements
@@ -44,18 +59,84 @@ def plot_all_figures(also_supplementary_figures: bool=False):
                                     plot_intertia_cost=True,
                                     blackoutthreshold=.8,
                                     target="num_GSS",
-                                    plot_rows="both"
+                                    plot_rows="both", 
+                                    organize_plots=False,
+                                    save_prefix="fig5"
                                     )
-    
     
     if also_supplementary_figures:
         plot_supplementary_figures()
-    
+        
     return
 
 
 def plot_supplementary_figures():
     """Plot the supplemantry figures for the SI of the paper."""
+    
+    
+    fpath_cluster_plot_data = os.path.join(path_to_plot_data, 
+                                           "plot_data_agg_params_01bf408e.pklz")
+    create_cluster_plot_only_lines_with_zoom(fpath_cluster_plot_data, 
+                                             0,
+                                             zoom_middle=(-0.07, 42.84), 
+                                             zoom_radius_x=5.2,
+                                             save_prefix="SI")
+    create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, use_only_lines=True,
+                                              sort_by="frequency",
+                                              save_prefix="SI")
+    
+    # Line Loadings across co2 levels
+    histogram_lineloading_accross_co2lvls(save_prefix="SI")
+    
+    # SPI vectors
+    plot_spi_histograms_n_mean_spi_per_month(save_prefix="SI")
+    
+    # Grid map showing num parallel
+    graph_with_num_parallel(save_prefix="SI")
+    
+    # Daily Profile Nuclear Generation
+    
+    
+    # Co2 Scenarios vs Generation by country stacked
+    
+    # Comparison of Decarbonisation and TYNDP
+    
+    # System Copsts for different CO2 Scenarios
+    
+    # System Energy Balance 0, 20, 60 % in seasons
+    
+    # Blackout Size Distribution (different versions) and for 3 with zoom in
+    ## Blackout Size (different versions)
+    plot_blackout_size_histograms(yscale_log=True, n_cols=2, save_prefix="SI")
+    plot_blackout_size_histograms(yscale_log=True, n_cols=2, n_bins=50,
+                                  fname_suffix="_lessbins", save_prefix="SI")
+    
+    plot_blackout_size_histograms(yscale_log=True, xscale_log=True, n_cols=2,
+                                  xlims=(1e-2, 1e2), fname_suffix="_log", save_prefix="SI")
+    plot_blackout_size_histograms(yscale_log=True, xscale_log=True, n_cols=2,
+                                  xlims=(1e-2, 1e2), n_bins=50, fname_suffix="_log_lessbins", save_prefix="SI")
+    
+    ## Blackout sizes after mitigation
+    blackout_size_histogram_after_mitigation(calc_inertia_again=False, 
+                                             save_prefix="SI",
+                                             n_bins=50)
+    
+    ## Zoom in
+    plot_blackout_size_distributions_with_zoom_in(save_prefix="SI")
+    
+    # 2D Historgram of Number of Components and Share of load not served
+    
+    # Fig.3 sorted by contribution to load not served
+    
+    # Detailed analysis of cluster 11: Daily Profile, Generation histogram and largest comp
+    
+    # Total inertia placed per country to compare with ENTSO-E results
+    
+    # TYNP line extensions vs 20%
+    
+    
+    
+    
     
     
     

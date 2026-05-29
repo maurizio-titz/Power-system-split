@@ -374,7 +374,8 @@ def create_combined_mitigation_plot(
     target: str = "num_GSS",
     plot_rows: str = "both",
     n_nodes: int = 600,
-    organize_plots: bool = True
+    organize_plots: bool = True,
+    save_prefix: str | None = None
 ):
     """Create combined mitigation plot with inertia on top and line extension below.
 
@@ -1179,6 +1180,9 @@ def create_combined_mitigation_plot(
     f_name = f_name + f"_{target}"
     if plot_rows != "both":
         f_name = f_name + f"_{plot_rows}"
+        
+    if save_prefix is not None:
+        f_name = save_prefix + "_" + f_name
 
     save_figure(f, f_name, save_path, organize_plots=organize_plots)
 
@@ -1187,12 +1191,13 @@ def blackout_size_histogram_after_mitigation(
     n_nodes: int = 600,
     co2_lvls_tup: tuple[float, ...] | None = (0.0, .2),
     budget_invest_bn_tup: tuple[float, ...] = (2, .3),
-    n_bins: int = 101,
+    n_bins: int = 51,
     xlims: tuple[float, float] = (0, 100),
     ylog_scale: bool = True,
     calc_inertia_again: bool = False,
     linewidth: float = 1.5,
-    alpha=.8):
+    alpha: float = .8,
+    save_prefix: str | None = None):
     """Plot the size of blackouts after mitigation and compare it with before.
 
     Args:
@@ -1210,6 +1215,7 @@ def blackout_size_histogram_after_mitigation(
             Defaults to False.
         linewidth (float, optional): Line width to the plot. Defaults to 1.5.
         alpha (float, optional): Color alpha of the lines. Defaults to .8.
+        save_prefix (str): If not None, this str is put before the filename.
     """
     
     # Load data
@@ -1228,7 +1234,7 @@ def blackout_size_histogram_after_mitigation(
                 '#d95f02',
                 '#7570b3',
                 '#e7298a']
-    linestyle_ls = ["--", ":", "-."]
+    linestyle_ls = ["--", "-.", ":"]
     
     if len(budget_invest_bn_tup) > 3:
         raise ValueError("Only a maximum of 3 different budget values is reasonable!")
@@ -1291,7 +1297,6 @@ def blackout_size_histogram_after_mitigation(
                             zorder=-2,
                             linewidth=linewidth,
                             color=color_ls[0])
-        
         
         # Line mitigation
         fname_line_mitigation = os.path.join(path_to_line_extension_mitigation_sclopf, 
@@ -1498,6 +1503,10 @@ def blackout_size_histogram_after_mitigation(
     
     # Save it
     fname_fig = f"blackout_sizes_after_mitigation_n{n_nodes}"
+    
+    if save_prefix is not None:
+        fname_fig = save_prefix + "_" + fname_fig
+    
     save_figure(fig, fname_fig, path_to_figures_sclopf)
     
     return

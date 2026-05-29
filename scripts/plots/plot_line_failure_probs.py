@@ -506,7 +506,8 @@ def create_total_line_failure_plot(
     calc_line_loading_gain: bool = False,
     n_bins_line_loading: int = 100,
     n_bins_blackout_sizes: int = 50,
-    n_nodes: int = 600
+    n_nodes: int = 600,
+    save_prefix: str | None = None
 ):
     """Create line failure probabilities plot showing only secondary failures.
 
@@ -948,8 +949,11 @@ def create_total_line_failure_plot(
     if in_second_row is not None:
         suffix += "_" + in_second_row
     
+    fname_prefix = save_prefix + "_" if save_prefix is not None else ""
+    
     if save_fig:
-        save_figure(f, f"line_failure_probs_total_{cmap_name}{suffix}", save_path)
+        save_figure(f, 
+                    f"{fname_prefix}line_failure_probs_total_{cmap_name}{suffix}", save_path)
     else:
         plt.show()
 

@@ -15,7 +15,7 @@ from utils.data_handling import \
 from utils.plot_style import *
 setup_matplotlib_style()
 
-from utils.config import path_to_figures_sclopf
+from utils.config import path_to_figures_sclopf, path_to_plot_data
 
 from utils import calculate_line_loadings
 
@@ -28,17 +28,22 @@ from matplotlib import pyplot as plt
 import matplotlib.colors as mplcolors
 
 
-def histogram_lineloading_accross_co2lvls(n_nodes: int = 600, calc_again: bool = False,
+
+def histogram_lineloading_accross_co2lvls(n_nodes: int = 600, 
+                                          calc_again: bool = False,
                                           condition_on_split: bool = False,
-                                          n_bins: int = 100, xscale_log: bool = False,
-                                          bin_range: tuple[float, float] = (0.5, 1.)):
+                                          n_bins: int = 100, 
+                                          xscale_log: bool = False,
+                                          bin_range: tuple[float, float] = (0., 1.),
+                                          x_lim: tuple[float, float] = (.5, 1.),
+                                          save_prefix: str | None = None):
     """Draw histograms of line loadings for different co2 levels
     """
     
     condition_str = "_givenSplit" if condition_on_split else ""
     
-    path_to_results = path_to_figures_sclopf + \
-        f"/plot_data/data_line_loading_n{n_nodes}{condition_str}.pklz"
+    path_to_results = os.path.join(path_to_plot_data , 
+                                   f"data_line_loading_n{n_nodes}{condition_str}.pklz")
     
     available_co2_lvls = get_co2_levels(n_nodes=n_nodes)
     
@@ -92,7 +97,7 @@ def histogram_lineloading_accross_co2lvls(n_nodes: int = 600, calc_again: bool =
     ax.set_xlabel("Line Loading $\\ell_{\\text{load}}$")
     ax.set_ylabel("$P(\\ell_{\\text{load}})$")
     
-    ax.set_xlim(min(bin_range), max(bin_range))
+    ax.set_xlim(min(x_lim), max(x_lim))
     
     ax.legend(loc="lower left",
               title="CO$_2$ level [\\% of 1990]",
@@ -101,6 +106,9 @@ def histogram_lineloading_accross_co2lvls(n_nodes: int = 600, calc_again: bool =
     fname_fig = f"line_loading_histogram_n{n_nodes}"
     if xscale_log:
         fname_fig += "_xlog"
+        
+    if save_prefix is not None:
+        fname_fig = save_prefix + "_" + fname_fig
     
     save_figure(fig, fname_fig, path_to_figures_sclopf)
     
@@ -111,7 +119,8 @@ def graph_with_num_parallel(co2lvl: float = .6, n_nodes: int = 600,
                             snet_index: str = '0',
                             edge_width: float = 2.,
                             log_scale: bool = False,
-                            vlims_edges: tuple[float, float] | None = (1e-1, 1e1)):
+                            vlims_edges: tuple[float, float] | None = (1e-1, 1e1),
+                            save_prefix: str | None = None):
     """Plot the graph of the CE network with num_parallel on the acis"""
     
     net = load_pypsa_network(co2lvl=co2lvl, n_nodes=n_nodes)
@@ -172,6 +181,9 @@ def graph_with_num_parallel(co2lvl: float = .6, n_nodes: int = 600,
     ax.axis('off')
     
     fname_fig = f"graph_num_parallel_co2l{co2lvl}_n{n_nodes}"
+    
+    if save_prefix is not None:
+        fname_fig = save_prefix + "_" + fname_fig
     
     save_figure(fig, fname_fig, path_to_figures_sclopf)
     
