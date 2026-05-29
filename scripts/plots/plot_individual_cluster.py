@@ -25,6 +25,9 @@ from utils.data_handling import get_co2_levels
 from utils import config
 from utils import plot_style
 
+import matplotlib.pyplot as plt
+import networkx as nx
+
 # %load_ext autoreload
 # %autoreload 2
 
@@ -38,7 +41,8 @@ for cluster_number in [11, 12]:
     sort_by = "weighted_lost_load"
 
     save_dir = os.path.join(
-        config.path_to_figures_sclopf, f"analysis_cluster_{cluster_number}"
+        config.path_to_figures_sclopf, 
+        f"analysis_cluster_{cluster_number}"
     )
     # %%
     # with gzip.open("/srv/data/jlange/power-system-split/no_extensions/results/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/clustering_results_index.pklz", "rb") as f:
@@ -47,7 +51,8 @@ for cluster_number in [11, 12]:
     # df = pd.DataFrame(df)
     # df.sort_values(by="silhouette_score", ascending=False)
     # %%
-    fpath = path_to_sclopf_results + "/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/agg_params_01bf408e.pklz"
+    fpath = path_to_sclopf_results + \
+        "/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/agg_params_01bf408e.pklz"
     with gzip.open(fpath, "rb") as f:
         res = pickle.load(f)
 
@@ -135,13 +140,10 @@ for cluster_number in [11, 12]:
     import matplotlib as mpl
     from utils.clustering_visualisation import truncate_colormap
 
-    edge_cmap = mpl.cm.get_cmap("inferno_r")
+    edge_cmap = plt.get_cmap("inferno_r")
     edge_cmap = truncate_colormap(edge_cmap, 0.1, 0.95, 1000)
     edge_cmap.set_under("gainsboro", 1.0)
     if plot_cluster:
-        import matplotlib.pyplot as plt
-        import networkx as nx
-
         plot_order = np.argsort(centroid[:, 2])  # Sort by the value of the third class
         colors_classes = ["blue", "lightgray", "red"]
         f, ax = plt.subplots(figsize=(8, 8))
@@ -226,7 +228,6 @@ for cluster_number in [11, 12]:
     ].idxmax()
     largest_component_df = component_df_cluster.loc[idx]
     # %%
-    import matplotlib.pyplot as plt
 
     fig, axs = plt.subplots(2, 2, figsize=(12, 10))
 
@@ -458,7 +459,6 @@ for cluster_number in [11, 12]:
     # %%
     # plot histograms of generation and storage power
     bins = np.arange(0, gen_by_carrier.sum(axis=1).max() / 1000 * 1.2, step=0.5)
-    import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots()
     for col in gen_by_carrier.columns:
@@ -611,6 +611,7 @@ for cluster_number in [11, 12]:
     plt.suptitle(f"Temporal Distribution of Blackouts", fontsize=16, y=0.93)
 
     plt.tight_layout()
+    
     f_name = f"blackout_daily_yearly_profile_co2l{co2l}"
     plot_style.save_figure(plt.gcf(), f_name, save_dir)
     # %%

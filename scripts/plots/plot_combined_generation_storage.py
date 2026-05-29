@@ -188,7 +188,8 @@ def _aggregate_countries_by_region(df: pd.DataFrame) -> pd.DataFrame:
     return df_agg
 
 
-def create_generation_by_country_stacked_bar_plot(n_nodes: int = 600):
+def create_generation_by_country_stacked_bar_plot(n_nodes: int = 600,
+                                                  save_prefix: str | None = None):
     """Create stacked bar plot of mean generation by country across CO2 levels."""
 
     save_path = path_to_figures_sclopf
@@ -274,7 +275,10 @@ def create_generation_by_country_stacked_bar_plot(n_nodes: int = 600):
     )
 
     fig.tight_layout()
-    save_figure(fig, "generation_by_country_stacked_bar", save_path)
+    
+    save_prefix_str = save_prefix + "_" if save_prefix is not None else ""
+    
+    save_figure(fig, f"{save_prefix_str}generation_by_country_stacked_bar", save_path)
     plt.show()
 
 

@@ -1335,7 +1335,7 @@ def blackout_size_histogram_after_mitigation(
         
         # Additional inertia mitigation
         search_pattern = os.path.join(path_to_inertia_mitigation_results_sclopf, 
-                                                f"synthetic_inertia_placement_Co2{co2l_r}_N{n_nodes}_deltarotE*_rocofthres1_lshare0_maxiter1000_random_blackoutthres0.8.pklz")
+                                                f"synthetic_inertia_placement_Co2{co2l_r:g}_N{n_nodes}_deltarotE*_rocofthres1_lshare0_maxiter1000_random_blackoutthres0.8.pklz")
         fname_inertia_ls = glob.glob(search_pattern)
         if len(fname_inertia_ls) != 1:
             print(search_pattern)

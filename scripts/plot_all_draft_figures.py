@@ -6,17 +6,21 @@ import os
 os.environ["PLOT_STYLE"] = "joules"
 from utils.plot_style import *
 
-from scripts.plots.plot_combined_generation_storage import create_combined_generation_storage_plot
+from scripts.plots.plot_combined_generation_storage import create_combined_generation_storage_plot, create_generation_by_country_stacked_bar_plot
 from scripts.plots.plot_combined_flow_split_statistics import create_combined_flow_and_split_statistics_plot
 from scripts.plots.plot_clustering_analysis import create_clustering_analysis_plot_from_data, create_cluster_plot_only_lines_with_zoom
 from scripts.plots.plot_mitigation import create_combined_mitigation_plot, blackout_size_histogram_after_mitigation
 from scripts.plots.plot_line_failure_probs import create_total_line_failure_plot
 from scripts.plots.plot_spatial_power_inhomogeneity import plot_spi_histograms_n_mean_spi_per_month
-from scripts.plots.plot_additional_pypsa_figures import histogram_lineloading_accross_co2lvls, graph_with_num_parallel
-from scripts.plots.plot_split_statistics import plot_blackout_size_histograms, plot_blackout_size_distributions_with_zoom_in
+from scripts.plots.plot_additional_pypsa_figures import histogram_lineloading_accross_co2lvls, \
+    graph_with_num_parallel, plot_load_dispatch, \
+    plot_investments_capital_costs
+from scripts.plots.plot_split_statistics import plot_blackout_size_histograms, plot_blackout_size_distributions_with_zoom_in, plot_component_number_vs_blackout_size
+from scripts.plots.plot_inertia_by_country import create_inertia_by_country_all_co2_plot
+from scripts.plots.plot_compare_lineMitigation_plannedExtension import plot_planned_line_extensions_single_co2, run_planned_extension_comparison
 
 # Paths
-from utils.config import path_to_plot_data
+from utils.config import path_to_plot_data, path_to_line_extension_mitigation_sclopf
 
 def plot_all_figures(also_supplementary_figures: bool=False):
     """Plot the figures for the paper, which mainly calls functions from 'scripts/plots/'"""
@@ -85,6 +89,7 @@ def plot_supplementary_figures():
                                               sort_by="frequency",
                                               save_prefix="SI")
     
+    
     # Line Loadings across co2 levels
     histogram_lineloading_accross_co2lvls(save_prefix="SI")
     
@@ -95,15 +100,18 @@ def plot_supplementary_figures():
     graph_with_num_parallel(save_prefix="SI")
     
     # Daily Profile Nuclear Generation
-    
+    ## please run the script 'scripts/plots/plot_nuclear_daily_profiles.py' from bash
     
     # Co2 Scenarios vs Generation by country stacked
+    create_generation_by_country_stacked_bar_plot(save_prefix="SI")
     
     # Comparison of Decarbonisation and TYNDP
     
-    # System Copsts for different CO2 Scenarios
+    # System Costs for different CO2 levels
+    plot_investments_capital_costs(save_prefix="SI")
     
     # System Energy Balance 0, 20, 60 % in seasons
+    plot_load_dispatch(save_prefix="SI")
     
     # Blackout Size Distribution (different versions) and for 3 with zoom in
     ## Blackout Size (different versions)
@@ -125,23 +133,50 @@ def plot_supplementary_figures():
     plot_blackout_size_distributions_with_zoom_in(save_prefix="SI")
     
     # 2D Historgram of Number of Components and Share of load not served
+    plot_component_number_vs_blackout_size(save_prefix="SI")
     
     # Fig.3 sorted by contribution to load not served
+    create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, use_only_lines=False,
+                                              sort_by="accumulative_lost_load",
+                                              save_prefix="SI")
     
     # Detailed analysis of cluster 11: Daily Profile, Generation histogram and largest comp
+    ## just run script 'scripts/plots/plot_individual_cluster.py'
     
     # Total inertia placed per country to compare with ENTSO-E results
+    create_inertia_by_country_all_co2_plot(
+        co2_lvl_ref=0.6,
+        co2_lvls=[0.4, 0.2, 0.0],
+        target="num_GSS",
+        blackoutthreshold=0.8,
+        save_prefix="SI"
+    )
     
     # TYNP line extensions vs 20%
-    
-    
-    
-    
-    
+    path_to_csv_planned_comp = os.path.join(
+            path_to_line_extension_mitigation_sclopf,
+            "planned_line_extensions_n600_target_num_GSS_annualized_380kVonly_blackoutthres0.8.csv",
+        )
+    if not os.path.exists(path_to_csv_planned_comp):
+        logger.warning("Need to generate planned extension data. Might take around 25 minutes.")
+        run_planned_extension_comparison(
+            n_nodes=600,
+            target="num_GSS",
+            blackoutthreshold=0.8,
+            build_380kV_only=True,
+            annualized_costs=True,
+        )
+    plot_planned_line_extensions_single_co2(
+        csv_path=path_to_csv_planned_comp,
+        co2l=0.2,
+        figure_name="planned_line_extensions_co2l0.2_blackoutthres0.8",
+        red_lines_rank=[11],
+        pad_deg=0.75,
+    )
     
     
     return
 
 if __name__ == "__main__":
     
-    plot_all_figures()
+    plot_all_figures(also_supplementary_figures=True)

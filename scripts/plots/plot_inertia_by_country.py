@@ -368,7 +368,8 @@ def create_inertia_by_country_all_co2_plot(
     resolve_strategy: str = "random",
     max_iter: int = 10000,
     ref_loss_factor: float = 1.0,
-    co2_lvls: Iterable[float] = None,
+    co2_lvls: Iterable[float] | None = None,
+    save_prefix: str | None = None
 ):
     """Plot total placed synthetic inertia per country across all CO2 levels."""
     os.makedirs(path_to_figures_sclopf, exist_ok=True)
@@ -480,8 +481,10 @@ def create_inertia_by_country_all_co2_plot(
     )
 
     fig.tight_layout()
+    
+    save_prefix_str = save_prefix + "_" if save_prefix is not None else ""
 
-    fname = f"inertia_by_country_allCo2_ref{co2_lvl_ref}_{target}"
+    fname = f"{save_prefix_str}inertia_by_country_allCo2_ref{co2_lvl_ref}_{target}"
     if blackoutthreshold is not None and blackoutthreshold > 0.0:
         fname += f"_blackoutThres{blackoutthreshold}"
     save_figure(fig, fname, path_to_figures_sclopf)

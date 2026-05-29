@@ -861,7 +861,7 @@ def plot_blackout_size_distributions_with_zoom_in(
     ax_zoom.legend(title="CO$_2$ level [\\% of 1990]",
                    loc="lower left")
     for ax_r in ax_arr:
-        ax_r.set_xlabel("Lost Load [MW]")
+        ax_r.set_xlabel("Load not served [MW]")
     
     fname = "blackout_sizes_three_lvls_w_zoom"
     
@@ -1223,11 +1223,21 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
     
 
 def plot_component_number_vs_blackout_size(
-    split_properties=None, save_dir=path_to_figures_sclopf
-):
+    split_properties: pd.DataFrame | None = None, 
+    save_dir: str = path_to_figures_sclopf,
+    save_prefix: str | None = None):
+    """Plot a 2-D histogram of Number of Components vs share of load not 
+    served for system split.
+
+    Args:
+        split_properties (pd.DataFrame | None, optional): DataFrame containing all split properties. Defaults to None.
+        save_dir (str, optional): Directory where figures is saved. Defaults to path_to_figures_sclopf.
+        save_prefix (str | None, optional): Prefix of figure filename. Defaults to None.
+    """
     if split_properties is None:
         split_properties = pd.read_hdf(
-            path_to_vis_results_sclopf + f"/split_properties_all_n600.h5", index_col=0
+            path_to_vis_results_sclopf + 
+            f"/split_properties_all_n600.h5", index_col=0
         )
     lls = split_properties["lost_load_share_blackout"].to_numpy() * 100
     n_comp = split_properties["n_components"].to_numpy()
@@ -1266,11 +1276,15 @@ def plot_component_number_vs_blackout_size(
 
     ax.set_yticks(yticks, labels=[str(int(tick)) for tick in yticks])
     ax.minorticks_off()
+    
     fig.colorbar(mesh, ax=ax, label="Relative Frequency")
+    
     ax.set_xlabel("Share of load not served [\%]", fontsize=AXIS_LABEL_FONTSIZE)
     ax.set_ylabel("Number of Components", fontsize=AXIS_LABEL_FONTSIZE)
     ax.set_title("Column-Normalized 2D Histogram", fontsize=AXIS_LABEL_FONTSIZE)
-    f_name = "lls_vs_n_components_colnorm"
+    
+    save_prefix_str = save_prefix + "_" if save_prefix is not None else ""
+    f_name = f"{save_prefix_str}lls_vs_n_components_colnorm"
     save_figure(fig, f_name, save_dir)
 
 
