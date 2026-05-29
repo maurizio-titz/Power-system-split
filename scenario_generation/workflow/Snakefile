@@ -4,6 +4,11 @@ configfile: "configs/config.yaml"
 
 import numpy as np
 import os
+import sys
+
+root_path = "../../"
+sys.path.append(root_path)
+
 
 group_size = int(config["groupsize"])
 temp_resolution = int(config["clustering"]["temporal"]["resolution_elec"].split("H")[0])
@@ -11,17 +16,16 @@ temp_resolution = int(config["clustering"]["temporal"]["resolution_elec"].split(
 N_ITER = str(int(np.ceil(8760 / temp_resolution / group_size))-1)
 NCLUSTERS = str(config["scenario"]["clusters"][0])
 
-base_repository_path = "../../../"
-export PYTHONPATH=str(base_repository_path):$PYTHONPATH
+# export PYTHONPATH=str(base_repository_path):$PYTHONPATH
 
 from utils.config import path_to_sclopf_data
 
 
 rule prepare_sclopf:
     input:
-        network = "submodules/pypsa-eur/" + s_max_pu_path + "results/networks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc",
+        network = "submodules/pypsa-eur/" + "results/networks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc",
         lookup = "data/np_lookup.csv"
-    output: path_to_sclopf_data + f"prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc"
+    output: path_to_sclopf_data + f"/prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc"
     resources: mem=4000
     threads: 4
     script: "scripts/prepare_sclopf.py"
@@ -29,9 +33,9 @@ rule prepare_sclopf:
 
 rule solve_sclopf:
     input: 
-        prepared = path_to_sclopf_data + "prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc",
-        previous = lambda w: path_to_sclopf_data + f"postnetworks/{w.opts}/sclopf-elec_s_" + NCLUSTERS + f"_ec_lv1.0-{int(w.i)-1}.nc" if int(w.i) > 0 else []
-    output: path_to_sclopf_data + "postnetworks/{opts}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-{i}.nc"
+        prepared = path_to_sclopf_data + "/prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc",
+        previous = lambda w: path_to_sclopf_data + f"/postnetworks/{w.opts}/sclopf-elec_s_" + NCLUSTERS + f"_ec_lv1.0-{int(w.i)-1}.nc" if int(w.i) > 0 else []
+    output: path_to_sclopf_data + "/postnetworks/{opts}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-{i}.nc"
     resources: mem_mb=100000
     threads: 4
     script: "scripts/solve_sclopf.py"
@@ -39,16 +43,16 @@ rule solve_sclopf:
 
 rule reassemble_all:
     input:
-        pre = path_to_sclopf_data + "prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc",
-        sub = path_to_sclopf_data + "postnetworks/{opts}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-" + N_ITER + ".nc"
-    output: path_to_sclopf_data + "postnetworks/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc"
+        pre = path_to_sclopf_data + "/prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc",
+        sub = path_to_sclopf_data + "/postnetworks/{opts}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-" + N_ITER + ".nc"
+    output: path_to_sclopf_data + "/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc"
     script: "scripts/reassemble.py"
 
 
 rule run_all:
     input:
         expand(
-            path_to_sclopf_data + "postnetworks/Co2L{Co2L}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-{i}.nc",
+            path_to_sclopf_data + "/postnetworks/Co2L{Co2L}/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0-{i}.nc",
             Co2L = config["Co2-scenarios"],
             i = [n for n in range(int(np.ceil(8760 / temp_resolution / group_size)))],
             onerror=lambda e: print(f"Warning: {e} failed, continuing..."),

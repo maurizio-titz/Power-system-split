@@ -127,35 +127,34 @@ if __name__ == "__main__":
         sense="<=",
         constant=emissions_lopf_i,
     )
+    # if network_sclopf:
+    #     pypsa_version = version('pypsa')
+    #     assert pypsa_version <= '0.28.0', "network_sclopf is only supported for pypsa v0.28.0 or earlier."
+    #     logger.info("Using network_sclopf")
+    #     from pypsa.contingency import network_sclopf
+    #     network_sclopf(n, snapshots=snapshots, **kwargs)
+        
+        
+    # else:
+    status, condition = n.optimize.optimize_security_constrained(
+        snapshots,
+        branch_outages = pd.Index(branch_outages),
+        solver_name = solver["solver"]["name"],
+        solver_options = solver["solver_options"]
+    )
+        
+        
+    logger.info(f"SCLOPF status: {status} with condition {condition}.")
+    
+    if status != "ok":
+        m = n.model
 
-    if network_sclopf:
-        pypsa_version = version('pypsa')
-        assert pypsa_version <= '0.28.0', "network_sclopf is only supported for pypsa v0.28.0 or earlier."
-        logger.info("Using network_sclopf")
-        from pypsa.contingency import network_sclopf
-        network_sclopf(n, snapshots=snapshots, **kwargs)
-        
-        
-    else:
-        status, condition = n.optimize.optimize_security_constrained(
-            snapshots,
-            branch_outages = pd.Index(branch_outages),
-            solver_name = solver["solver"]["name"],
-            solver_options = solver["solver_options"]
-        )
-        
-        
-        logger.info(f"SCLOPF status: {status} with condition {condition}.")
-        
-        if status != "ok":
-            m = n.model
-
-            # m.print_infeasibilities()
-            print("")
-            labels = m.compute_infeasibilities()
-            res = [print_single_constraint(m, label) for label in labels]
-            print("\n---------------------------------------- \nInfeasible Constraints:\n---------------------------------------- \n")
-            logger.info("\n".join(res))
+        # m.print_infeasibilities()
+        print("")
+        labels = m.compute_infeasibilities()
+        res = [print_single_constraint(m, label) for label in labels]
+        print("\n---------------------------------------- \nInfeasible Constraints:\n---------------------------------------- \n")
+        logger.info("\n".join(res))
             
             
     to_remove = [k for k in n.lines_t.keys() if "mu_contingency" in k]
@@ -165,17 +164,32 @@ if __name__ == "__main__":
     print("\n---------------------------------------- \nCO2 Check:\n---------------------------------------- \n")
     # get co2 emissions after sclopf
     emissions_sclopf_i = get_emissions(n, snapshots)
-    perc = 100 * emissions_sclopf_i / (emissions_lopf_i)
 
-    rtol = 0.005
-    if perc <= 100 * (1+rtol): 
-        logger.info(
-            f"Co2-Test successful. Emissions are {perc}% of LOPF window."
-        )
-    else:
-        raise AssertionError(
+    if emissions_lopf_i == 0:
+
+        if emissions_sclopf_i != 0:
+            raise AssertionError(
             f"Co2-Test not succesful. Emissions are {perc}% of LOPF window."
         )
+
+        else: 
+            logger.info(
+                f"Co2-Test successful. Emissions are 0 as in LOPF window."
+            )
+
+    else: 
+
+        perc = 100 * emissions_sclopf_i / (emissions_lopf_i)
+        
+        rtol = 0.005
+        if perc <= 100 * (1+rtol): 
+            logger.info(
+                f"Co2-Test successful. Emissions are {perc}% of LOPF window."
+            )
+        else:
+            raise AssertionError(
+                f"Co2-Test not succesful. Emissions are {perc}% of LOPF window."
+            )
 
     # export network
     n.export_to_netcdf(snakemake.output[0])
