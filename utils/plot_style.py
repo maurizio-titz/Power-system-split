@@ -128,9 +128,7 @@ def get_plot_config():
     panel_lowercase_env = os.getenv("PLOT_PANEL_LOWERCASE")
     plot_style = os.getenv("PLOT_STYLE", "").strip().lower()
     if panel_lowercase_env is None:
-        if plot_style == "nature_energy":
-            panel_lowercase = True
-        elif plot_style == "joules":
+        if plot_style == "joule":
             panel_lowercase = False
         else:
             panel_lowercase = False
@@ -151,17 +149,14 @@ def apply_plot_profile(profile_name, output_dir=None):
     """Apply a named plot profile and optionally set the output directory.
 
     Supported profiles:
-        - "nature_energy": lowercase panel labels
-        - "joules": uppercase panel labels
+        - "joule": uppercase panel labels
     """
     profile = profile_name.strip().lower()
-    if profile == "nature_energy":
-        os.environ["PLOT_PANEL_LOWERCASE"] = "true"
-    elif profile == "joules":
+    if profile == "joule":
         os.environ["PLOT_PANEL_LOWERCASE"] = "false"
     else:
         raise ValueError(
-            f"Unknown plot profile: {profile_name}. Supported: ['nature_energy', 'joules']"
+            f"Unknown plot profile: {profile_name}. Supported: ['joule']"
         )
 
     if output_dir is not None:

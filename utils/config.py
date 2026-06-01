@@ -44,7 +44,7 @@ path_to_plot_data = path_to_figures_sclopf + "/plot_data"
 # Allow plot output directory override via environment variable
 _plot_output_dir = os.getenv("PLOT_OUTPUT_DIR", "").strip()
 _plot_style = os.getenv("PLOT_STYLE", "").strip().lower()
-if not _plot_output_dir and _plot_style in {"nature_energy", "joules"}:
+if not _plot_output_dir and _plot_style in {"joule"}:
     _plot_output_dir = os.path.join(path_to_figures_sclopf, _plot_style)
 if _plot_output_dir:
     path_to_figures_sclopf = _plot_output_dir

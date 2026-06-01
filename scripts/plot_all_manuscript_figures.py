@@ -3,8 +3,11 @@
 
 # Set Joule style
 import os
-os.environ["PLOT_STYLE"] = "joules"
+os.environ["PLOT_STYLE"] = "joule"
 from utils.plot_style import *
+
+import sys
+import subprocess
 
 from scripts.plots.plot_combined_generation_storage import create_combined_generation_storage_plot, create_generation_by_country_stacked_bar_plot
 from scripts.plots.plot_combined_flow_split_statistics import create_combined_flow_and_split_statistics_plot
@@ -39,7 +42,8 @@ def plot_all_figures(also_supplementary_figures: bool=False):
                                                    save_prefix="fig2")
     
     # Fig. 3: Characteristic geographic patterns of system split
-    # This requires data that is created when 'plot_clusts.py' is run. So please run it first
+    # This requires data that is created when 'plot_clusts.py' is run and the clustering 
+    # data was create before (see cluster_blackouts.py).
     fpath_cluster_plot_data = os.path.join(path_to_plot_data, 
                                            "plot_data_agg_params_01bf408e.pklz")
     create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, sort_by="frequency",
@@ -100,7 +104,9 @@ def plot_supplementary_figures():
     graph_with_num_parallel(save_prefix="SI")
     
     # Daily Profile Nuclear Generation
-    ## please run the script 'scripts/plots/plot_nuclear_daily_profiles.py' from bash
+    ## please run the script 'scripts/plots/plot_nuclear_profiles.py' from bash
+    subprocess.run([sys.executable, 
+                    "scripts/plots/plot_nuclear_profiles.py"])
     
     # Co2 Scenarios vs Generation by country stacked
     create_generation_by_country_stacked_bar_plot(save_prefix="SI")
@@ -122,7 +128,8 @@ def plot_supplementary_figures():
     plot_blackout_size_histograms(yscale_log=True, xscale_log=True, n_cols=2,
                                   xlims=(1e-2, 1e2), fname_suffix="_log", save_prefix="SI")
     plot_blackout_size_histograms(yscale_log=True, xscale_log=True, n_cols=2,
-                                  xlims=(1e-2, 1e2), n_bins=50, fname_suffix="_log_lessbins", save_prefix="SI")
+                                  xlims=(1e-2, 1e2), n_bins=50, 
+                                  fname_suffix="_log_lessbins", save_prefix="SI")
     
     ## Blackout sizes after mitigation
     blackout_size_histogram_after_mitigation(calc_inertia_again=False, 
@@ -136,12 +143,15 @@ def plot_supplementary_figures():
     plot_component_number_vs_blackout_size(save_prefix="SI")
     
     # Fig.3 sorted by contribution to load not served
-    create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, use_only_lines=False,
+    create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, 
+                                              use_only_lines=False,
                                               sort_by="accumulative_lost_load",
                                               save_prefix="SI")
     
     # Detailed analysis of cluster 11: Daily Profile, Generation histogram and largest comp
     ## just run script 'scripts/plots/plot_individual_cluster.py'
+    subprocess.run([sys.executable, 
+                    "scripts/plots/plot_individual_cluster.py"])
     
     # Total inertia placed per country to compare with ENTSO-E results
     create_inertia_by_country_all_co2_plot(

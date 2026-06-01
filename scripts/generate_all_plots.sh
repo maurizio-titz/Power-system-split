@@ -2,7 +2,7 @@
 # Generate all plots with specified style configuration
 
 # Default configuration
-PLOT_STYLE="joules"
+PLOT_STYLE="joule"
 PLOT_PANEL_LOWERCASE=""
 PLOT_DPI="300"
 PLOTS_DIR="scripts/plots"
@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --style nature_energy|joules  Select plot style (default: joules)"
+            echo "  --style joule  Select plot style (default: joule)"
             echo "  --output-dir PATH             Output directory for plots (default: base/STYLE)"
             echo "  --lowercase true|false         Override panel label casing"
             echo "  --only SCRIPT                  Run only one plot script (e.g. plot_mitigation.py)"
@@ -44,9 +44,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --help                    Show this help message"
             echo ""
             echo "Examples:"
-            echo "  $0 --style nature_energy --output-dir /tmp/figs/nature"
-            echo "  $0 --style joules --output-dir /tmp/figs/joules"
-            echo "  $0 --style joules --dpi 600"
+            echo "  $0 --style joule --output-dir /tmp/figs/joule"
+            echo "  $0 --style joule --dpi 600"
             echo "  $0 --only plot_mitigation.py"
             exit 0
             ;;
@@ -60,10 +59,10 @@ done
 
 # Validate style name
 case "${PLOT_STYLE}" in
-    nature_energy|joules)
+    joule)
         ;;
     *)
-        echo "Unknown style: ${PLOT_STYLE} (expected: nature_energy|joules)"
+        echo "Unknown style: ${PLOT_STYLE} (expected: joule)"
         exit 1
         ;;
 esac

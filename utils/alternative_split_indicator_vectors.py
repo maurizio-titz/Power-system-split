@@ -254,9 +254,9 @@ def add_indices_to_indicator_vectors(
         path_to_indicator_vectors = path_to_indicator_vectors_lopf
 
     if type == "node":
-        fname = "rocof_indicator_vectors_Co2L"
+        fname = "/rocof_indicator_vectors_Co2L"
     elif type == "edge":
-        fname = "failed_edges_indicator_vectors_Co2L"
+        fname = "/failed_edges_indicator_vectors_Co2L"
     else:
         raise ValueError(f"Type {type} not recognized.")
 
