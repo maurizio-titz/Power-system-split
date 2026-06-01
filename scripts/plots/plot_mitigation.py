@@ -1348,10 +1348,14 @@ def blackout_size_histogram_after_mitigation(
         with gzip.open(fname_inertia, 'rb') as fh_inertia_in:
             _, _, inertia_placed_loss_mitigated_ls, comp_mitigated_step, _, _ = pickle.load(fh_inertia_in)
         
-        fname_comp_property_df = os.path.join(path_to_evaluation_results_sclopf, 
-                                              f"component_properties_Co2L{co2l_r}_n{n_nodes}.h5")
+        fname_comp_property_all = os.path.join(path_to_vis_results_sclopf, 
+                                               f"component_properties_all_n{n_nodes}.h5")
         
-        comp_property_df = pd.read_hdf(fname_comp_property_df, key="df")
+        comp_property_df = pd.read_hdf(fname_comp_property_all, key="df")
+        
+        comp_property_df = comp_property_df[comp_property_df.co2l == co2l_r]
+        comp_property_df.reset_index(inplace=True, drop=True)
+        
         # Get how much inertia is placed before reaching budges. Get number of steps
         comp_mitigated_step = comp_mitigated_step.sort_values()
         comp_mitigated_step = comp_mitigated_step[comp_mitigated_step != -1]

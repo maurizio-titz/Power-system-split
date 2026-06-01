@@ -25,6 +25,7 @@ from utils.config import (
     path_to_evaluation_results_sclopf,
     path_to_inertia_mitigation_results_sclopf,
     path_to_pypsa_network_sclopf,
+    path_to_vis_results_sclopf
 )
 from utils.data_handling import (
     load_pypsa_network_from_path,
@@ -546,18 +547,20 @@ def run_specific_co2lvl_n_size(
         path_to_evaluation_results = path_to_evaluation_results_lopf
         path_to_inertia_mitigation_results = path_to_inertia_mitigation_results_lopf
 
-    fpath_component_in = (
-        path_to_evaluation_results
-        + f"component_properties_Co2L{co2_lvl}_n{nn_nodes}.h5"
+    fpath_component_in = os.path.join(
+        path_to_vis_results_sclopf, f"component_properties_all_n{nn_nodes}.h5"
     )
     component_df = pd.read_hdf(fpath_component_in, key="df")
+    component_df = component_df[component_df.co2l == co2_lvl]
+    component_df.reset_index(inplace=True, drop=True)
+    
     if blackout_size_threshold > 0.0:
         component_df.reset_index(inplace=True, drop=False)
         split_props = load_split_props(
             n_nodes=nn_nodes, co2l=co2_lvl, use_sclopf=use_sclopf
         )
         component_df.reset_index(inplace=True, drop=False)
-        component_df["co2l"] = co2_lvl
+        #component_df["co2l"] = co2_lvl
         component_df = component_df.set_index(["co2l", "time_stamp", "split_number"])
         component_df["mitigation_weighting"] = 0
         # filter split properties by blackout size threshold

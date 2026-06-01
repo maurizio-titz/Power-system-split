@@ -137,12 +137,13 @@ def get_nodal_rocof_vectors(
 
     if comp_props is None:
         comp_props = pd.read_hdf(
-            path_to_evaluation_results
-            + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(
-                co2_lvl, n_nodes
-            ),
+            path_to_vis_results_sclopf
+            + f"/component_properties_all_n{n_nodes}.h5",
             key="df",
         )
+        comp_props = comp_props[comp_props.co2l == co2_lvl]
+        comp_props.reset_index(inplace=True, drop=True)
+        
     if (
         comp_props.time_stamp.values != comp_props.time_stamp.sort_values().values
     ).any():
@@ -293,10 +294,12 @@ def add_indices_to_indicator_vectors(
             indicator_vector_rocof = pickle.load(fh_in_indi)[-1]
 
     df_comp_props = pd.read_hdf(
-        path_to_evaluation_results
-        + f"/component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
-        key="df",
-    )
+            path_to_vis_results_sclopf
+            + f"/component_properties_all_n{n_nodes}.h5",
+            key="df",
+        )
+    df_comp_props = df_comp_props[df_comp_props.co2l == co2_lvl]
+    df_comp_props.reset_index(inplace=True, drop=True)
 
     if verbose:
         print("Finished loading data.\n")
@@ -579,10 +582,13 @@ def find_failed_edge_indicator_vector_for_cascade_results(
         path_to_evaluation_results = path_to_evaluation_results_lopf
 
     df_comp_props = pd.read_hdf(
-        path_to_evaluation_results
-        + f"/component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
-        key="df",
-    )
+            path_to_vis_results_sclopf
+            + f"/component_properties_all_n{n_nodes}.h5",
+            key="df",
+        )
+    df_comp_props = df_comp_props[df_comp_props.co2l == co2_lvl]
+    df_comp_props.reset_index(inplace=True, drop=True)
+    
     df_comp_props_sorted = df_comp_props.sort_values(by=["time_stamp", "split_number"])
     if not df_comp_props_sorted.reset_index(drop=True).equals(
         df_comp_props.reset_index(drop=True)
@@ -698,10 +704,13 @@ def sort_failed_edge_indicator_vector(
         path_to_evaluation_results = path_to_evaluation_results_lopf
 
     df_comp_props = pd.read_hdf(
-        path_to_evaluation_results
-        + f"component_properties_Co2L{co2_lvl}_n{n_nodes}.h5".format(co2_lvl, n_nodes),
-        key="df",
-    )
+            path_to_vis_results_sclopf
+            + f"/component_properties_all_n{n_nodes}.h5",
+            key="df",
+        )
+    df_comp_props = df_comp_props[df_comp_props.co2l == co2_lvl]
+    df_comp_props.reset_index(inplace=True, drop=True)
+    
     df_comp_props_sorted = df_comp_props.sort_values(by=["time_stamp", "split_number"])
     if not df_comp_props_sorted.reset_index(drop=True).equals(
         df_comp_props.reset_index(drop=True)

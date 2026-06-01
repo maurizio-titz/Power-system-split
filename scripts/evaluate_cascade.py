@@ -437,7 +437,7 @@ def evaluate_cascade(
     ].values
     component_props["split_number"] = split_numbers
 
-    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
+    save_df_path = save_path + f"/component_properties_Co2L{co2l}_n{n_nodes}"
 
     component_props.to_hdf(save_df_path + ".h5", key="df", mode="w")
 
@@ -696,7 +696,7 @@ def evaluate_cascade_parallel(
 
     print(f"saving results to {save_path}")
 
-    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
+    save_df_path = save_path + f"/component_properties_Co2L{co2l}_n{n_nodes}"
     if os.path.exists(save_df_path + ".h5"):
         if not overwrite:
             raise FileExistsError(
@@ -912,7 +912,7 @@ def evaluate_cascade_parallel(
             mask_ts, "split_number_snapshot"
         ] + sum(split_number_per_snapshot[:i])
 
-    save_df_path = save_path + f"component_properties_Co2L{co2l}_n{n_nodes}"
+    save_df_path = save_path + f"/component_properties_Co2L{co2l}_n{n_nodes}"
     component_props.to_hdf(save_df_path + ".h5", key="df", mode="w")
 
     if cfg.mattermost_url is not None:

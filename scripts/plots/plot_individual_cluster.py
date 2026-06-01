@@ -210,14 +210,13 @@ for cluster_number in [11, 12]:
 
     # restrict to single co2 level for analysis
     co2l = 0.0
-    fpath_component_in = (
-        config.path_to_evaluation_results_sclopf
-        + f"/component_properties_Co2L{co2l}_n{n_nodes}.h5"
-    )
-    component_df = pd.read_hdf(fpath_component_in, key="df")
+    fpath_component_in_all = config.path_to_vis_results_sclopf + f"/component_properties_all_n{n_nodes}.h5"
+    component_df = pd.read_hdf(fpath_component_in_all, key="df")
+    component_df = component_df[component_df.co2l == co2l]
+    component_df.reset_index(inplace=True, drop=True)
+    
     props_clust_lvl = props_clust[props_clust.index.get_level_values("co2l") == co2l]
     idx_clust_lvl = props_clust_lvl.index
-    component_df["co2l"] = co2l
     component_df = component_df.set_index(["co2l", "time_stamp", "split_number"])
     component_df_cluster = component_df.loc[idx_clust_lvl]
     component_df_cluster.reset_index(inplace=True, drop=False)
