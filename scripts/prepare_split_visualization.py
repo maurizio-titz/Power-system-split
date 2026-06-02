@@ -207,7 +207,6 @@ for co2l in co2l_list:
 # #     )
 
 ## Calculate likelihoods #####
-exit()
 print("\nCalculate likelihoods of primary/secondary failures...\n")
 likelihoods_primary = dict(keys=co2l_list)
 likelihoods_secondary = dict(keys=co2l_list)

@@ -3,6 +3,8 @@ import os
 
 from pathlib import Path
 
+from loguru import logger
+
 project_folder_path = str(Path(__file__).parent.parent)
 
 # Base paths configuration for different datasets
@@ -38,6 +40,7 @@ path_to_line_extension_mitigation_sclopf = (
 path_to_vis_results_sclopf = path_to_sclopf_results + "/split_visualization"
 path_to_pre_outage_sclopf = path_to_sclopf_results + "/pre_outage_data"
 path_to_figures_sclopf = results_path + "/figures"
+
 # Intermediate data that is created while running plot script for the first time
 path_to_plot_data = path_to_figures_sclopf + "/plot_data"
 
@@ -54,3 +57,24 @@ path_to_WR_meteo_data = data_path + "/weather_data"
 path_to_meteo_figures = path_to_figures_sclopf + "/meteo"
 
 mattermost_url = None
+
+def setup_results_default_sclopf():
+    """Create default folder structure."""
+    
+    list_folders = [data_path, path_to_grid_data, results_path, path_to_sclopf_data,
+                    path_to_sclopf_results, path_to_indicator_vectors_sclopf,
+                    path_to_clustering_results_sclopf, path_to_cascade_results_sclopf,
+                    path_to_evaluation_results_sclopf, path_to_pypsa_network_sclopf,
+                    path_to_inertia_mitigation_results_sclopf, path_to_line_extension_mitigation_sclopf,
+                    path_to_vis_results_sclopf, path_to_pre_outage_sclopf,
+                    path_to_figures_sclopf, path_to_plot_data
+                    ]
+
+    for ele in list_folders:
+        os.makedirs(ele, exist_ok=True)
+        
+    logger.info("Created default folder structure.")
+    
+if __name__ == "__main__":
+    
+    setup_results_default_sclopf()
