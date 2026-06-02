@@ -114,7 +114,7 @@ def plot_supplementary_figures(low_memory: bool = False):
     histogram_lineloading_accross_co2lvls(save_prefix="SI")
     
     # SPI vectors
-    plot_spi_histograms_n_mean_spi_per_month(save_prefix="SI", selected_co2_lvls=(.6, .5,.4,.3,.2,.05, 0))
+    plot_spi_histograms_n_mean_spi_per_month(save_prefix="SI", selected_co2_lvls=(.6,.4,.2, 0))
     
     # Grid map showing num parallel
     graph_with_num_parallel(save_prefix="SI")
