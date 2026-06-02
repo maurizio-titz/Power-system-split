@@ -84,7 +84,7 @@ distance_metric_kwargs = {
     "cache_components": True,
 }
 
-n_clusters_list = [16, 32, 64, 80, 96, 112]
+n_clusters_list = [16, 32, 64, 96, 128, 512]
 clustering_params = {
     "agg": {
         "n_iter": 1e4,

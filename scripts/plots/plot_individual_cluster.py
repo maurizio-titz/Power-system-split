@@ -5,7 +5,6 @@
 Especially, it investigates which nodes have an overfrequency blackout 
 and what carrier was dominant before the blackout."""
 
-# %%
 import gzip
 import pickle
 import numpy as np
@@ -28,8 +27,7 @@ from utils import plot_style
 import matplotlib.pyplot as plt
 import networkx as nx
 
-# %load_ext autoreload
-# %autoreload 2
+from utils import subgraph_evaluation
 
 plot_style.setup_matplotlib_style()
 
@@ -44,13 +42,7 @@ for cluster_number in [11, 12]:
         config.path_to_figures_sclopf, 
         f"analysis_cluster_{cluster_number}"
     )
-    # %%
-    # with gzip.open("/srv/data/jlange/power-system-split/no_extensions/results/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/clustering_results_index.pklz", "rb") as f:
-    # # with gzip.open("/srv/data/jlange/power-system-split/no_extensions/results_no_load_inertia/sclopf/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.05/clustering_results/clustering_results_index.pklz", "rb") as f:
-    #     df = pickle.load(f)
-    # df = pd.DataFrame(df)
-    # df.sort_values(by="silhouette_score", ascending=False)
-    # %%
+   
     fpath = path_to_sclopf_results + \
         "/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/agg_params_01bf408e.pklz"
     with gzip.open(fpath, "rb") as f:
@@ -58,9 +50,8 @@ for cluster_number in [11, 12]:
 
     with gzip.open(fpath.replace(".pklz", "_centroid_res.pklz"), "rb") as f:
         cluster_res = pickle.load(f)
-        
-    # %%
-    # %% load clustering results
+
+    # load clustering results
     n_nodes = 600
     co2l_list = list(get_co2_levels(n_nodes))
 
@@ -116,7 +107,7 @@ for cluster_number in [11, 12]:
         clustering_params=clustering_params,
         distance_matrix_dtype=np.float16,
     )
-    # %%
+    
     cluster_idx = (
         cluster_res["centroids_df"]
         .sort_values(by=sort_by, ascending=False)
@@ -196,7 +187,6 @@ for cluster_number in [11, 12]:
         cb_edge = f.colorbar(sm_edge, ax=ax)
         # plt.colorbar(sm_edges, ax=ax, label="Edge failure probability")
 
-    # %%
     node_idxs_red = np.where(centroid[:, 2] > 0.5)
     nx_graph = data_handling.load_networkx_graph(snet_index='0', 
                                                  co2lvl=0.0)
@@ -220,13 +210,12 @@ for cluster_number in [11, 12]:
     component_df = component_df.set_index(["co2l", "time_stamp", "split_number"])
     component_df_cluster = component_df.loc[idx_clust_lvl]
     component_df_cluster.reset_index(inplace=True, drop=False)
-    # %%
+
     # Keep only the row with largest load_share for each index group
     idx = component_df_cluster.groupby(by=["co2l", "time_stamp", "split_number"])[
         "load_share"
     ].idxmax()
     largest_component_df = component_df_cluster.loc[idx]
-    # %%
 
     fig, axs = plt.subplots(2, 2, figsize=(12, 10))
 
@@ -260,7 +249,6 @@ for cluster_number in [11, 12]:
     axs[1, 1].set_title("RoCoF Distribution [Hz/s]")
     for ax in axs.ravel():
         ax.set_ylabel("Relative Frequency")
-    # %%
 
     co2l = 0.0
     n = data_handling.load_pypsa_network(co2lvl=co2l, n_nodes=600)
@@ -271,7 +259,6 @@ for cluster_number in [11, 12]:
         .values
     )
 
-    # %%
     all_snapshots = pd.to_datetime(n.loads_t["p"].index)
     snapshot_to_idx = {snap: idx for idx, snap in enumerate(all_snapshots)}
     snaps_clust = (
@@ -287,7 +274,7 @@ for cluster_number in [11, 12]:
         .sort_index()
         .values
     )
-    # %%
+
     rot_energy_series = (
         component_df[component_df.split_number_snapshot == 1]
         .groupby(
@@ -298,7 +285,7 @@ for cluster_number in [11, 12]:
         .rot_energy.sum()
         / 1000
     )
-    # %%
+
     from operator import itemgetter
 
     largest_component_sub = largest_component_df
@@ -412,7 +399,7 @@ for cluster_number in [11, 12]:
     f_name = f"largest_component_two_panel_co2l{co2l}"
     plot_style.save_figure(fig, f_name, save_dir)
 
-    # %% analyse overfrequency nodes
+    # analyse overfrequency nodes
 
     node_cols_gen = [
         col
@@ -450,12 +437,12 @@ for cluster_number in [11, 12]:
     rocofs = (
         50 * power_imbalance / 1000 / ((inertia_time_cluster + 1e-8) * 2)
     )  # /1000 because power imbalance and inertia in GW
-    # %%
+
     relative_contribution = gen_by_carrier.div(gen_by_carrier.sum(axis=1), axis=0)
     relative_contribution.describe()
-    # %%
+
     # since solar contributes more than 95% on average we will not plot by carrier but only total generation and storage
-    # %%
+
     # plot histograms of generation and storage power
     bins = np.arange(0, gen_by_carrier.sum(axis=1).max() / 1000 * 1.2, step=0.5)
 
@@ -478,7 +465,7 @@ for cluster_number in [11, 12]:
     plt.title("Generation by Carrier")
     f_name = f"generation_by_carrier_hist_co2l{co2l}"
     plot_style.save_figure(fig, f_name, save_dir)
-    # %%
+
     fig, axs = plt.subplots(1, 4, figsize=(15, 5))
     # gen_store_vals = np.concatenate(
     #     [gen_by_carrier.values.flatten(), storage_by_carrier.values.flatten()]
@@ -547,7 +534,7 @@ for cluster_number in [11, 12]:
     # axs[4].set_xlabel("RoCoF [Hz/s]")
     f_name = f"gen_load_storage_imbalance_hist_co2l{co2l}"
     plot_style.save_figure(fig, f_name, save_dir)
-    # %%
+    # 
     # Plot histograms of snapshots - daily and yearly profiles
     fig, axs = plt.subplots(1, 2, figsize=(6, 5), width_ratios=[0.5, 1])
 
@@ -613,7 +600,6 @@ for cluster_number in [11, 12]:
     
     f_name = f"blackout_daily_yearly_profile_co2l{co2l}"
     plot_style.save_figure(plt.gcf(), f_name, save_dir)
-    # %%
 
     # get installed generation capacity in the nodes of the cluster
     gen_capacity = (
@@ -628,10 +614,9 @@ for cluster_number in [11, 12]:
     gen_capacity = gen_capacity[gen_capacity > gen_capacity.max() * 0.01]
     gen_capacity
 
-    # %%
 
-    # %% inertia contribution by snapshot (full network)
-    from utils import subgraph_evaluation
+    # inertia contribution by snapshot (full network)
+    
 
     participation_threshold = 0.05
     load_inertia_constant = 0.4
@@ -661,7 +646,7 @@ for cluster_number in [11, 12]:
         inertia_by_snapshot_rows, index=snapshot_index
     ).fillna(0.0)
     inertia_by_snapshot_df["total"] = inertia_by_snapshot_df.sum(axis=1)
-    # %%
+    # 
     inertia_by_snapshot_relative = inertia_by_snapshot_df.div(
         inertia_by_snapshot_df.total, axis=0
     )
@@ -672,16 +657,16 @@ for cluster_number in [11, 12]:
         columns=no_inertia_cols
     )
     inertia_by_snapshot_relative.describe()
-    # %%
+    # 
     inertia_rel_clust = inertia_by_snapshot_relative.loc[snapshots_dt]
     inertia_rel_clust.describe()
-    # %%
+    # 
     # (inertia_by_snapshot_relative.H2 * 100).hist()
     # plt.title("Relative inertia contribution of H2 storage")
     # plt.xlabel("Relative inertia contribution [\%]")
     # plt.ylabel("Frequency")
     # plot_style.save_figure(plt.gcf(), "h2_inertia_contribution_hist", save_dir)
-    # %%
+    # 
     # (inertia_by_snapshot_relative.H2 * 100).hist()
     # plt.title(f"Relative inertia contribution of H2 storage cluster {cluster_number}")
     # plt.xlabel("Relative inertia contribution [\%]")

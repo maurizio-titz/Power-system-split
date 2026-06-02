@@ -860,8 +860,9 @@ def plot_blackout_size_distributions_with_zoom_in(
     """
     ax_zoom.legend(title="CO$_2$ level [\\% of 1990]",
                    loc="lower left")
-    for ax_r in ax_arr:
+    for idx_r, ax_r in enumerate(ax_arr):
         ax_r.set_xlabel("Load not served [MW]")
+        add_panel_label(ax_r, idx_r)
     
     fname = "blackout_sizes_three_lvls_w_zoom"
     
@@ -876,7 +877,8 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
                                                                   use_steps: bool = True,
                                                                   cmap_blackout_categories: str = "inferno_r",
                                                                   show_ratio: bool = False,
-                                                                  show_number_and_normalized: bool = False):
+                                                                  show_number_and_normalized: bool = False,
+                                                                  save_prefix: str | None = None):
     """Create the plot that shows both the blackout statistics (Number of System Splits)
     for both common corridor (left panel) and common corridor (right panel).
     This is using in essence the same approach as 'create_blackout_statistics_plot'"""
@@ -1211,6 +1213,9 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
         
     for idx_ax, ax_r in enumerate(ax_iter):
         add_panel_label(ax_r, idx_ax, y_offset=0.1, x_offset=-0.075)
+    
+    if save_prefix is not None:
+        fname_fig = save_prefix + "_" + fname_fig
     
     if show_number_and_normalized:
         fig.align_ylabels([ax_same, ax_same_norm])

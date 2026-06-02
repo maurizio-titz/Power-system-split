@@ -54,9 +54,7 @@ def main(single_co2=None):
     for co2_lvl in co2l_list:
         print(f"Running for co2_lvl: {co2_lvl}")
         delta_rot = delta_rot_dict.get(co2_lvl, 1000)
-        # for blackout_size_threshold in [0, 0.8]:
-        # TODO hardcoded non GSS blackout Threshold
-        for blackout_size_threshold in [0]:
+        for blackout_size_threshold in [0, 0.8]:
             run_specific_co2lvl_n_size(
                 co2_lvl,
                 nn_nodes=n_nodes,

@@ -673,7 +673,7 @@ def get_co2_levels(n_nodes, ignore_lvls=()):
 
     return np.array(sorted(co2l_list, reverse=True))
 
-# FIXME n_nodes goes not into this. Maybe other names filenames.
+
 def get_actual_co2_level(lvls, n_nodes=600, percent=False) -> np.ndarray:
     """Get actual CO2 levels from results file.
 
@@ -689,7 +689,6 @@ def get_actual_co2_level(lvls, n_nodes=600, percent=False) -> np.ndarray:
     if n_nodes != 600:
         raise NotImplementedError("Actual Co2 Levels only calculated for n=600!")
     
-    # TODO why squeeze?
     lvls_actual = (
         pd.read_csv(path_to_sclopf_results + "/actual_co2_levels.csv", 
                     index_col=0)
@@ -697,7 +696,6 @@ def get_actual_co2_level(lvls, n_nodes=600, percent=False) -> np.ndarray:
         .values.squeeze()
     )
 
-    # TODO rounding here seems weird
     if percent:
         lvls_actual = (lvls_actual * 100).round().astype(int)
 

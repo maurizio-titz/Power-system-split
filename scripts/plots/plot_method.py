@@ -389,7 +389,6 @@ if __name__ == "__main__":
     setup_network_with_layout(case_str='sec', save_fig=True)
     setup_network_with_layout(case_str='split', save_fig=True)
     
-    logger.info("Finsihed parts of small abstract network")
+    logger.info("Finished parts of small abstract network")
     
-    # TODO add spain split with new results
     #plot_entire_network_n_split_components()

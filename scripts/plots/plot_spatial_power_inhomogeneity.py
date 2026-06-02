@@ -30,7 +30,7 @@ from loguru import logger
 def histograms_of_spi_norm(fig: Figure, ax: Axes, n_nodes:int = 600, bin_width=1, bin_lims: tuple[float, float] | None = None,
                            selected_co2_lvls: tuple[float, ...] | None = (0.6, 0.2, 0.0),
                            cmap: str = 'cividis',
-                           verbose: bool = True):
+                           verbose: bool = True, show_median: bool = True):
     """Draw the histogram of the spi norm on the axis 'ax'"""
     
     co2_lvls_all = get_co2_levels(n_nodes=n_nodes)
@@ -84,6 +84,16 @@ def histograms_of_spi_norm(fig: Figure, ax: Axes, n_nodes:int = 600, bin_width=1
         
         label_str_r = f"{round(actual_co2_lvls[idx_list] * 100)}\\%"
         
+        median_val = np.median(vec_norm_r)
+        std_val = np.std(vec_norm_r)
+        if verbose:
+            info_str = f"{co2_l_r}: {median_val:.4f} med, {std_val} std"
+            print(info_str)
+        
+        if show_median:
+            
+            ax.axvline(x=median_val, color=color_r, ls="--", lw=1.5)
+        
         ax.hist(vec_norm_r, 
             weights=network.snapshot_weightings.generators.values.astype(float),
             bins=bin_arr, histtype='step',
@@ -104,9 +114,9 @@ def draw_monthly_average_spi_vectors(fig: Figure,
                                      selected_co2_lvls: tuple[float, ...],
                                      n_nodes: int = 600,
                                      cmap: str = 'cividis',
-                                     scale_factor: float = 1.5*1e4,
-                                     head_width=2.,
-                                     width=1., 
+                                     scale_factor: float = 1.2*1e4,
+                                     head_width=3.,
+                                     width=2., 
                                      use_latlon: bool = True,
                                      verbose: bool = True):
     """Draw the arrow for the spatial power inhomogeneity averaged for each month."""
@@ -117,8 +127,6 @@ def draw_monthly_average_spi_vectors(fig: Figure,
     actual_co2_levels = get_actual_co2_level(co2_lvls_all, n_nodes)
 
     cmap_co2 = plt.get_cmap(cmap).copy()
-    
-    
     
     ## Add axes to grid spec
     gs_all_vectors = GridSpecFromSubplotSpec(len(selected_co2_lvls), 13, 
@@ -165,6 +173,7 @@ def draw_monthly_average_spi_vectors(fig: Figure,
                        mean_dipole_vec_1 / scale_factor,
                        head_width=head_width,
                        width=width,
+                       linewidth=.5,
                        facecolor=color_r)
             
             if idx == 0:
@@ -215,12 +224,13 @@ def plot_spi_histograms_n_mean_spi_per_month(selected_co2_lvls: tuple[float, ...
     
     setup_matplotlib_style()
     
-    fig = plt.figure(figsize=(10, 8))
+    fig = plt.figure(figsize=(10, 4 + 4 * (len(selected_co2_lvls)/3.)))
     
-    gs0 = GridSpec(2, 1, figure=fig, hspace=0.5)
+    gs0 = GridSpec(2, 1, figure=fig, hspace=0.5, height_ratios=[1, 2])
     ax_hist = fig.add_subplot(gs0[0])
     
-    histograms_of_spi_norm(fig, ax_hist, selected_co2_lvls=selected_co2_lvls,
+    histograms_of_spi_norm(fig, ax_hist, 
+                           selected_co2_lvls=selected_co2_lvls,
                            verbose=verbose)
     
     # Load dipole vectors for all co2 levels and snapshots

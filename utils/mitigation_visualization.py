@@ -334,8 +334,7 @@ def plot_map_inertia_placement_final(
 
     ## Plot mitigated lost load and remaining lost splits over time
     if plot_curve:
-        # TODO should this have "new". Is this the new function?
-        plot_inertia_loss_mitigation_curve(
+        plot_inertia_loss_mitigation_curve_new(
             resolve_strategy,
             co2_lvl,
             nn,

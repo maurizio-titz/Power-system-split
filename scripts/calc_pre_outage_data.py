@@ -261,10 +261,6 @@ import os
 
 import sys
 
-# root_path = "../"#'/srv/data/jlange/PYPSA3/sclopf-iter' # This defaults to './', which should be the repository path
-
-# sys.path.append(root_path)
-
 import warnings
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -277,18 +273,6 @@ groupsize = 60
 TEMP_RESOLUTION = 3  # H
 load_shedding = True
 n_subnetworks = int(np.ceil(8760 / TEMP_RESOLUTION / groupsize))
-
-
-# Co2_scenarios = ['0.0','0.05', '0.1','0.2', '0.3', '0.4', '0.5', '0.6'] #, '0.2'
-
-
-# networks_path = f"{root_path}/workflow/co2_rel_{relax}/s_max_pu_{p_heurist}/postnetworks/"
-
-
-# root_path = "/srv/data/jlange/PYPSA3/sclopf-iter"  # This defaults to './', which should be the repository path
-# networks_path = (
-#     f"{root_path}/workflow/co2_rel_{relax}/s_max_pu_{p_heurist}/postnetworks/"
-# )
 
 
 def get_emissions(n):

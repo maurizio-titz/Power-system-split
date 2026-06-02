@@ -61,15 +61,6 @@ def failing_edges_in_split(
     return functioning_edge_indicator_vector
 
 
-def nodal_rocof_in_split(co2_lvl: float, n_nodes: int, save_res: bool = True):
-    """Return the vector for each split that has an
-    entry for each node, which quantifies the rocof in its component."""
-
-    # TODO write version to create version from scratch
-
-    return
-
-
 def get_nodal_rocof_vectors(
     co2_lvl: float,
     n_nodes: int,

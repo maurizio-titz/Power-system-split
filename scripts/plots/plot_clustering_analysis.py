@@ -71,7 +71,6 @@ def load_clustering_data(
         nx_graph
     )
     try:
-        # TODO this loads it for one levels. Why even save it for every level!
         file_path = data_handling.path_to_grid_data + f"/n_2_failures_co2lvl{0.0}.pklz"
         with gzip.open(file_path, "rb") as fh:
             n_2_failures = pickle.load(fh)
@@ -98,9 +97,13 @@ def load_clustering_data(
         "num_failures_weighted": num_failures_weighted,
     }
 
-# TODO n_nodes is not loaded anymore
-def load_processed_data(save_dir, n_nodes):
+
+def load_processed_data(save_dir, n_nodes: int):
     """Load pre-processed clustering and split data."""
+    
+    if n_nodes != 600:
+        raise ValueError("Results were generated using a PyPSA grid with 600 nodes.")
+    
     # Load split properties
     split_properties_filtered = pd.read_hdf(save_dir + 
                                             f"data_filtered.h5", index_col=0)
@@ -351,7 +354,21 @@ def create_clustering_analysis_plot(
     
     if save_plot_data:
         fpath_plot_cluster_fname = path_to_plot_data + f"/plot_data_{fname}"
+        cluster_method = fname.split("_param")[0] 
+        params_hash = fname.split(".pklz")[0].split("params")[1]
+        silhouette_score = None
+        path_cluster_index = cluster_res_dir + "/clustering_results_index.pklz"
+        if os.path.exists(path_cluster_index):
+            with gzip.open(path_cluster_index, "rb") as fh_cindex:
+                cluster_index = pickle.load(fh_cindex)
+            lisi_cluster = [xx for xx in cluster_index 
+                            if "silhouette_score" in xx and xx["filename"]
+                            == fname]
             
+            if len(lisi_cluster) == 1:
+                silhouette_score = lisi_cluster[0]["silhouette_score"]        
+        
+        
         plot_data_dict = {
             "graph": nx_graph,
             "graph_pos": pos,
@@ -364,7 +381,10 @@ def create_clustering_analysis_plot(
             "co2l_inds_hist": co2l_inds_hist,
             "co2_lvls_hist": co2_lvls_hist,
             "weights": weights,
-            "num_failures_weighted": num_failures_weighted
+            "num_failures_weighted": num_failures_weighted,
+            "param_hash":params_hash,
+            "silhouette_score":  silhouette_score,
+            "cluster_method": cluster_method
             }
         
         with gzip.open(fpath_plot_cluster_fname, "wb") as fh_plot_data:
@@ -738,7 +758,6 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
     with gzip.open(fpath_plot_data) as fh_in:
         plot_data = pickle.load(fh_in)
     
-    # TODO add agg_param and silhouette score
     nx_graph: nx.Graph = plot_data["graph"]
     pos_graph: dict = plot_data["graph_pos"]
     node_centroids: dict = plot_data["node_centroids"]
@@ -1017,8 +1036,6 @@ def create_cluster_plot_only_lines_with_zoom(fpath_plot_data: str,
     with gzip.open(fpath_plot_data) as fh_in:
         plot_data = pickle.load(fh_in)
     
-    
-    # TODO add agg_param and silhouette score
     nx_graph: nx.Graph = plot_data["graph"]
     pos_graph: dict = plot_data["graph_pos"]
     node_centroids: dict = plot_data["node_centroids"]

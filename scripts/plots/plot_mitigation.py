@@ -21,7 +21,7 @@ from loguru import logger
 import networkx as nx
 import pandas as pd
 import numpy as np
-import pypsa
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
@@ -39,10 +39,9 @@ from utils.config import (
     path_to_line_extension_mitigation_sclopf,
     path_to_pre_outage_sclopf,
     path_to_inertia_mitigation_results_sclopf,
-    path_to_evaluation_results_sclopf,
     path_to_plot_data
 )
-from utils import data_handling, cascade_simulation
+from utils import data_handling
 from utils.cascade_simulation import LOOKUP_TABLE_NP
 from utils.mitigation_visualization import (
     plot_map_inertia_placement_final,
