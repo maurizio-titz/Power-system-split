@@ -17,10 +17,10 @@ user:dir$ conda activate system_split_env
 This installs the package in editable mode using the dependencies defined in [pyproject.toml](./pyproject.toml). 
 
 ### Config
-To post message to mattermost, please set the incoming 'mattermost_url' in [utils/config.py](utils/config.py).
-This config also contains all paths that generally do not need to be changed but you might want to change the root path, if you want to store both the scenario data and the results in a different location.
+The config at [utils/config.py](./utils/config.py) contains all paths that generally do not need to be changed but you might want to change the root path, if you want to store both the scenario data and the results in a different location.
+To post message to mattermost for the calculation of the cascades and the evaluation of the results, please set the  'mattermost_url' to the one you configured in your mattermost instance in [utils/config.py](utils/config.py). 
 
-You can setup the basic folder structure by running `python utils/config.py`.
+You can setup the basic folder structure by running `python utils/config.py`. Note, this folder structure by default will be identical to the one used in the prepared data set that is mentioned below.
 
 ## Content
 
@@ -45,7 +45,7 @@ The `scripts` contain our workflow and needs to be executed in roughly this orde
 
 All code assume that your PYTHONPATH contains the repository directory and the code is executed in there, too. 
 
-The scenario data is created in `scenario_generation`. A seperate conda enviroment is used there, more details under `Input data and results` and the repective README.
+The scenario data is created in `scenario_generation`. A separate conda enviroment is used there, more details under `Input data and results` and the respective README.
 
 ## Input data and results
 
