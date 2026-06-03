@@ -700,9 +700,16 @@ if __name__ == "__main__":
         "--co2l", nargs="+", type=float, help="CO2 levels to cluster", default=None
     )
     
+    parser.add_argument(
+        "--no_check_n1", action="store_true", help="Don't check n-1 stability", default=False
+    )
+    
+
     args = parser.parse_args()
 
     n_nodes = 600
+    
+    check_n_1 = not args.no_check_n1
     
     if args.co2l is not None:
         co2ls = args.co2l
@@ -726,7 +733,7 @@ if __name__ == "__main__":
             save_non_split_cascades=save_whole_cascades,
             use_sclopf=True,
             n_checkpoints=10,
-            check_n1_security=True,
+            check_n1_security=check_n_1,
             overwrite=True,
         )
 
