@@ -414,14 +414,14 @@ def save_figure(
     formats=None,
     dpi=None,
     bbox_inches="tight",
-    clear_fig=False,
+    clear_fig=True,
     organize_plots=True,
 ):
     """Save figure with consistent settings and optional configuration suffix.
 
     Signature:
         save_figure(fig, filename, save_path=None, formats=None, dpi=None, bbox_inches="tight",
-                   clear_fig=False, organize_plots=True)
+                   clear_fig=True, organize_plots=True)
 
     Args:
         fig: matplotlib figure object

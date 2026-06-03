@@ -8,6 +8,7 @@ from utils.plot_style import *
 
 import sys
 import subprocess
+import psutil
 
 import gc
 from matplotlib import pyplot as plt
@@ -28,13 +29,15 @@ from scripts.plots.plot_compare_lineMitigation_plannedExtension import plot_plan
 # Paths
 from utils.config import path_to_plot_data, path_to_line_extension_mitigation_sclopf
 
-def plot_all_figures(also_supplementary_figures: bool=False,
+
+def enough_memory(threshold_pct: float = 90.0) -> bool:
+    return psutil.virtual_memory().percent < threshold_pct
+
+def plot_all_figures(
                      low_memory: bool = False):
     """Plot the figures for the paper, which mainly calls functions from 'scripts/plots/'
 
     Args:
-        also_supplementary_figures (bool, optional): If True, also 
-            plot the SI figures. Defaults to False.
         low_memory (bool, optional): If True, some figures are not plotted that require 
             more than 32GB of memory. Defaults to False.
     """
@@ -44,7 +47,9 @@ def plot_all_figures(also_supplementary_figures: bool=False,
     create_combined_generation_storage_plot(save_prefix="fig1")
     
     # Fig. 2: Evolution of risks during decarbonistaion
-    if not low_memory:
+    if low_memory:
+        logger.warning("Skipping 'Fig.2' + 'Fig.3' due to low memory!")
+    else:
         create_combined_flow_and_split_statistics_plot(mean_distance=False, 
                                                    load_normalization=False, 
                                                    show_blackout_stats=True, 
@@ -52,19 +57,19 @@ def plot_all_figures(also_supplementary_figures: bool=False,
                                                    use_steps_load_loss=True,
                                                    use_equal_panels=True,
                                                    save_prefix="fig2")
-    plt.close('all')
-    gc.collect()
     
     # Fig. 3: Characteristic geographic patterns of system split
     # This requires data that is created when 'plot_clusts.py' is run and the clustering 
     # data was create before (see cluster_blackouts.py).
     fpath_cluster_plot_data = os.path.join(path_to_plot_data, 
                                             "plot_data_agg_params_01bf408e.pklz")
-    create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, sort_by="frequency",
+    create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, 
+                                                sort_by="frequency",
                                                 save_prefix="fig3")
     
     
     # Fig. 4: Conditional probability of transmission lines participating in casc. failures
+    
     create_total_line_failure_plot(
         unified_colorbar=True,
         powernorm=False,
@@ -86,9 +91,6 @@ def plot_all_figures(also_supplementary_figures: bool=False,
                                     organize_plots=False,
                                     save_prefix="fig5"
                                     )
-    
-    if also_supplementary_figures:
-        plot_supplementary_figures()
         
     return
 
@@ -110,11 +112,10 @@ def plot_supplementary_figures(low_memory: bool = False):
     
     plt.close('all')
     gc.collect()
-    # Line Loadings across co2 levels
-    histogram_lineloading_accross_co2lvls(save_prefix="SI")
     
     # SPI vectors
-    plot_spi_histograms_n_mean_spi_per_month(save_prefix="SI", selected_co2_lvls=(.6,.4,.2, 0))
+    plot_spi_histograms_n_mean_spi_per_month(save_prefix="SI", 
+                                             selected_co2_lvls=(.6,.4,.2, 0))
     
     # Grid map showing num parallel
     graph_with_num_parallel(save_prefix="SI")
@@ -131,13 +132,20 @@ def plot_supplementary_figures(low_memory: bool = False):
     plot_investments_capital_costs(save_prefix="SI")
     plt.close('all')
     gc.collect()
-    if not low_memory:
+    
     # System Energy Balance 0, 20, 60 % in seasons
-        plot_load_dispatch(save_prefix="SI")
-    
-    # Blackout Size Distribution (different versions) and for 3 with zoom in
-    ## Blackout Size (different versions)
-    
+    plot_load_dispatch(save_prefix="SI")
+    if low_memory:
+        logger.warning("Skipping figures showing histograms of blackout sizes" + 
+                       " histograms.")
+        
+    else:
+        ## Blackout sizes after mitigation
+        blackout_size_histogram_after_mitigation(calc_inertia_again=False, 
+                                                save_prefix="SI",
+                                                n_bins=50)
+        # Blackout Size Distribution (different versions) and for 3 with zoom in
+        ## Blackout Size (different versions)
         plot_blackout_size_histograms(yscale_log=True, n_cols=2, save_prefix="SI")
         plot_blackout_size_histograms(yscale_log=True, n_cols=2, n_bins=50,
                                     fname_suffix="_lessbins", save_prefix="SI")
@@ -147,17 +155,12 @@ def plot_supplementary_figures(low_memory: bool = False):
         plot_blackout_size_histograms(yscale_log=True, xscale_log=True, n_cols=2,
                                     xlims=(1e-2, 1e2), n_bins=50, 
                                     fname_suffix="_log_lessbins", save_prefix="SI")
-        
-        ## Blackout sizes after mitigation
-        blackout_size_histogram_after_mitigation(calc_inertia_again=False, 
-                                                save_prefix="SI",
-                                                n_bins=50)
     
-    ## Zoom in
-    plot_blackout_size_distributions_with_zoom_in(save_prefix="SI")
+        ## Zoom in
+        plot_blackout_size_distributions_with_zoom_in(save_prefix="SI")
     
-    # 2D Historgram of Number of Components and Share of load not served
-    plot_component_number_vs_blackout_size(save_prefix="SI")
+        # 2D Historgram of Number of Components and Share of load not served
+        plot_component_number_vs_blackout_size(save_prefix="SI")
 
     # Fig.3 sorted by contribution to load not served
     create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, 
@@ -168,11 +171,15 @@ def plot_supplementary_figures(low_memory: bool = False):
     gc.collect()
     # Detailed analysis of cluster 11: Daily Profile, Generation histogram and largest comp
     ## just run script 'scripts/plots/plot_individual_cluster.py'
-    subprocess.run([sys.executable, 
+    if low_memory:
+        logger.warning("Skipping plot of individual clusters analysis.")
+    else:
+        subprocess.run([sys.executable, 
                     "scripts/plots/plot_individual_cluster.py"])
     
     # Blackout Statistics same vs different corridor
-    create_blackout_statistics_common_vs_different_corridor_plot(save_prefix="SI")
+    create_blackout_statistics_common_vs_different_corridor_plot(save_prefix="SI",
+                                                                 show_number_and_normalized=True)
     
     # Total inertia placed per country to compare with ENTSO-E results
     create_inertia_by_country_all_co2_plot(
@@ -204,9 +211,30 @@ def plot_supplementary_figures(low_memory: bool = False):
         red_lines_rank=[11],
         pad_deg=0.75,
     )
+    plt.close('all')
+    gc.collect()
     
     return
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Cluster blackouts")
+
     
-    plot_all_figures(also_supplementary_figures=True)
+    parser.add_argument(
+        "--low_memory", action="store_true", help="Use if memory of machine below 32GB", default=False
+    )
+    
+    parser.add_argument(
+        "--no_SI", action="store_true", help="Use if memory of machine below 32GB", default=False
+    )
+    
+    args = parser.parse_args()
+    
+    low_memory = args.low_memory
+    also_supplementary_figs = not args.no_SI
+    
+    plot_all_figures(low_memory=low_memory)
+    if also_supplementary_figs:
+        plot_supplementary_figures(low_memory=low_memory)

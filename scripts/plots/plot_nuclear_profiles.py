@@ -141,5 +141,4 @@ plt.suptitle(
     y=0.98,
 )
 # plt.tight_layout()
-plt.show()
-save_figure(fig, "nuclear_daily_profiles", path_to_figures_sclopf)
+save_figure(fig, "nuclear_daily_profiles", path_to_figures_sclopf, clear_fig=True)
