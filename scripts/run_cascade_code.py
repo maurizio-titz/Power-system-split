@@ -691,17 +691,34 @@ def verify_collected_results(
 
 
 if __name__ == "__main__":
+    import argparse
 
+    parser = argparse.ArgumentParser(description="Cluster blackouts")
+    
+    parser.add_argument(
+        "--co2l", nargs="+", type=float, help="CO2 levels to cluster", default=None
+    )
+    
+    args = parser.parse_args()
+
+    n_nodes = 600
+    
+    if args.co2l is not None:
+        co2ls = args.co2l
+    else:
+        co2ls = list(get_co2_levels(n_nodes))
+        
     # Load arguments
     n_nodes = 600
     co2ls = get_co2_levels(n_nodes)
     if isinstance(co2ls, float):
         co2ls = [co2ls]
-    save_whole_cascades = False  # set this to true if you want to save all cascades, not only the ones that lead to system splits. Be aware that this can lead to very large files, especially for lower CO2 levels where many cascades are triggered.
+    
+    save_whole_cascades = False  # set this to true if you want to save all cascades, 
+    # not only the ones that lead to system splits. Be aware that this can lead to very large files, 
+    # especially for lower CO2 levels where many cascades are triggered.
 
     for co2l in co2ls:
-        if co2l > 0.4:
-            continue
         run_cascade_dual_line_failures(
             co2l,
             n_nodes,
