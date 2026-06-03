@@ -33,7 +33,7 @@ from utils.config import path_to_plot_data, path_to_line_extension_mitigation_sc
 def enough_memory(threshold_pct: float = 90.0) -> bool:
     return psutil.virtual_memory().percent < threshold_pct
 
-def plot_all_figures(
+def plot_manuscript_figures(
                      low_memory: bool = False):
     """Plot the figures for the paper, which mainly calls functions from 'scripts/plots/'
 
@@ -235,6 +235,6 @@ if __name__ == "__main__":
     low_memory = args.low_memory
     also_supplementary_figs = not args.no_SI
     
-    plot_all_figures(low_memory=low_memory)
+    plot_manuscript_figures(low_memory=low_memory)
     if also_supplementary_figs:
         plot_supplementary_figures(low_memory=low_memory)

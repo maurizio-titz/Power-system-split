@@ -1,26 +1,26 @@
 # Power System Split
-Code accompanying the manuscript "Cascading Failures and Critical Infrastructures in Future Renewable European Power Systems" on [ArXiv](https://arxiv.org/abs/2603.24529) and the accompanying publication. 
+Code accompanying the manuscript "Cascading Failures and Critical Infrastructures in Future Renewable European Power Systems" on [ArXiv](https://arxiv.org/abs/2603.24529). 
 
-This project evaluates cascading failures of transmission lines in the Continental European power grid. The project uses PyPSA to simulate future renewable power grids. 
+This project evaluates cascading failures of transmission lines in the Continental European power grid. The project uses PyPSA-Eur to simulate future renewable power system scenarios, which are subsequently used to perform cascade experiments.  
 
 ## Installation
 
 The code is written in Python (tested with python 3.11.8). To clone the repository and install the required dependencies, e.g., by using a conda environment, execute the following commands:
 
 ```[shell]
-user:dir$ git clone --recurse-submodules https://link/to/repository
+user:dir$ git clone --recurse-submodules https://github.com/maurizio-titz/Power-system-split
 user:dir$ conda create system_split_pyenv python=3.11.8 
 user:dir$ conda activate system_split_env
 (system_split_env)user:dir$ pip install -e .
 ```
 
-This installs the package in editable mode using the dependencies defined in [pyproject.toml](./pyproject.toml). 
+This installs the python package in editable mode and installs the dependencies defined in [pyproject.toml](./pyproject.toml). 
 
 ### Config
-The config at [utils/config.py](./utils/config.py) contains all paths that generally do not need to be changed but you might want to change the root path, if you want to store both the scenario data and the results in a different location.
+The config at [utils/config.py](./utils/config.py) contains all paths that generally do not need to be changed. You might want to change the root path, if you want to store both the scenario data and the results in a different location than the repository.
 To post message to mattermost for the calculation of the cascades and the evaluation of the results, please set the  'mattermost_url' to the one you configured in your mattermost instance in [utils/config.py](utils/config.py). 
 
-You can setup the basic folder structure by running `python utils/config.py`. Note, this folder structure by default will be identical to the one used in the prepared data set that is mentioned below.
+You can setup the basic folder structure by running `python utils/config.py`. Note, this folder default structure by is identical to the one used in the prepared data set that is mentioned below.
 
 ## Content
 
@@ -37,7 +37,7 @@ The `scripts` contain our workflow and needs to be executed in roughly this orde
 - [`calc_pre_outage_data.py`](./scripts/calc_pre_outage_data.py): Calculate inertia and other properties from the (solved) PyPSA networks.
 - [`run_cascade_code.py`](./scripts/run_cascade_code.py): Run the cascade algorithm on the PyPSA networks. This can take a few weeks depending on compute power.
 - [`evaluate_cascade.py`](./scripts/evaluate_cascade.py): Evaluating the cascade results, e.g., inertia and load imbalance for each split, indicator vectors. Run only after `run_cascade_code.py` has finished.
-- [`prepare_split_visualization.py`](./scripts/prepare_split_visualization.py): Prepare data from the results, that we use for visualisation, e.g., prototypical clusters of system splits. Run only after `evaluate_cascade.py` has finished.
+- [`prepare_split_visualization.py`](./scripts/prepare_split_visualization.py): Prepare data from the results, that we use for visualization, e.g., prototypical clusters of system splits. Run only after `evaluate_cascade.py` has finished.
 - [`calc_inertia_placement.py`](./scripts/calc_inertia_placement.py) : Determine optimal inertia placement to mitigate the impact of system splits. Run only after `prepare_split_visualization.py` has finished.
 - [`cluster_blackouts.py`](./scripts/cluster_blackouts.py): Performs the clustering of splits using a composite metric taking both nodes and edges features into account as described in the main manuscript.
 - Create plots by running the scripts in `scripts/plotting` individually or run the bash script `generate_all_plots.sh` to generate all plots in one go.
@@ -51,9 +51,9 @@ The scenario data is created in `scenario_generation`. A separate conda envirome
 
 All the input data to run the scripts is publicly available and can be generated using the repository. 
 
-We have uploaded the version of this repo used in the publication to zenodo with the doi []() 
+We have uploaded the version of this repo used in the publication to zenodo with the doi [10.5281/zenodo.20529177](https://doi.org/10.5281/zenodo.20529177). 
 
-Additionally, you can find a version of the data on zenodo that includes the CO2 scenarios generated using PyPSA and the results generated using the code in this repository. Unpacking this data set into the main folder of the repo on you local machine, you can plot the figures that are presented in the manuscript.
+Additionally, you can find a version of the data on zenodo ([10.5281/zenodo.20528960](https://doi.org/10.5281/zenodo.20528960)) that includes the CO2 scenarios generated using PyPSA and the results generated using the code in this repository. Unpacking this data set into the main folder of the repo on you local machine, you can plot the figures that are presented in the manuscript.
 
 If you want to place the files in another location, please modify the path in [utils/config.py](./utils/config.py) accordingly.
 
