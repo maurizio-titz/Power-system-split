@@ -1195,7 +1195,7 @@ def blackout_size_histogram_after_mitigation(
     ylog_scale: bool = True,
     calc_inertia_again: bool = False,
     linewidth: float = 1.5,
-    alpha: float = .8,
+    alpha: float = .9,
     save_prefix: str | None = None):
     """Plot the size of blackouts after mitigation and compare it with before.
 
@@ -1333,11 +1333,9 @@ def blackout_size_histogram_after_mitigation(
                                 color=color_ls[1+idx_budget])
         
         # Additional inertia mitigation
-        fpath_inertia_placed_df = os.path.join(path_to_plot_data, f"inertia_place_df_Co2{co2l_r:g}.h5")
-        
         
         search_pattern = os.path.join(path_to_inertia_mitigation_results_sclopf, 
-                                                f"synthetic_inertia_placement_Co2{co2l_r:g}_N{n_nodes}_deltarotE*_rocofthres1_lshare0_maxiter1000_random_blackoutthres0.8.pklz")
+                                     f"synthetic_inertia_placement_Co2{co2l_r:g}_N{n_nodes}_deltarotE*_rocofthres1_lshare0_maxiter1000_random_blackoutthres0.8.pklz")
         fname_inertia_ls = glob.glob(search_pattern)
         if len(fname_inertia_ls) != 1:
             print(search_pattern)
@@ -1362,7 +1360,8 @@ def blackout_size_histogram_after_mitigation(
         comp_mitigated_step = comp_mitigated_step.sort_values()
         comp_mitigated_step = comp_mitigated_step[comp_mitigated_step != -1]
         
-        if os.path.exists(fpath_inertia_placed_df) or calc_inertia_again:
+        fpath_inertia_placed_df = os.path.join(path_to_plot_data, f"inertia_placed_n_costs_df_Co2{co2l_r:g}.h5")
+        if not os.path.exists(fpath_inertia_placed_df) or calc_inertia_again:
             inertia_unit_fac = 1e-3
             inertia_placed_df = pd.DataFrame(inertia_placed_loss_mitigated_ls,
                                             columns=["idx_step", "idx_node", "delta_Erot_fac", 
@@ -1381,6 +1380,10 @@ def blackout_size_histogram_after_mitigation(
         else:
             inertia_placed_df = pd.read_hdf(fpath_inertia_placed_df, key="df")
         
+        max_inertia_budget_r = inertia_placed_df.cum_cost_bn.max()
+        if max_inertia_budget_r < max(budget_invest_bn_tup):
+            raise ValueError("Choosen budgets exceed max. value in inertia placemnet cost. " + 
+                             f"Choose a lower budget. Max. is {max_inertia_budget_r:.4f}")
         
         for idx_budget_i, budget_inertia in enumerate(budget_invest_bn_tup):
             comp_property_r = comp_property_df.copy()
@@ -1392,12 +1395,11 @@ def blackout_size_histogram_after_mitigation(
                 logger.info(f"Finding sprops for inertia mitigation w. budget {budget_inertia}")
                 # Find out components that have been mitigated with the current budget
                 inertia_mask_under_budget = inertia_placed_df.cum_cost_bn <= budget_inertia
-            
+                
                 inertia_budget_row = inertia_placed_df[inertia_mask_under_budget].iloc[-1]
                 
                 inertia_last_step = inertia_budget_row.idx_step
                 
-                # TODO should this effectively reordering take place of should it just be cut outs?
                 inertia_comps_miti_index = comp_mitigated_step[comp_mitigated_step < inertia_last_step].index
                 
                 # Set the 'blackout_load_loss_share' to zero where it was mitigated               
