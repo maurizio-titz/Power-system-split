@@ -189,14 +189,14 @@ def run_cascade_dual_line_failures(
 
     if use_sclopf:
         path_to_pypsa_network = path_to_pypsa_network_sclopf
-        full_path_to_file = (
-            path_to_pypsa_network
-            + f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-2920SEG.nc"
+        full_path_to_file = os.path.join(
+            path_to_pypsa_network, 
+            f"sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-2920SEG.nc"
         )
     else:
         path_to_pypsa_network = path_to_pypsa_network_lopf
-        full_path_to_file = (
-            path_to_pypsa_network + f"elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-3H.nc"
+        full_path_to_file = os.path.join(
+            path_to_pypsa_network, f"/elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-3H.nc"
         )
 
     if use_sclopf:
@@ -206,7 +206,8 @@ def run_cascade_dual_line_failures(
 
     os.makedirs(save_path, exist_ok=True)
 
-    fpath_out = save_path + f"system_splits_Co2L{co2l}_n{n_nodes}"
+    fpath_out = os.path.join(save_path, 
+                             f"/system_splits_Co2L{co2l}_n{n_nodes}")
 
     if not use_sclopf:
         fpath_out += "_lopf"
@@ -554,12 +555,12 @@ def collect_batch_results(
     candidate_files = os.listdir(path_to_results)
     print(f"Scanning {len(candidate_files)} files in {path_to_results}. Filtering....")
 
-    splitting_cascades_save_path = (
-        save_dir + f"system_splits_Co2L{co2l}_n{n_nodes}.pklz"
+    splitting_cascades_save_path = os.path.join(
+        save_dir, f"/system_splits_Co2L{co2l}_n{n_nodes}.pklz"
     )
     if all_cascades and save_dir is not None:
-        all_cascades_save_path = (
-            save_dir + f"system_splits_Co2L{co2l}_n{n_nodes}_allcascades.pklz"
+        all_cascades_save_path = os.path.join(
+            save_dir, f"system_splits_Co2L{co2l}_n{n_nodes}_allcascades.pklz"
         )
 
     if os.path.exists(splitting_cascades_save_path):
