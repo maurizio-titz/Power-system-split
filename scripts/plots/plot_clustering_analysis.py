@@ -5,7 +5,7 @@ Clustering Analysis Plot Generation Script
 This file holds functions to generate clustering analysis visualizations:
 - Network topology with centroids and failure probabilities
 - Histograms of loss distribution by CO2 levels
-- Colorbars for both node blackout probability and line failure probability
+- Colorbars for both node blackout probability and corridor failure probability
 """
 
 import os
@@ -589,7 +589,7 @@ def create_clustering_analysis_plot(
     cb_edge = fig.colorbar(sm_edge, cax=cbar_ax_edge, orientation="horizontal")
     cb_edge.ax.tick_params(labelsize=COLORBAR_TICK_FONTSIZE, width=1.0, which="both")
     cb_edge.ax.set_xlabel(
-        "line failure probability", fontsize=COLORBAR_LABEL_FONTSIZE, rotation=0
+        "corridor failure probability", fontsize=COLORBAR_LABEL_FONTSIZE, rotation=0
     )
     cb_edge.ax.xaxis.set_label_position("top")
 
@@ -993,7 +993,7 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
     cb_edge = fig.colorbar(sm_edge, cax=cbar_ax_edge, orientation="horizontal")
     cb_edge.ax.tick_params(labelsize=COLORBAR_TICK_FONTSIZE, width=1.0, which="both")
     cb_edge.ax.set_xlabel(
-        "line failure probability", fontsize=COLORBAR_LABEL_FONTSIZE, rotation=0
+        "corridor failure probability", fontsize=COLORBAR_LABEL_FONTSIZE, rotation=0
     )
     cb_edge.ax.xaxis.set_label_position("top")
 
@@ -1179,7 +1179,7 @@ def create_cluster_plot_only_lines_with_zoom(fpath_plot_data: str,
     cb_edge.ax.tick_params(labelsize=COLORBAR_TICK_FONTSIZE, 
                            width=1.0, which="both")
     cb_edge.set_label(
-        "line failure probability", 
+        "corridor failure probability", 
         size=COLORBAR_LABEL_FONTSIZE
     )
     #cb_edge.ax.xaxis.set_label_position("right")

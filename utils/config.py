@@ -58,7 +58,7 @@ path_to_meteo_figures = path_to_figures_sclopf + "/meteo"
 
 mattermost_url = None
 
-def setup_results_default_sclopf():
+def setup_results_default_folders_sclopf():
     """Create default folder structure."""
     
     list_folders = [data_path, path_to_grid_data, results_path, path_to_sclopf_data,
@@ -77,4 +77,4 @@ def setup_results_default_sclopf():
     
 if __name__ == "__main__":
     
-    setup_results_default_sclopf()
+    setup_results_default_folders_sclopf()
