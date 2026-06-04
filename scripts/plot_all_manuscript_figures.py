@@ -8,7 +8,6 @@ from utils.plot_style import *
 
 import sys
 import subprocess
-import psutil
 
 import gc
 from matplotlib import pyplot as plt
@@ -29,9 +28,6 @@ from scripts.plots.plot_compare_lineMitigation_plannedExtension import plot_plan
 # Paths
 from utils.config import path_to_plot_data, path_to_line_extension_mitigation_sclopf
 
-
-def enough_memory(threshold_pct: float = 90.0) -> bool:
-    return psutil.virtual_memory().percent < threshold_pct
 
 def plot_manuscript_figures(
                      low_memory: bool = False):
