@@ -59,6 +59,23 @@ def _init_split_worker(state):
     _WORKER_STATE.update(state)
 
 
+def _make_pool_context():
+    """Return ``(ctx, pool_kwargs)`` for a worker pool that shares ``_WORKER_STATE``.
+
+    On fork platforms (Linux/macOS) the pool is forked and workers inherit the
+    already-populated ``_WORKER_STATE`` via copy-on-write, so nothing is passed through the
+    initializer — that would pickle and copy the large objects once per worker, defeating
+    the sharing. On spawn platforms (Windows) the current state snapshot is handed to each
+    worker once via the initializer. Call this AFTER ``_WORKER_STATE`` holds everything the
+    workers need, since the spawn path snapshots it here."""
+    if "fork" in mp.get_all_start_methods():
+        return mp.get_context("fork"), {}
+    return (
+        mp.get_context("spawn"),
+        dict(initializer=_init_split_worker, initargs=(dict(_WORKER_STATE),)),
+    )
+
+
 def _compute_split_properties(task):
     """Process a single (co2_r, rocof_r) pair — the body of the old inner loop.
 
@@ -113,6 +130,24 @@ def _compute_split_properties(task):
 
     logger.info(f"Computed Co2L={co2_r}, rocof_r={rocof_r}")
     return rocof_r, split_props
+
+
+def _concat_and_save(task):
+    """Concat all per-CO2 frames for one RoCoF threshold, sort, and write the combined
+    HDF5 file — the body of the old final append loop, for a single threshold.
+
+    Run in a worker so the heavy compressed write (``blosc:zstd`` level 9 dominates the
+    wall time) happens in parallel across thresholds. The per-CO2 frames are read from the
+    shared worker state (inherited via fork, or handed over for spawn) keyed by
+    ``rocof_r``, so they are not re-pickled per call on fork platforms."""
+    rocof_r, save_fpath, complib, complevel = task
+    frames = _WORKER_STATE["results"][rocof_r]
+    combined = pd.concat(frames).sort_index()
+    combined.to_hdf(
+        save_fpath, key="df", mode="w", complib=complib, complevel=complevel
+    )
+    logger.info(f"Saved rocof_r={rocof_r} ({len(frames)} CO2 levels) → {save_fpath}")
+    return rocof_r, len(frames)
 
 
 def generate_split_properties_different_rocof_thresholds(
@@ -195,18 +230,7 @@ def generate_split_properties_different_rocof_thresholds(
             rocof_r, split_props = _compute_split_properties(task)
             results[rocof_r].append(split_props)
     else:
-        if "fork" in mp.get_all_start_methods():
-            # Linux/macOS: fork so workers inherit _WORKER_STATE via copy-on-write. Do NOT
-            # pass the data through initializer/initargs — that would pickle and copy the
-            # large objects once per worker, defeating the sharing.
-            ctx = mp.get_context("fork")
-            pool_kwargs = {}
-        else:
-            # Windows (no fork): spawn fresh workers and hand them the data via the
-            # initializer (one pickled copy per worker — the base objects cannot be shared).
-            ctx = mp.get_context("spawn")
-            pool_kwargs = dict(initializer=_init_split_worker, initargs=(dict(_WORKER_STATE),))
-
+        ctx, pool_kwargs = _make_pool_context()
         with ctx.Pool(processes=n_jobs, **pool_kwargs) as pool:
             for rocof_r, split_props in tqdm(
                 pool.imap_unordered(_compute_split_properties, tasks),
@@ -215,13 +239,31 @@ def generate_split_properties_different_rocof_thresholds(
                 results[rocof_r].append(split_props)
 
     # Final append step: one file per RoCoF threshold, all CO2 levels stacked together.
-    for rocof_r in rocofs_to_run:
-        combined = pd.concat(results[rocof_r]).sort_index()
-        save_fpath = _save_fpath(rocof_r)
-        combined.to_hdf(
-            save_fpath, key="df", mode="w", complib=complib, complevel=complevel
-        )
-        logger.info(f"Saved rocof_r={rocof_r} ({len(results[rocof_r])} CO2 levels) → {save_fpath}")
+    # concat + sort + the compressed write are independent per threshold, so fan them out
+    # the same way as the compute step. Expose the collected frames on _WORKER_STATE first
+    # so fork workers inherit them via copy-on-write (and the spawn snapshot below includes
+    # them).
+    _WORKER_STATE["results"] = results
+    save_tasks = [
+        (rocof_r, _save_fpath(rocof_r), complib, complevel)
+        for rocof_r in rocofs_to_run
+    ]
+    n_save_jobs = max(1, min(n_jobs, len(save_tasks)))
+
+    if n_save_jobs == 1:
+        for task in tqdm(save_tasks, desc="saving"):
+            _concat_and_save(task)
+    else:
+        # A NEW pool is required here even on fork: the compute pool (if any) was forked
+        # before `results` was populated, so its workers never saw the frames.
+        ctx, pool_kwargs = _make_pool_context()
+        with ctx.Pool(processes=n_save_jobs, **pool_kwargs) as pool:
+            for _ in tqdm(
+                pool.imap_unordered(_concat_and_save, save_tasks),
+                total=len(save_tasks),
+                desc="saving",
+            ):
+                pass
 
     if isinstance(mattermost_url, str):
         message_text = (
@@ -361,7 +403,7 @@ def _split_counts_per_co2(fpath, co2ls_desc, bins):
 
 
 def plot_split_risk_different_rocof_thresholds(
-    rocof_thresholds: tuple[float, ...] = (0.5,),#, 1.0, 1.5, 2.0),
+    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.1, 1.5),
     n_nodes: int = 600,
     save_fig: bool = True,
 ):
@@ -473,8 +515,129 @@ def plot_split_risk_different_rocof_thresholds(
     return fig, axes
 
 
+def plot_split_risk_categories_across_rocof_thresholds(
+    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.1, 1.5),
+    n_nodes: int = 600,
+    save_fig: bool = True,
+):
+    """Plot the fraction of system splits vs CO2 level, one panel per share-of-load-not-
+    served category, with one line per RoCoF threshold inside each panel.
+
+    This is the transpose of ``plot_split_risk_different_rocof_thresholds``: there each
+    panel fixes a RoCoF threshold and draws a line per load-loss category; here each panel
+    fixes a load-loss category and draws a line per RoCoF threshold, so the thresholds are
+    compared directly within a category. Same quantity and normalization as that function
+    (fraction of total contingencies ``count / (n_double_line_failures *
+    total_snapshot_weight)``, log y, inverted x).
+
+    Each threshold reads its per-threshold split properties file
+    (``split_properties_rocofThreshold{rocof_r:G}_n{n_nodes}.h5``); thresholds whose file
+    does not exist are skipped with a warning. The RoCoF thresholds are colored with the
+    ``turbo`` colormap — deliberately distinct from the ``inferno_r`` used for categories
+    in ``plot_split_risk_different_rocof_thresholds`` — so the two figures are not confused.
+    Returns ``(fig, axes)``."""
+
+    setup_matplotlib_style()
+
+    co2ls_desc, co2_x, norm = _split_risk_normalization(n_nodes)
+
+    bins = np.linspace(0, 100, 6).astype(int)
+    bin_centers = 0.5 * (bins[:-1] + bins[1:])
+
+    # A colormap for the RoCoF thresholds (the lines), distinct from the inferno/cividis
+    # family used elsewhere in this module for the load-loss categories.
+    cmap = plt.get_cmap("turbo")
+    markers = ["o", "s", "D", "^", "v", "."]
+
+    # Load each threshold's per-CO2 histogram once (reused across every category panel).
+    n_thr = len(rocof_thresholds)
+    counts_per_thr = {}
+    for rocof_r in tqdm(rocof_thresholds, total=n_thr, desc="rocof thresholds"):
+        fpath = _split_props_fpath(rocof_r, n_nodes)
+        if not os.path.exists(fpath):
+            logger.warning(f"No split properties file for rocof={rocof_r} — skipping.")
+            continue
+        counts_per_thr[rocof_r] = _split_counts_per_co2(fpath, co2ls_desc, bins)
+
+    n_panels = len(bin_centers)
+    fig, axes = plt.subplots(
+        1, n_panels, figsize=(4 * n_panels, 5), sharey=True
+    )
+    axes = np.atleast_1d(axes)
+
+    legend_handles, legend_labels = None, None
+
+    for idx, (ax, bin_center) in enumerate(zip(axes, bin_centers)):
+        if not counts_per_thr:
+            ax.text(
+                0.5, 0.5, "no data",
+                transform=ax.transAxes, ha="center", va="center",
+                fontsize=AXIS_LABEL_FONTSIZE,
+            )
+        else:
+            for i, rocof_r in enumerate(rocof_thresholds):
+                if rocof_r not in counts_per_thr:
+                    continue
+                color = cmap(i / (n_thr - 1)) if n_thr > 1 else cmap(0.5)
+                ax.step(
+                    co2_x,
+                    counts_per_thr[rocof_r].loc[:, bin_center] / norm,
+                    where="mid",
+                    label=rf"${rocof_r:g}$",
+                    alpha=0.8,
+                    color=color,
+                    marker=markers[i % len(markers)],
+                    markersize=5,
+                )
+
+            ax.set_yscale("log")
+            if legend_handles is None:
+                legend_handles, legend_labels = ax.get_legend_handles_labels()
+
+        # Common axis styling (applied to populated and placeholder panels alike).
+        ax.set_xlabel(r"CO$_2$ level [\% of 1990]", fontsize=AXIS_LABEL_FONTSIZE)
+        ax.set_xticks([0, 20, 40, 60])
+        ax.set_xticks([10, 30, 50], minor=True)
+        ax.grid(False)
+        ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+        ax.invert_xaxis()
+
+        # Category identity: an in-axes annotation rather than an axes title.
+        ax.text(
+            0.5, 1.06, rf"Load not served: {bins[idx]}-{bins[idx+1]}\%",
+            transform=ax.transAxes, ha="center", va="bottom",
+            fontsize=AXIS_LABEL_FONTSIZE + 4,
+        )
+        add_panel_label(ax, idx, y_offset=0.1)
+
+    axes[0].set_ylabel("Fraction of total contingencies", fontsize=AXIS_LABEL_FONTSIZE)
+
+    if legend_handles is not None:
+        leg = fig.legend(
+            legend_handles,
+            legend_labels,
+            title=r"$|\mathrm{RoCoF}|_\mathrm{lim}$" + "\n[Hz/s]",
+            loc="center left",
+            bbox_to_anchor=(1.0, 0.5),
+            fontsize=LEGEND_FONTSIZE,
+            title_fontsize=LEGEND_FONTSIZE,
+        )
+        leg.get_title().set_horizontalalignment("center")
+
+    fig.tight_layout()
+
+    if save_fig:
+        save_figure(
+            fig,
+            f"split_risk_fraction_contingencies_categories_across_rocof_thresholds_n{n_nodes}",
+            path_to_figures_sclopf,
+        )
+
+    return fig, axes
+
+
 def plot_split_risk_high_loss_across_rocof_thresholds(
-    rocof_thresholds: tuple[float, ...] = (0.5,),#, 1.0, 1.5, 2.0),
+    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.1, 1.5),
     n_nodes: int = 600,
     save_fig: bool = True,
 ):
@@ -816,7 +979,7 @@ def plot_all_rocof_figures(
     co2_lvls_ls=(0.6, 0.2, 0.0),
     n_nodes: int = 600,
     min_load_share_ls: list[float] = [0., 0.1, .8],
-    rocof_thresholds: tuple[float, ...] = (0.5,),#, 1.0, 1.5, 2.0),
+    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.1, 1.5),
     save_fig: bool = True,
 ):
     """Produce all RoCoF statistics figures in one call.
@@ -827,7 +990,9 @@ def plot_all_rocof_figures(
     - the absolute RoCoF exceedance-probability curve
       (``plot_rocof_exceedance_probability``),
     - the per-threshold split-risk panels
-      (``plot_split_risk_different_rocof_thresholds``), and
+      (``plot_split_risk_different_rocof_thresholds``),
+    - the per-category split-risk panels comparing thresholds
+      (``plot_split_risk_categories_across_rocof_thresholds``), and
     - the 80–100% load-loss comparison across thresholds
       (``plot_split_risk_high_loss_across_rocof_thresholds``).
 
@@ -853,6 +1018,11 @@ def plot_all_rocof_figures(
     # Split-risk figures across RoCoF thresholds (independent of min_load_share, so drawn
     # once rather than per min_load_share).
     plot_split_risk_different_rocof_thresholds(
+        rocof_thresholds=rocof_thresholds,
+        n_nodes=n_nodes,
+        save_fig=save_fig,
+    )
+    plot_split_risk_categories_across_rocof_thresholds(
         rocof_thresholds=rocof_thresholds,
         n_nodes=n_nodes,
         save_fig=save_fig,
