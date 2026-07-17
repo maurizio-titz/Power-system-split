@@ -20,7 +20,6 @@ sys.path.append("./")
 from utils import cascade_simulation, data_handling, send_mattermost_messages
 from utils.config import (
     mattermost_url,
-    path_to_evaluation_results_sclopf,
     path_to_figures_sclopf,
     path_to_pypsa_network_sclopf,
     path_to_vis_results_sclopf,
@@ -32,7 +31,6 @@ from utils.plot_style import (
     TICK_LABEL_FONTSIZE,
     TWO_PANEL_SIZE,
     add_panel_label,
-    format_co2_title,
     get_co2_color,
     save_figure,
     set_axis_style,
@@ -151,8 +149,7 @@ def _concat_and_save(task):
 
 
 def generate_split_properties_different_rocof_thresholds(
-    rocof_tup: tuple[float, ...] = (0.5, 1.0, 1.1, 1.5,
-                                    2.0, 2.5, 5, 10, 15),
+    rocof_tup: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
     co2_lvl_tup: tuple[float, ...] | None = None,
     n_nodes: int = 600,
     overwrite: bool = False,
@@ -402,10 +399,53 @@ def _split_counts_per_co2(fpath, co2ls_desc, bins):
     return pd.DataFrame(np.stack(data), index=co2ls_desc, columns=bin_centers)
 
 
+def _resolve_panel_grid(n_panels, n_cols, layout_2x3):
+    """Return ``(n_rows, n_cols)`` for laying out ``n_panels`` panels.
+
+    ``layout_2x3`` forces 3 columns, giving 2 rows for the 5- and 6-panel split-risk
+    figures (and overriding ``n_cols``); otherwise ``n_cols`` is used, capped to
+    ``n_panels`` so no column is left fully empty."""
+    n_cols = 3 if layout_2x3 else max(1, int(n_cols))
+    n_cols = min(n_cols, n_panels)
+    n_rows = int(np.ceil(n_panels / n_cols))
+    return n_rows, n_cols
+
+
+def _place_panel_legend(fig, axes_flat, n_panels, n_cols, handles, labels, title):
+    """Place the panel legend and hide unused grid cells.
+
+    Panels occupy ``axes_flat[:n_panels]`` (filled row-major). If the grid has a leftover
+    cell, the legend is drawn inside the first one — enlarged and with a single-line title
+    (the ``\n`` in ``title`` is collapsed to a space), since it has a whole panel to itself.
+    Otherwise it is anchored just outside the top-right panel, hugging its top-right corner.
+    Every cell beyond the panels is turned off. No legend is drawn when ``handles`` is
+    ``None``."""
+    for extra in axes_flat[n_panels:]:
+        extra.axis("off")
+    if handles is None:
+        return
+    if len(axes_flat) > n_panels:  # a leftover cell exists -> legend inside it, large
+        big = LEGEND_FONTSIZE + 10
+        leg = axes_flat[n_panels].legend(
+            handles, labels, title=title.replace("\n", " "), loc="center",
+            fontsize=big, title_fontsize=big,
+        )
+    else:  # full grid -> legend just right of the top-right panel, aligned to its top
+        top_right = axes_flat[n_cols - 1]  # row 0, last column
+        leg = fig.legend(
+            handles, labels, title=title, loc="upper left",
+            bbox_to_anchor=(1.02, 1.0), bbox_transform=top_right.transAxes,
+            fontsize=LEGEND_FONTSIZE, title_fontsize=LEGEND_FONTSIZE,
+        )
+    leg.get_title().set_horizontalalignment("center")
+
+
 def plot_split_risk_different_rocof_thresholds(
-    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.1, 1.5),
+    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
     n_nodes: int = 600,
     save_fig: bool = True,
+    n_cols: int = 3,
+    layout_2x3: bool = False,
 ):
     """Plot the fraction of system splits falling into each share-of-load-not-served
     category as a function of CO2 level, one panel per RoCoF blackout threshold.
@@ -420,9 +460,12 @@ def plot_split_risk_different_rocof_thresholds(
 
     The y-axis is the fraction of total contingencies:
     ``count / (n_double_line_failures * total_snapshot_weight)`` — the same normalization
-    used by the secondary axis of panel c. The figure has exactly
-    ``len(rocof_thresholds)`` panels in a single row; thresholds whose data file does not
-    exist yet are drawn as empty "no data" placeholders. Returns ``(fig, axes)``."""
+    used by the secondary axis of panel c. The panels (one per RoCoF threshold) are laid
+    out in a grid of ``ceil(len(rocof_thresholds) / n_cols)`` rows by ``n_cols`` columns;
+    ``layout_2x3=True`` forces a 2-row × 3-column grid (overriding ``n_cols``), which fits
+    the default six thresholds exactly. When the grid has a leftover cell the legend is
+    drawn inside it, otherwise it sits outside on the right. Thresholds whose data file
+    does not exist yet are drawn as empty "no data" placeholders. Returns ``(fig, axes)``."""
 
     setup_matplotlib_style()
 
@@ -434,15 +477,16 @@ def plot_split_risk_different_rocof_thresholds(
     markers = ["o", "s", "D", "^", "v", "."]
 
     n_panels = len(rocof_thresholds)
+    n_rows, n_cols = _resolve_panel_grid(n_panels, n_cols, layout_2x3)
     fig, axes = plt.subplots(
-        1, n_panels, figsize=(4 * n_panels, 5), sharey=True
+        n_rows, n_cols, figsize=(4 * n_cols, 5 * n_rows), sharey=True, squeeze=False
     )
-    axes = np.atleast_1d(axes)
+    axes_flat = axes.flatten()
 
     legend_handles, legend_labels = None, None
 
     for idx, (ax, rocof_r) in enumerate(
-        tqdm(list(zip(axes, rocof_thresholds)), total=n_panels, desc="rocof panels")
+        tqdm(list(zip(axes_flat, rocof_thresholds)), total=n_panels, desc="rocof panels")
     ):
         fpath = _split_props_fpath(rocof_r, n_nodes)
 
@@ -481,27 +525,24 @@ def plot_split_risk_different_rocof_thresholds(
         ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
         ax.invert_xaxis()
 
+        # ylabel only on the leftmost column (sharey hides the inner y tick labels).
+        if idx % n_cols == 0:
+            ax.set_ylabel(
+                "Fraction of total contingencies", fontsize=AXIS_LABEL_FONTSIZE
+            )
+
         # Threshold identity: an in-axes annotation rather than an axes title.
         ax.text(
-            0.5, 1.02, rf"$|\mathrm{{RoCoF}}|_\mathrm{{lim}} = {rocof_r:g}$ Hz/s",
+            0.5, 1.02, rf"$|\mathrm{{RoCoF}}|_\mathrm{{crit}} = {rocof_r:g}$ Hz/s",
             transform=ax.transAxes, ha="center", va="bottom",
             fontsize=AXIS_LABEL_FONTSIZE,
         )
         add_panel_label(ax, idx, y_offset=0.1)
 
-    axes[0].set_ylabel("Fraction of total contingencies", fontsize=AXIS_LABEL_FONTSIZE)
-
-    if legend_handles is not None:
-        leg = fig.legend(
-            legend_handles,
-            legend_labels,
-            title="Share of load\n not served",
-            loc="center left",
-            bbox_to_anchor=(1.0, 0.5),
-            fontsize=LEGEND_FONTSIZE,
-            title_fontsize=LEGEND_FONTSIZE,
-        )
-        leg.get_title().set_horizontalalignment("center")
+    _place_panel_legend(
+        fig, axes_flat, n_panels, n_cols, legend_handles, legend_labels,
+        title="Share of load\n not served",
+    )
 
     fig.tight_layout()
 
@@ -516,9 +557,11 @@ def plot_split_risk_different_rocof_thresholds(
 
 
 def plot_split_risk_categories_across_rocof_thresholds(
-    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.1, 1.5),
+    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
     n_nodes: int = 600,
     save_fig: bool = True,
+    n_cols: int = 3,
+    layout_2x3: bool = False,
 ):
     """Plot the fraction of system splits vs CO2 level, one panel per share-of-load-not-
     served category, with one line per RoCoF threshold inside each panel.
@@ -533,9 +576,15 @@ def plot_split_risk_categories_across_rocof_thresholds(
     Each threshold reads its per-threshold split properties file
     (``split_properties_rocofThreshold{rocof_r:G}_n{n_nodes}.h5``); thresholds whose file
     does not exist are skipped with a warning. The RoCoF thresholds are colored with the
-    ``turbo`` colormap — deliberately distinct from the ``inferno_r`` used for categories
+    qualitative ``Dark2`` colormap (they are nominal categories, so no sequential map is
+    used) — deliberately distinct from the ``inferno_r`` used for the load-loss categories
     in ``plot_split_risk_different_rocof_thresholds`` — so the two figures are not confused.
-    Returns ``(fig, axes)``."""
+
+    The category panels are laid out in a grid of ``ceil(n_panels / n_cols)`` rows by
+    ``n_cols`` columns; ``layout_2x3=True`` forces a 2-row × 3-column grid (overriding
+    ``n_cols``), i.e. the first three categories on the top row and the remaining two on the
+    bottom row with the RoCoF legend filling the leftover cell. When the grid has no
+    leftover cell the legend sits outside on the right. Returns ``(fig, axes)``."""
 
     setup_matplotlib_style()
 
@@ -544,9 +593,12 @@ def plot_split_risk_categories_across_rocof_thresholds(
     bins = np.linspace(0, 100, 6).astype(int)
     bin_centers = 0.5 * (bins[:-1] + bins[1:])
 
-    # A colormap for the RoCoF thresholds (the lines), distinct from the inferno/cividis
-    # family used elsewhere in this module for the load-loss categories.
-    cmap = plt.get_cmap("turbo")
+    # A qualitative colormap for the RoCoF thresholds (the lines): they are nominal
+    # categories whose ordering/spacing is not meant to be read off the colors, so a
+    # sequential map (viridis/inferno/cividis/turbo) would be misleading here. Dark2's
+    # colors are indexed by integer position, one distinct hue per threshold, and it is
+    # kept clear of the inferno_r used for the load-loss categories.
+    cmap = plt.get_cmap("Dark2")
     markers = ["o", "s", "D", "^", "v", "."]
 
     # Load each threshold's per-CO2 histogram once (reused across every category panel).
@@ -560,14 +612,15 @@ def plot_split_risk_categories_across_rocof_thresholds(
         counts_per_thr[rocof_r] = _split_counts_per_co2(fpath, co2ls_desc, bins)
 
     n_panels = len(bin_centers)
+    n_rows, n_cols = _resolve_panel_grid(n_panels, n_cols, layout_2x3)
     fig, axes = plt.subplots(
-        1, n_panels, figsize=(4 * n_panels, 5), sharey=True
+        n_rows, n_cols, figsize=(4 * n_cols, 5 * n_rows), sharey=True, squeeze=False
     )
-    axes = np.atleast_1d(axes)
+    axes_flat = axes.flatten()
 
     legend_handles, legend_labels = None, None
 
-    for idx, (ax, bin_center) in enumerate(zip(axes, bin_centers)):
+    for idx, (ax, bin_center) in enumerate(zip(axes_flat, bin_centers)):
         if not counts_per_thr:
             ax.text(
                 0.5, 0.5, "no data",
@@ -578,7 +631,7 @@ def plot_split_risk_categories_across_rocof_thresholds(
             for i, rocof_r in enumerate(rocof_thresholds):
                 if rocof_r not in counts_per_thr:
                     continue
-                color = cmap(i / (n_thr - 1)) if n_thr > 1 else cmap(0.5)
+                color = cmap(i)  # qualitative map: integer index -> distinct hue
                 ax.step(
                     co2_x,
                     counts_per_thr[rocof_r].loc[:, bin_center] / norm,
@@ -602,6 +655,12 @@ def plot_split_risk_categories_across_rocof_thresholds(
         ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
         ax.invert_xaxis()
 
+        # ylabel only on the leftmost column (sharey hides the inner y tick labels).
+        if idx % n_cols == 0:
+            ax.set_ylabel(
+                "Fraction of total contingencies", fontsize=AXIS_LABEL_FONTSIZE
+            )
+
         # Category identity: an in-axes annotation rather than an axes title.
         ax.text(
             0.5, 1.06, rf"Load not served: {bins[idx]}-{bins[idx+1]}\%",
@@ -610,19 +669,10 @@ def plot_split_risk_categories_across_rocof_thresholds(
         )
         add_panel_label(ax, idx, y_offset=0.1)
 
-    axes[0].set_ylabel("Fraction of total contingencies", fontsize=AXIS_LABEL_FONTSIZE)
-
-    if legend_handles is not None:
-        leg = fig.legend(
-            legend_handles,
-            legend_labels,
-            title=r"$|\mathrm{RoCoF}|_\mathrm{lim}$" + "\n[Hz/s]",
-            loc="center left",
-            bbox_to_anchor=(1.0, 0.5),
-            fontsize=LEGEND_FONTSIZE,
-            title_fontsize=LEGEND_FONTSIZE,
-        )
-        leg.get_title().set_horizontalalignment("center")
+    _place_panel_legend(
+        fig, axes_flat, n_panels, n_cols, legend_handles, legend_labels,
+        title=r"$|\mathrm{RoCoF}|_\mathrm{crit}$" + "\n[Hz/s]",
+    )
 
     fig.tight_layout()
 
@@ -637,7 +687,7 @@ def plot_split_risk_categories_across_rocof_thresholds(
 
 
 def plot_split_risk_high_loss_across_rocof_thresholds(
-    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.1, 1.5),
+    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
     n_nodes: int = 600,
     save_fig: bool = True,
 ):
@@ -659,7 +709,9 @@ def plot_split_risk_high_loss_across_rocof_thresholds(
     high_bin_center = 0.5 * (bins[-2] + bins[-1])  # the 80–100% category
     high_bin_label = rf"{bins[-2]}-{bins[-1]}\%"
 
-    cmap = plt.get_cmap("viridis")
+    # Qualitative map for the RoCoF thresholds (nominal categories, order not encoded by
+    # the colors); integer-indexed, kept clear of the inferno_r used for load-loss bins.
+    cmap = plt.get_cmap("Dark2")
     fig, ax = plt.subplots(figsize=SINGLE_PLOT_SIZE)
 
     n_thr = len(rocof_thresholds)
@@ -672,7 +724,7 @@ def plot_split_risk_high_loss_across_rocof_thresholds(
             continue
 
         data = _split_counts_per_co2(fpath, co2ls_desc, bins)
-        color = cmap(i / (n_thr - 1)) if n_thr > 1 else cmap(0.5)
+        color = cmap(i)  # qualitative map: integer index -> distinct hue
         ax.step(
             co2_x,
             data.loc[:, high_bin_center] / norm,
@@ -701,7 +753,7 @@ def plot_split_risk_high_loss_across_rocof_thresholds(
     )
 
     leg = ax.legend(
-        title=r"$|\mathrm{RoCoF}|_\mathrm{lim}$ [Hz/s]",
+        title=r"$|\mathrm{RoCoF}|_\mathrm{crit}$ [Hz/s]",
         fontsize=LEGEND_FONTSIZE,
         title_fontsize=LEGEND_FONTSIZE,
     )
@@ -726,8 +778,8 @@ def _co2_percent_label(co2_r, n_nodes):
 
 
 def plot_rocof_histogram_values_n_absolute(
-    co2_lvls_ls=(0.6, 0.2, 0.0),
-    rocof_thresholds=(0.5, 1.0, 1.5, 2.0, 2.5, 10),
+    co2_lvls_tup: tuple[float, ...]=(0.6, 0.2, 0.0),
+    rocof_thresholds: tuple[float, ...]=(0.75, 1.0, 1.25, 1.5, 2., 2.5),
     n_nodes: int = 600,
     min_load_share: float = 0.1,
     save_fig: bool = True,
@@ -753,7 +805,7 @@ def plot_rocof_histogram_values_n_absolute(
 
     # Shared bins from the finite rocof over the selected co2 levels, so the panels are
     # directly comparable across levels.
-    selected = comp_props_all[comp_props_all.co2l.isin(co2_lvls_ls)]
+    selected = comp_props_all[comp_props_all.co2l.isin(co2_lvls_tup)]
     all_finite = selected["rocof"].to_numpy()
     all_finite = all_finite[np.isfinite(all_finite)]
     max_abs = np.nanmax(np.abs(all_finite))
@@ -763,7 +815,7 @@ def plot_rocof_histogram_values_n_absolute(
     fig, (ax_signed, ax_abs) = plt.subplots(1, 2, figsize=TWO_PANEL_SIZE)
 
     quantiles = {}
-    for co2_r in co2_lvls_ls:
+    for co2_r in co2_lvls_tup:
         vals = comp_props_all.loc[comp_props_all.co2l == co2_r, "rocof"].to_numpy()
         r = vals[np.isfinite(vals)]
         if len(r) == 0:
@@ -793,13 +845,14 @@ def plot_rocof_histogram_values_n_absolute(
     ax_abs.set_yscale("log")
 
     set_axis_style(
-        ax_signed, xlabel=r"RoCoF (Hz/s)", ylabel="Count",
+        ax_signed, xlabel=r"$\mathrm{RoCoF}$ [\unit{\hertz\per\second}]", ylabel="Count",
         label_fontsize=22, tick_labelsize=18,
     )
     set_axis_style(
-        ax_abs, xlabel=r"$|$RoCoF$|$ (Hz/s)", ylabel="Count",
+        ax_abs, xlabel=r"$|\mathrm{RoCoF}|$ [\unit{\hertz\per\second}]", ylabel="Count",
         label_fontsize=22, tick_labelsize=18,
     )
+    ax_abs.set_xlim(left=0)
     add_panel_label(ax_signed, 0)
     add_panel_label(ax_abs, 1)
     leg = ax_signed.legend(
@@ -816,7 +869,7 @@ def plot_rocof_histogram_values_n_absolute(
     # for every (co2 level, threshold). usetex is enabled globally, so this renders in
     # the LaTeX font, and matplotlib's table draws proper cell lines.
     present_co2 = [
-        co2_r for co2_r in co2_lvls_ls
+        co2_r for co2_r in co2_lvls_tup
         if any((co2_r, thr) in quantiles for thr in rocof_thresholds)
     ]
     # Build the table manually so the top-left corner cell labels the first column as the
@@ -866,14 +919,14 @@ def plot_rocof_histogram_values_n_absolute(
 
 
 def plot_rocof_exceedance_probability(
-    co2_lvls_ls=(0.6, 0.2, 0.0),
+    co2_lvls_tup: tuple[float, ...]=(0.6, 0.2, 0.0),
     n_nodes: int = 600,
     min_load_share: float = 0.1,
     save_fig: bool = True,
     zoom_rocof_tup: tuple[float, float] | None = (0, 15),
 ):
     """Plot the empirical exceedance probability of the absolute RoCoF per co2 level:
-    ``|RoCoF|`` (Hz/s) on the x-axis against ``P(|RoCoF| > x)`` on the y-axis.
+    ``|RoCoF|`` [Hz/s] on the x-axis against ``P(|RoCoF| > x)`` on the y-axis.
 
     This is the complementary CDF (survival function, ``1 - CDF``) of ``|RoCoF|`` — the
     continuous counterpart of the per-threshold quantiles in
@@ -895,7 +948,7 @@ def plot_rocof_exceedance_probability(
 
     # Compute each co2 level's empirical exceedance curve once; reused across panels.
     curves = []
-    for co2_r in co2_lvls_ls:
+    for co2_r in co2_lvls_tup:
         vals = comp_props_all.loc[comp_props_all.co2l == co2_r, "rocof"].to_numpy()
         r = vals[np.isfinite(vals)]
         if len(r) == 0:
@@ -916,7 +969,7 @@ def plot_rocof_exceedance_probability(
             )
         target_ax.set_yscale("log")
 
-    xlabel = r"$|$RoCoF$|$ (Hz/s)"
+    xlabel = r"$|\mathrm{RoCoF}|$ [\unit{\hertz\per\second}]"
     ylabel = r"$P(|\mathrm{RoCoF}| > x)$"
 
     if zoom_rocof_tup is None:
@@ -976,10 +1029,10 @@ def plot_rocof_exceedance_probability(
 
 
 def plot_all_rocof_figures(
-    co2_lvls_ls=(0.6, 0.2, 0.0),
+    co2_lvls_ls: tuple[float, ...]=(0.6, 0.2, 0.0),
     n_nodes: int = 600,
     min_load_share_ls: list[float] = [0., 0.1, .8],
-    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.1, 1.5),
+    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
     save_fig: bool = True,
 ):
     """Produce all RoCoF statistics figures in one call.
@@ -1002,13 +1055,13 @@ def plot_all_rocof_figures(
 
     for min_load_share in min_load_share_ls:
         plot_rocof_histogram_values_n_absolute(
-            co2_lvls_ls=co2_lvls_ls,
+            co2_lvls_tup=co2_lvls_ls,
             n_nodes=n_nodes,
             min_load_share=min_load_share,
             save_fig=save_fig,
         )
         plot_rocof_exceedance_probability(
-            co2_lvls_ls=co2_lvls_ls,
+            co2_lvls_tup=co2_lvls_ls,
             n_nodes=n_nodes,
             min_load_share=min_load_share,
             save_fig=save_fig,

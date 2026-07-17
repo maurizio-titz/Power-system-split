@@ -197,7 +197,15 @@ def setup_matplotlib_style():
 
     # Enable LaTeX text rendering
     plt.rc("text", usetex=True)
-    plt.rc("text.latex", preamble=r"\usepackage{amsmath}\usepackage{bm}")
+    # siunitx renders units upright (not italic); per-mode=symbol gives "Hz/s" rather
+    # than "Hz s^{-1}". Use \unit{\hertz\per\second} etc. in labels.
+    plt.rc(
+        "text.latex",
+        preamble=(
+            r"\usepackage{amsmath}\usepackage{bm}"
+            r"\usepackage{siunitx}\sisetup{per-mode=symbol}"
+        ),
+    )
 
     # Set default font sizes
     plt.rc("font", size=TICK_LABEL_FONTSIZE)
