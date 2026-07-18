@@ -39,6 +39,7 @@ path_to_line_extension_mitigation_sclopf = (
 )
 path_to_vis_results_sclopf = path_to_sclopf_results + "/split_visualization"
 path_to_pre_outage_sclopf = path_to_sclopf_results + "/pre_outage_data"
+path_to_ac_dc_comparison = path_to_sclopf_results + "/ac_dc_comparison"
 path_to_figures_sclopf = results_path + "/figures"
 
 # Intermediate data that is created while running plot script for the first time
@@ -67,6 +68,7 @@ def setup_results_default_folders_sclopf():
                     path_to_evaluation_results_sclopf, path_to_pypsa_network_sclopf,
                     path_to_inertia_mitigation_results_sclopf, path_to_line_extension_mitigation_sclopf,
                     path_to_vis_results_sclopf, path_to_pre_outage_sclopf,
+                    path_to_ac_dc_comparison,
                     path_to_figures_sclopf, path_to_plot_data
                     ]
 
