@@ -149,7 +149,7 @@ def _concat_and_save(task):
 
 
 def generate_split_properties_different_rocof_thresholds(
-    rocof_tup: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
+    rocof_tup: tuple[float, ...] = (0.8,0.9,1.0, 1.1, 1.2),
     co2_lvl_tup: tuple[float, ...] | None = None,
     n_nodes: int = 600,
     overwrite: bool = False,
@@ -441,7 +441,7 @@ def _place_panel_legend(fig, axes_flat, n_panels, n_cols, handles, labels, title
 
 
 def plot_split_risk_different_rocof_thresholds(
-    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
+    rocof_thresholds: tuple[float, ...] = (0.8,0.9,1.0, 1.1, 1.2),
     n_nodes: int = 600,
     save_fig: bool = True,
     n_cols: int = 3,
@@ -557,7 +557,7 @@ def plot_split_risk_different_rocof_thresholds(
 
 
 def plot_split_risk_categories_across_rocof_thresholds(
-    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
+    rocof_thresholds: tuple[float, ...] = (0.8,0.9,1.0, 1.1, 1.2),
     n_nodes: int = 600,
     save_fig: bool = True,
     n_cols: int = 3,
@@ -687,7 +687,7 @@ def plot_split_risk_categories_across_rocof_thresholds(
 
 
 def plot_split_risk_high_loss_across_rocof_thresholds(
-    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
+    rocof_thresholds: tuple[float, ...] = (0.8,0.9,1.0, 1.1, 1.2),
     n_nodes: int = 600,
     save_fig: bool = True,
 ):
@@ -779,7 +779,7 @@ def _co2_percent_label(co2_r, n_nodes):
 
 def plot_rocof_histogram_values_n_absolute(
     co2_lvls_tup: tuple[float, ...]=(0.6, 0.2, 0.0),
-    rocof_thresholds: tuple[float, ...]=(0.75, 1.0, 1.25, 1.5, 2., 2.5),
+    rocof_thresholds: tuple[float, ...]=(0.8,0.9,1.0, 1.1, 1.2),
     n_nodes: int = 600,
     min_load_share: float = 0.1,
     save_fig: bool = True,
@@ -1032,7 +1032,7 @@ def plot_all_rocof_figures(
     co2_lvls_ls: tuple[float, ...]=(0.6, 0.2, 0.0),
     n_nodes: int = 600,
     min_load_share_ls: list[float] = [0., 0.1, .8],
-    rocof_thresholds: tuple[float, ...] = (0.75, 1.0, 1.25, 1.5, 2., 2.5),
+    rocof_thresholds: tuple[float, ...] = (0.8,0.9,1.0, 1.1, 1.2),
     save_fig: bool = True,
 ):
     """Produce all RoCoF statistics figures in one call.
