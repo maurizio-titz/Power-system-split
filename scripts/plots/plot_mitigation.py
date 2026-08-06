@@ -1186,6 +1186,29 @@ def create_combined_mitigation_plot(
     save_figure(f, f_name, save_path, organize_plots=organize_plots)
 
 
+def count_globally_severe_splits(
+    split_props: pd.DataFrame,
+    lower: float = .8,
+    upper: float = 1.):
+    """Count the splits whose blackout share falls into [lower, upper].
+
+    Args:
+        split_props (pd.DataFrame): Split properties, needs the columns
+            'lost_load_share_blackout' and 'total_weighting'.
+        lower (float, optional): Lower bound of the blackout share. Defaults to .8.
+        upper (float, optional): Upper bound of the blackout share. Defaults to 1..
+
+    Returns:
+        tuple[int, int]: Number of split events and the number weighted with
+            'total_weighting' (i.e. what the histogram shows).
+    """
+    mask_gss = (
+        (split_props.lost_load_share_blackout >= lower)
+        & (split_props.lost_load_share_blackout <= upper)
+    )
+    return int(mask_gss.sum()), int(split_props.total_weighting[mask_gss].sum())
+
+
 def blackout_size_histogram_after_mitigation(
     n_nodes: int = 600,
     co2_lvls_tup: tuple[float, ...] | None = (0.0, .2),
@@ -1380,6 +1403,14 @@ def blackout_size_histogram_after_mitigation(
         else:
             inertia_placed_df = pd.read_hdf(fpath_inertia_placed_df, key="df")
         
+        n_gss_base, n_gss_base_w = count_globally_severe_splits(split_props_co2)
+        tqdm.write(
+            f"\n=== Inertia mitigation, CO2 level {co2l_r:g} "
+            f"(step size {inertia_step_delta_rotE_MWs*1e-3:.3g} GWs) ===\n"
+            f"  no mitigation      : GSS (0.8 <= share <= 1.0) "
+            f"{n_gss_base:d} splits, {n_gss_base_w:d} weighted"
+        )
+
         max_inertia_budget_r = inertia_placed_df.cum_cost_bn.max()
         if max_inertia_budget_r < max(budget_invest_bn_tup):
             raise ValueError("Choosen budgets exceed max. value in inertia placemnet cost. " + 
@@ -1388,19 +1419,19 @@ def blackout_size_histogram_after_mitigation(
         for idx_budget_i, budget_inertia in enumerate(budget_invest_bn_tup):
             comp_property_r = comp_property_df.copy()
             fname_inertia_sprops = f"mitigated_split_properties_Co2L{co2l_r}_n{n_nodes}_budget{budget_inertia:.4f}.h5"
-            fpath_inertia_mitigated_sprops = os.path.join(path_to_plot_data, 
+            fpath_inertia_mitigated_sprops = os.path.join(path_to_plot_data,
                                                           fname_inertia_sprops)
-            
+
+            # Placement step at which the budget is exhausted (needed both for the
+            # sprops calculation and for the diagnostic printout below)
+            inertia_mask_under_budget = inertia_placed_df.cum_cost_bn <= budget_inertia
+            inertia_budget_row = inertia_placed_df[inertia_mask_under_budget].iloc[-1]
+            inertia_last_step = inertia_budget_row.idx_step
+
             if not os.path.exists(fpath_inertia_mitigated_sprops) or calc_inertia_again:
                 logger.info(f"Finding sprops for inertia mitigation w. budget {budget_inertia}")
                 # Find out components that have been mitigated with the current budget
-                inertia_mask_under_budget = inertia_placed_df.cum_cost_bn <= budget_inertia
-                
-                inertia_budget_row = inertia_placed_df[inertia_mask_under_budget].iloc[-1]
-                
-                inertia_last_step = inertia_budget_row.idx_step
-                
-                inertia_comps_miti_index = comp_mitigated_step[comp_mitigated_step < inertia_last_step].index
+                inertia_comps_miti_index = comp_mitigated_step[comp_mitigated_step <= inertia_last_step].index
                 
                 # Set the 'blackout_load_loss_share' to zero where it was mitigated               
                 comp_property_r.loc[inertia_comps_miti_index, "blackout_load_loss_share"] = 0
@@ -1437,6 +1468,15 @@ def blackout_size_histogram_after_mitigation(
             else:
                 inertia_split_props_r = pd.read_hdf(fpath_inertia_mitigated_sprops, key="df")
             
+            n_gss, n_gss_w = count_globally_severe_splits(inertia_split_props_r)
+            tqdm.write(
+                f"  budget {budget_inertia:6.2f} bn EUR: "
+                f"placed {inertia_budget_row.cum_Erot_GWs:8.3f} GWs "
+                f"(cost {inertia_budget_row.cum_cost_bn:.4f} bn EUR, "
+                f"{int(inertia_last_step):d} steps) | "
+                f"GSS (0.8 <= share <= 1.0) {n_gss:d} splits, {n_gss_w:d} weighted"
+            )
+
             # Plot it
             vals_inertia = inertia_split_props_r.lost_load_share_blackout * 100.
             
