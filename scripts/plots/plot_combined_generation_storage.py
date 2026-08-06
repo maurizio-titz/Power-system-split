@@ -379,7 +379,11 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
         ax_line_storage,
     ]
     for idx, ax_loss_lvl in enumerate(panel_label_axis):
-        add_panel_label(ax_loss_lvl, idx, x_offset=-0.15)
+        if idx < 3:
+            x_offset = -0.15
+        else:
+            x_offset = - 0.175
+        add_panel_label(ax_loss_lvl, idx, x_offset=x_offset)
 
     # === GENERATION PLOT ===
     # Calculate generation by carrier and CO2 level
