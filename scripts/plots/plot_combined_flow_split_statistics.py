@@ -314,22 +314,24 @@ def create_combined_flow_and_split_statistics_plot(
         ax3_num_splits.invert_xaxis()
 
         if secondary_proba_axis:
+            # The right-hand axis shows the same data as the left one, just divided by
+            # the total number of screened contingencies. Coupling the limits explicitly
+            # by that constant is equivalent to (but more robust than) plotting the
+            # rescaled curves invisibly and hoping both axes autoscale consistently.
+            # A twin axes is used rather than `secondary_yaxis` because only a real
+            # Axes draws the horizontal grid lines at its major ticks.
+            contingency_norm = (
+                len(n_2_failures) * network.snapshot_weightings.generators.sum()
+            )
             ax3_num_splits_secondary = ax3_num_splits.twinx()
-            for i, bin_center in enumerate(bin_centers):
-                color = cmap(i / (len(bin_centers) + 1) + (1 / (len(bin_centers) + 1)))
-                counts = data.loc[:, bin_center]
-                plt.plot(
-                    get_actual_co2_level(co2ls[::-1], percent=True),
-                    counts
-                    / len(n_2_failures)
-                    / network.snapshot_weightings.generators.sum(),
-                    label=rf"{bins[i]}-{bins[i+1]}\%",
-                    alpha=0.0,
-                )
+            ax3_num_splits_secondary.set_yscale("log")
+            counts_ymin, counts_ymax = ax3_num_splits.get_ylim()
+            ax3_num_splits_secondary.set_ylim(
+                counts_ymin / contingency_norm, counts_ymax / contingency_norm
+            )
             ax3_num_splits_secondary.set_ylabel(
                 "Fraction of total contingencies", fontsize=AXIS_LABEL_FONTSIZE
             )
-            ax3_num_splits_secondary.set_yscale("log")
             ax3_num_splits_secondary.tick_params(
                 axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE
             )
