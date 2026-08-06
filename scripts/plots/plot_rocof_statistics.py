@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 
-"""Plot the statistics of RoCoF for components and splits."""
+"""Plot the statistics of RoCoF for components and splits. This scripts 
+specifically compares how the number of blackouts changes if a different
+RoCoF threshold is assumed to be valid. In general, the limit of 1Hz/s 
+is an industry standard for large scale simulations."""
 
+import functools
 import glob
 import multiprocessing as mp
 import os
@@ -21,6 +25,7 @@ from utils import cascade_simulation, data_handling, send_mattermost_messages
 from utils.config import (
     mattermost_url,
     path_to_figures_sclopf,
+    path_to_plot_data,
     path_to_pypsa_network_sclopf,
     path_to_vis_results_sclopf,
 )
@@ -101,11 +106,14 @@ def _compute_split_properties(task):
         ["co2l", "time_stamp", "split_number_snapshot"]
     )
 
-    split_props["init_failure_0"] = split_groups.init_failure_0.unique().apply(lambda x: x[0]).astype(int)
-    split_props["init_failure_1"] = split_groups.init_failure_1.unique().apply(lambda x: x[0]).astype(int)
-    split_props["num_par_failure_0"] = split_groups.num_par_failure_0.unique().apply(lambda x: x[0]).astype(float)
-    split_props["num_par_failure_1"] = split_groups.num_par_failure_1.unique().apply(lambda x: x[0]).astype(float)
-    split_props["trigger_weighting"] = split_groups.trigger_weighting.unique().apply(lambda x: x[0]).astype(int)
+    # No unwrapping of the per-group arrays returned by unique(): astype() then raises if a
+    # split carries more than one value for a trigger property, which is the desired hard
+    # failure — the components of a split must agree about their own trigger.
+    split_props["init_failure_0"] = split_groups.init_failure_0.unique().astype(int)
+    split_props["init_failure_1"] = split_groups.init_failure_1.unique().astype(int)
+    split_props["num_par_failure_0"] = split_groups.num_par_failure_0.unique().astype(float)
+    split_props["num_par_failure_1"] = split_groups.num_par_failure_1.unique().astype(float)
+    split_props["trigger_weighting"] = split_groups.trigger_weighting.unique().astype(int)
     split_props["lost_load_share_shedding"] = (
         split_groups.shedding_load_loss_share.sum().astype(float)
     )
@@ -346,38 +354,110 @@ def check_if_rocof_1_aggrees_with_standard(n_nodes: int = 600):
         f"{rocof1.co2l.nunique()} CO2 levels."
     )
 
-def _split_risk_normalization(n_nodes: int = 600):
+def _split_risk_norm_fpath(n_nodes):
+    """Path of the cached per-CO2-level split-risk normalization (in ``path_to_plot_data``).
+
+    ``path_to_plot_data`` is resolved before the ``PLOT_STYLE``/``PLOT_OUTPUT_DIR`` override
+    of ``path_to_figures_sclopf`` in ``utils.config``, so the cache is shared by all plot
+    styles instead of being recomputed per style."""
+    return os.path.join(path_to_plot_data, f"split_risk_normalization_n{n_nodes}.pklz")
+
+
+def _compute_split_risk_norm(co2ls_desc, n_nodes):
+    """Compute the normalization for every CO2 level in ``co2ls_desc``.
+
+    Each level uses its own network (``...Co2L{co2l}-2920SEG.nc``); the denominator is
+    ``n_double_line_failures * total_snapshot_weight``. Returns a ``pd.Series`` indexed by
+    ``co2l``. This is the expensive part (one PyPSA network load per level), so it only runs
+    when the cache file is missing."""
+
+    norm = pd.Series(index=pd.Index(co2ls_desc, name="co2l"), dtype=float, name="norm")
+    for co2l in tqdm(co2ls_desc, desc="normalization per co2 level"):
+        network = data_handling.load_pypsa_network_from_path(
+            path_to_pypsa_network_sclopf
+            + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-2920SEG.nc",
+            True,
+        )
+        nx_graph = data_handling.build_networkx_graph(network, snet_index="0")
+        _, _, num_parallels, _ = data_handling.get_matrices_from_nx_graph(nx_graph)
+        bridge_idxs = data_handling.nx_edges_to_matrix_indices(
+            nx.bridges(nx_graph), nx_graph
+        )
+        n_2_failures = cascade_simulation.calc_possible_double_line_failures(
+            num_parallels, ignored_idxs=bridge_idxs
+        )
+        total_weight = network.snapshot_weightings.generators.sum()
+        norm.loc[co2l] = len(n_2_failures) * total_weight
+        logger.info(
+            f"Co2L={co2l}: {len(n_2_failures)} double line failures "
+            f"× total snapshot weight {total_weight:g} → norm {norm.loc[co2l]:g}"
+        )
+    return norm
+
+
+@functools.lru_cache(maxsize=None)
+def _split_risk_normalization(n_nodes: int = 600, overwrite: bool = False):
     """Return ``(co2ls_desc, co2_x, norm)`` shared by the split-risk fraction plots.
 
     ``co2ls_desc`` are the CO2 levels sorted ascending (so the x-axis, once inverted, runs
     from high to low CO2), ``co2_x`` the matching actual CO2 percentages, and ``norm`` the
-    denominator ``n_double_line_failures * total_snapshot_weight`` that turns a split count
-    into a fraction of total contingencies — the same normalization used by the secondary
-    axis of panel c in ``create_combined_flow_and_split_statistics_plot``."""
+    per-CO2-level denominator ``n_double_line_failures * total_snapshot_weight`` that turns
+    a split count into a fraction of total contingencies — the same normalization used by
+    the secondary axis of panel c in ``create_combined_flow_and_split_statistics_plot``.
+
+    ``norm`` is a ``pd.Series`` indexed by ``co2ls_desc``, computed from each CO2 level's own
+    network rather than from a single hardcoded one. The levels are expected to agree — the
+    networks share their topology, hence their number of double line failures, and the
+    snapshot weightings are 3 throughout — so a deviation is logged as a warning; the
+    per-level values are still returned and used, since they are the correct denominators
+    either way.
+
+    Computing ``norm`` costs one PyPSA network load per CO2 level (minutes), so it is cached
+    on disk as a gzip-compressed pickle (``.pklz``) in ``path_to_plot_data`` and only
+    recomputed when that file is missing, when it does not cover exactly the CO2 levels
+    currently available (a level was added or removed), or when ``overwrite=True``. ``co2ls_desc``/``co2_x`` are cheap and
+    always derived fresh. Additionally cached in-process per ``(n_nodes, overwrite)``, since
+    all three split-risk plot functions call this; callers must not mutate the result."""
 
     co2ls = data_handling.get_co2_levels(n_nodes)
     co2ls_desc = co2ls[::-1]
     co2_x = data_handling.get_actual_co2_level(co2ls_desc, percent=True)
 
-    network = data_handling.load_pypsa_network_from_path(
-        path_to_pypsa_network_sclopf
-        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
-        True,
-    )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index="0")
-    _, _, num_parallels, _ = data_handling.get_matrices_from_nx_graph(nx_graph)
-    bridge_idxs = data_handling.nx_edges_to_matrix_indices(
-        nx.bridges(nx_graph), nx_graph
-    )
-    n_2_failures = cascade_simulation.calc_possible_double_line_failures(
-        num_parallels, ignored_idxs=bridge_idxs
-    )
-    norm = len(n_2_failures) * network.snapshot_weightings.generators.sum()
+    fpath = _split_risk_norm_fpath(n_nodes)
+    norm = None
+    if os.path.exists(fpath) and not overwrite:
+        # compression is passed explicitly: pandas infers it from the extension only for
+        # ".gz"/".bz2"/".zip"/".xz"/".zst", so a bare ".pklz" would be read/written raw.
+        cached = pd.read_pickle(fpath, compression="gzip")
+        # Only usable if it covers exactly today's CO2 levels — otherwise it predates a
+        # change in the available networks and is recomputed instead of silently reused.
+        if np.array_equal(cached.index.to_numpy(), np.asarray(co2ls_desc, dtype=float)):
+            norm = cached
+            logger.info(f"Loaded split-risk normalization from {fpath}")
+        else:
+            logger.warning(
+                f"Cached normalization in {fpath} covers CO2 levels "
+                f"{list(cached.index)} but {list(co2ls_desc)} are available — recomputing."
+            )
+
+    if norm is None:
+        norm = _compute_split_risk_norm(co2ls_desc, n_nodes)
+        os.makedirs(path_to_plot_data, exist_ok=True)
+        norm.to_pickle(fpath, compression="gzip")
+        logger.info(f"Saved split-risk normalization to {fpath}")
+
+    if norm.nunique() > 1:
+        logger.warning(
+            "Normalization differs across CO2 levels (expected identical — same topology "
+            f"and snapshot weightings of 3 everywhere): {norm.to_dict()}"
+        )
+
     return co2ls_desc, co2_x, norm
 
 
 def _split_props_fpath(rocof_r, n_nodes):
     """Path to the per-threshold split properties file (``{rocof_r:G}`` in the name)."""
+    
     return (
         path_to_vis_results_sclopf
         + f"/split_properties_rocofThreshold{rocof_r:G}_n{n_nodes}.h5"
