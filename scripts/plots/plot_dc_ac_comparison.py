@@ -358,7 +358,7 @@ def plot_ac_dc_vs_q_uncertainty(
     """
     n_rows = len(co2_levels)
     fig, axes = plt.subplots(
-        n_rows, 2, figsize=figsize or (10, 2.6 * n_rows),
+        n_rows, 2, figsize=figsize or (11, 2.6 * n_rows),
         constrained_layout=True,
     )
     if n_rows == 1:
@@ -415,8 +415,11 @@ def plot_ac_dc_vs_q_uncertainty(
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="0.7", alpha=0.9),
             )
 
-    axes[-1, 0].set_xlabel("AC loading / DC loading", fontsize=AXIS_LABEL_FONTSIZE)
-    axes[-1, 1].set_xlabel(r"$(\max_{Q}$ AC loading $-$ $\min_{Q}$ AC loading) / DC loading", fontsize=AXIS_LABEL_FONTSIZE)
+    axes[-1, 0].set_xlabel(r"AC loading / DC loading [$\%$]", fontsize=AXIS_LABEL_FONTSIZE)
+    axes[-1, 1].set_xlabel(
+        r"$(\max_{Q}$ AC loading $-$ $\min_{Q}$ AC loading)" "\n" r"/ DC loading [$\%$]",
+        fontsize=AXIS_LABEL_FONTSIZE,
+    )
 
     return fig, axes
 
@@ -467,6 +470,7 @@ def plot_dc_ac_comparison():
         n_bins_left=100, n_bins_right=n_bins_right, dc_threshold=dc_threshold,
         xlim_right=xlim_right,
     )
+
     fig.savefig(os.path.join(fig_dir, "ac_dc_ratio_vs_q_uncertainty_spread.pdf"))
 
 
