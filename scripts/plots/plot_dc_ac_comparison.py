@@ -539,8 +539,8 @@ def plot_dc_ac_comparison():
         constrained_layout=True,
     )
     axes = axes.flatten()
-    Real_percents = [0, 20, 58]
-    CO2_levels = [0.0, 0.2, 0.6]
+    Real_percents = [58,20,0]
+    CO2_levels = [0.6,0.2,0.0]
     for i, ax in enumerate(axes):
         co2lvl = CO2_levels[i]
         loading_df = loading_df_by_co2[co2lvl]
@@ -571,7 +571,7 @@ def plot_dc_ac_comparison():
     xlim_right = (0, 10)
     n_bins_right = 40
     fig, axes = plot_ac_dc_vs_q_uncertainty(
-        loading_df_by_co2, [0, 0.2, 0.6], [0, 0.2, 0.58],
+        loading_df_by_co2, [0.6,0.2,0], [0.58,0.2,0],
         n_bins_left=n_bins_right, n_bins_right=n_bins_right, dc_threshold=dc_threshold,
         xlim_right=xlim_right,
     )
@@ -581,7 +581,7 @@ def plot_dc_ac_comparison():
     # %%
     # --- Same comparison, but 2 panels with all CO2 levels overlaid per panel ---
     fig, axes = plot_ac_dc_vs_q_uncertainty_combined(
-        loading_df_by_co2, ALL_CO2_LEVELS, ALL_REAL_PERCENTS,
+        loading_df_by_co2, [0.6,0.2,0.0], [58,20,0],
         n_bins_left=n_bins_right, n_bins_right=n_bins_right, dc_threshold=dc_threshold,
         xlim_right=xlim_right,
     )
