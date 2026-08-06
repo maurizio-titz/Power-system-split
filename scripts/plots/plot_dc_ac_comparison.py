@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
 from utils.config import path_to_ac_dc_comparison, path_to_figures_sclopf
-from utils.plot_style import setup_matplotlib_style, AXIS_LABEL_FONTSIZE
+from utils.plot_style import setup_matplotlib_style, AXIS_LABEL_FONTSIZE, get_co2_color, TWO_PANEL_SIZE
 from utils.data_handling import get_co2_levels, load_pypsa_network
 
 fig_dir = os.path.join(path_to_figures_sclopf, "ac_dc_comparison")
@@ -32,8 +32,11 @@ n_sub = n.sub_networks.obj[0]
 
 # %%
 # --- Collect AC and DC loading for every line, snapshot, repetition, per CO2 level ---
+ALL_CO2_LEVELS = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+ALL_REAL_PERCENTS = [0, 5, 10, 20, 30, 40, 50, 60]
+
 loading_df_by_co2 = {}
-for co2lvl in [0.0, 0.2, 0.6]:
+for co2lvl in ALL_CO2_LEVELS:
     ratio_records = []
     ac_records = []
     dc_records = []
@@ -77,11 +80,20 @@ for co2lvl in [0.0, 0.2, 0.6]:
 # ## Function definitions
 
 # %%
-def plot_ac_dc_ratio_hist_with_median(loading_df, dc_threshold=0.2, n_bins=30, fig=None, ax=None):
-    """Histogram of AC/DC ratio with a reference line at 1 and the median annotated."""
+def plot_ac_dc_ratio_hist_with_median(
+    loading_df, dc_threshold=0.2, n_bins=30, fig=None, ax=None,
+    xscale="linear", xlim=(0, 2),
+):
+    """Histogram of AC/DC ratio with a reference line at 1 and the median annotated.
+
+    ``xscale="linear"`` (default) matches the left panel used elsewhere in this
+    file: fixed-range bins over ``xlim``, zero-ratio entries excluded.
+    ``xscale="log"`` instead uses log-symmetric bins around ratio=1 and ignores
+    ``xlim``.
+    """
     filtered = loading_df[loading_df["dc_loading"] > dc_threshold]
 
-    # drop zero/negative/non-finite ratios -- log-scale can't handle them
+    # drop zero/negative/non-finite ratios
     ratio_vals = filtered["ratio"]
     valid_mask = (ratio_vals > 0) & np.isfinite(ratio_vals)
     n_dropped = (~valid_mask).sum()
@@ -96,27 +108,35 @@ def plot_ac_dc_ratio_hist_with_median(loading_df, dc_threshold=0.2, n_bins=30, f
 
     ratio_median = filtered["ratio"].median()
 
-    max_log = np.abs(np.log10(filtered["ratio"])).max()
-    bins = np.logspace(-max_log, max_log, n_bins + 1)
     if ax is None:
         fig, ax = plt.subplots(figsize=(7, 5))
+
+    if xscale == "log":
+        max_log = np.abs(np.log10(filtered["ratio"])).max()
+        bins = np.logspace(-max_log, max_log, n_bins + 1)
+    else:
+        bins = np.linspace(xlim[0], xlim[1], n_bins + 1)
+
     ax.hist(filtered["ratio"], bins=bins, color="steelblue", edgecolor="white")
 
     ax.axvline(1.0, color="black", linestyle="--", linewidth=1, label="AC = DC")
     ax.axvline(ratio_median, color="crimson", linestyle="-", linewidth=1.5,
                label=f"median ratio = {ratio_median:.2f}")
 
-    ax.set_xscale("log")
-    if np.abs(bins[0]) > np.abs(bins[-1]):
-        lim = 1 / np.abs(bins[0])
+    if xscale == "log":
+        ax.set_xscale("log")
+        if np.abs(bins[0]) > np.abs(bins[-1]):
+            lim = 1 / np.abs(bins[0])
+        else:
+            lim = np.abs(bins[-1])
+        ax.set_xlim(1 / lim, lim)
     else:
-        lim = np.abs(bins[-1])
-    ax.set_xlim(1 / lim, lim)
+        ax.set_xlim(*xlim)
     return fig, ax
 
 
 def select_lines_by_loading(loading_df, snapshot, targets=(1.0, 0.8),
-                             n_per_target=2, n_low=2, low_quantile=0.3):
+                             n_per_target=2, n_low=2, low_quantile=0.6):
     """
     For a single snapshot, pick lines closest to each target DC loading
     level, plus a set of lower-loaded lines.
@@ -270,6 +290,11 @@ def _format_co2_label(value: float) -> str:
     return f"CO$_2$ = {pct:.0f}%"
 
 
+def _set_scientific_y(ax):
+    """Force scientific-notation y-tick labels -- counts range from ~1e3 to ~1e5."""
+    ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+
+
 def _fixed_range_clip_count(data, lo, hi):
     """Count how many values fall outside [lo, hi] -- used purely for the
     'N outliers outside view' annotation, not for computing the bin range."""
@@ -286,13 +311,14 @@ def plot_ac_dc_ratio_hist(
     fig=None,
     ax=None,
     color: str = "steelblue",
+    xlim: tuple = (0, 2),
 ):
-    """Histogram of AC/DC loading ratio with log-symmetric bins.
+    """Histogram of AC/DC loading ratio with linear, fixed-range bins.
 
-    Bin edges are ``np.logspace(-max_log, max_log, n_bins + 1)`` where
-    ``max_log`` is the largest |log10(ratio)| in the (threshold-filtered)
-    data -- so the bins are symmetric in log-space around ratio=1, and the
-    widest possible range (over- and under-estimate) gets equal resolution.
+    Bin edges are ``np.linspace(xlim[0], xlim[1], n_bins + 1)``, identical
+    for every caller so rows stay comparable. Values outside ``xlim`` are
+    excluded from the histogram; the caller is responsible for reporting how
+    many were dropped.
 
     Parameters
     ----------
@@ -302,11 +328,13 @@ def plot_ac_dc_ratio_hist(
         Only keep rows with DC loading above this value (see
         ``compute_ac_dc_metrics`` for rationale).
     n_bins : int
-        Number of log-spaced bins.
+        Number of linearly-spaced bins.
     fig, ax : matplotlib Figure/Axes, optional
         If not given, a new figure/axes is created.
     color : str
         Histogram bar color.
+    xlim : tuple
+        Fixed (lo, hi) range the bins span.
 
     Returns
     -------
@@ -317,10 +345,9 @@ def plot_ac_dc_ratio_hist(
         filtered = filtered[filtered["dc_loading"] > dc_threshold]
 
     ratio = filtered["ratio"].replace([np.inf, -np.inf], np.nan).dropna()
-    ratio = ratio[ratio > 0]  # log-scale requires strictly positive values
+    ratio = ratio[ratio != 0]  # exclude zero-ratio (ac_loading == 0) entries
 
-    max_log = np.abs(np.log10(ratio)).max()
-    bins = np.logspace(-max_log, max_log, n_bins + 1)
+    bins = np.linspace(xlim[0], xlim[1], n_bins + 1)
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(7, 5))
@@ -337,21 +364,21 @@ def plot_ac_dc_vs_q_uncertainty(
     n_bins_left: int = 100,
     n_bins_right: int = 60,
     dc_threshold: float = 0.0,
-    xlim_left: tuple = (1e-1, 1e1),
+    xlim_left: tuple = (0, 2),
     xlim_right: tuple = (0, 20),
     figsize: tuple | None = None,
 ):
     """3-row x 2-col figure: rows = CO2 levels, columns = [AC/DC ratio, Q spread].
 
-    Left column uses :func:`plot_ac_dc_ratio_hist` (log-x, log-symmetric bins,
-    vertical reference line at ratio=1).
+    Left column uses :func:`plot_ac_dc_ratio_hist` (linear-x, fixed-range
+    bins spanning ``xlim_left``, vertical reference line at ratio=1).
 
     Right column shows the Q-driven spread (``max_pf(AC) - min_pf(AC)``,
-    percentage points). All three rows share IDENTICAL bin edges: the bin
-    range is simply ``xlim_right``, split into ``n_bins_right`` equal-width
-    bins (bin width = (xlim_right[1] - xlim_right[0]) / n_bins_right). Values
-    outside ``xlim_right`` are excluded from the histogram, and their count is
-    annotated on each panel so nothing is silently hidden.
+    percentage points). Both columns share IDENTICAL bin edges per column
+    across rows: the bin range is simply ``xlim_left``/``xlim_right``, split
+    into equal-width bins. Values outside the respective xlim are excluded
+    from the histogram, and their count is annotated on each panel so
+    nothing is silently hidden.
 
     ``dc_threshold`` restricts both columns to (snapshot, Line) pairs whose DC
     loading exceeds this value (e.g. 0.2 for "only lines loaded >20%").
@@ -383,14 +410,19 @@ def plot_ac_dc_vs_q_uncertainty(
 
         ax_left, ax_right = axes[i]
 
-        # --- left: AC/DC ratio histogram ---
+        # --- left: AC/DC ratio histogram, shared fixed-range bins across all rows ---
+        ratio_filtered = loading_df
+        if dc_threshold > 0:
+            ratio_filtered = ratio_filtered[ratio_filtered["dc_loading"] > dc_threshold]
+        ratio_left = ratio_filtered["ratio"].replace([np.inf, -np.inf], np.nan)
+        ratio_left = ratio_left[ratio_left != 0]
+        n_clip_left, n_left = _fixed_range_clip_count(ratio_left, xlim_left[0], xlim_left[1])
         plot_ac_dc_ratio_hist(
             loading_df, dc_threshold=dc_threshold, n_bins=n_bins_left,
-            fig=fig, ax=ax_left, color="steelblue",
+            fig=fig, ax=ax_left, color="steelblue", xlim=xlim_left,
         )
-        ax_left.set_xscale("log")
         ax_left.set_xlim(*xlim_left)
-        ax_left.axvline(1.0, color="0.3", linestyle="--", linewidth=1, zorder=0)
+        ax_left.axvline(1.0, color="0.3", linestyle="--", linewidth=1, zorder=5)
 
         # --- right: Q-spread histogram, shared fixed-range bins across all rows ---
         n_clip_right, n_right = _fixed_range_clip_count(spread_q, xlim_right[0], xlim_right[1])
@@ -398,7 +430,7 @@ def plot_ac_dc_vs_q_uncertainty(
         ax_right.set_xlim(*xlim_right)
 
         for ax, n_clip, n_total in (
-            (ax_left, 0, len(loading_df)),  # ratio panel isn't range-clipped (log xlim handles it)
+            (ax_left, n_clip_left, n_left),
             (ax_right, n_clip_right, n_right),
         ):
             ax.spines["top"].set_visible(False)
@@ -408,6 +440,7 @@ def plot_ac_dc_vs_q_uncertainty(
 
         for ax in (ax_left, ax_right):
             ax.set_ylabel("Counts", fontsize=AXIS_LABEL_FONTSIZE)
+            _set_scientific_y(ax)
             ax.text(
                 0.02, 0.92, _format_co2_label(real_percents[i]),
                 transform=ax.transAxes, fontsize=AXIS_LABEL_FONTSIZE,
@@ -415,13 +448,82 @@ def plot_ac_dc_vs_q_uncertainty(
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="0.7", alpha=0.9),
             )
 
-    axes[-1, 0].set_xlabel(r"AC loading / DC loading [$\%$]", fontsize=AXIS_LABEL_FONTSIZE)
+    axes[-1, 0].set_xlabel("AC loading / DC loading", fontsize=AXIS_LABEL_FONTSIZE)
     axes[-1, 1].set_xlabel(
-        r"$(\max_{Q}$ AC loading $-$ $\min_{Q}$ AC loading)" "\n" r"/ DC loading [$\%$]",
+        r"$(\max_{Q}$ AC loading $-$ $\min_{Q}$ AC loading)" "\n" r"/ DC loading",
         fontsize=AXIS_LABEL_FONTSIZE,
     )
 
     return fig, axes
+
+
+def plot_ac_dc_vs_q_uncertainty_combined(
+    loading_df_by_co2: dict,
+    co2_levels: list,
+    real_percents: list,
+    n_bins_left: int = 60,
+    n_bins_right: int = 40,
+    dc_threshold: float = 0.2,
+    xlim_left: tuple = (0, 2),
+    xlim_right: tuple = (0, 10),
+    figsize: tuple = TWO_PANEL_SIZE,
+):
+    """2-panel version of :func:`plot_ac_dc_vs_q_uncertainty`: all CO2 levels
+    overlaid in a single axes per column (left = AC/DC ratio, right = Q spread)
+    instead of one row per level.
+
+    Uses ``histtype='step'`` and :func:`get_co2_color` so levels stay
+    distinguishable and colors match every other CO2-level figure. Both panels
+    share the same y-limits so counts are directly comparable; if the step
+    outlines end up mostly on top of each other this may be worth revisiting,
+    but the CO2-level color mapping should stay as-is.
+    """
+    fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=figsize)
+
+    bins_left = np.linspace(xlim_left[0], xlim_left[1], n_bins_left + 1)
+    bins_right = np.linspace(xlim_right[0], xlim_right[1], n_bins_right + 1)
+
+    for co2lvl, real_pct in zip(co2_levels, real_percents):
+        loading_df = loading_df_by_co2[co2lvl]
+        color = get_co2_color(co2lvl)
+        label = _format_co2_label(real_pct)
+
+        filtered = loading_df
+        if dc_threshold > 0:
+            filtered = filtered[filtered["dc_loading"] > dc_threshold]
+        ratio = filtered["ratio"].replace([np.inf, -np.inf], np.nan).dropna()
+        ratio = ratio[ratio != 0]  # exclude zero-ratio (ac_loading == 0) entries
+
+        _, spread_q = compute_ac_dc_metrics(loading_df, dc_threshold=dc_threshold)
+
+        ax_left.hist(ratio, bins=bins_left, histtype="step", lw=2.5, color=color, label=label,alpha = .6)
+        ax_right.hist(spread_q, bins=bins_right, histtype="step", lw=2.5, color=color, label=label,alpha = .6)
+
+    ax_left.axvline(1.0, color="0.3", linestyle="--", linewidth=1, zorder=5)
+    ax_left.set_xlim(*xlim_left)
+    ax_right.set_xlim(*xlim_right)
+
+    y_max = max(ax_left.get_ylim()[1], ax_right.get_ylim()[1])
+    # ax_left.set_ylim(0, y_max)
+    # ax_right.set_ylim(0, y_max)
+
+    for ax in (ax_left, ax_right):
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.grid(axis="y", alpha=0.3, linewidth=0.5)
+        ax.tick_params(axis="both", labelsize=AXIS_LABEL_FONTSIZE)
+        ax.set_ylabel("Counts", fontsize=AXIS_LABEL_FONTSIZE)
+        _set_scientific_y(ax)
+
+    ax_left.set_xlabel("AC loading / DC loading", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_right.set_xlabel(
+        r"$(\max_{Q}$ AC loading $-$ $\min_{Q}$ AC loading)" "\n" r"/ DC loading",
+        fontsize=AXIS_LABEL_FONTSIZE,
+    )
+    ax_left.legend(title="CO$_2$ level", loc="upper right", frameon=True)
+
+    fig.tight_layout()
+    return fig, (ax_left, ax_right)
 
 
 # %% [markdown]
@@ -442,15 +544,17 @@ def plot_dc_ac_comparison():
         co2lvl = CO2_levels[i]
         loading_df = loading_df_by_co2[co2lvl]
 
-        fig, ax = plot_ac_dc_ratio_hist_with_median(loading_df, dc_threshold=0.2, n_bins=100, fig=fig, ax=ax)
-        ax.set_xscale("log")
-        ax.set_xlim(1e-1, 1e1)
+        fig, ax = plot_ac_dc_ratio_hist_with_median(
+            loading_df, dc_threshold=0.2, n_bins=40, fig=fig, ax=ax,
+            xscale="linear", xlim=(0, 2),
+        )
 
         # reference line at ratio = 1 (AC == DC loading)
-        ax.axvline(1.0, color="0.3", linestyle="--", linewidth=1, zorder=0)
+        ax.axvline(1.0, color="0.3", linestyle="--", linewidth=1, zorder=5)
 
         ax.set_ylabel("Counts", fontsize=AXIS_LABEL_FONTSIZE)
         ax.tick_params(axis="both", labelsize=AXIS_LABEL_FONTSIZE)
+        _set_scientific_y(ax)
 
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -467,11 +571,21 @@ def plot_dc_ac_comparison():
     n_bins_right = 40
     fig, axes = plot_ac_dc_vs_q_uncertainty(
         loading_df_by_co2, [0, 0.2, 0.6], [0, 0.2, 0.58],
-        n_bins_left=100, n_bins_right=n_bins_right, dc_threshold=dc_threshold,
+        n_bins_left=n_bins_right, n_bins_right=n_bins_right, dc_threshold=dc_threshold,
         xlim_right=xlim_right,
     )
 
     fig.savefig(os.path.join(fig_dir, "ac_dc_ratio_vs_q_uncertainty_spread.pdf"))
+
+    # %%
+    # --- Same comparison, but 2 panels with all CO2 levels overlaid per panel ---
+    fig, axes = plot_ac_dc_vs_q_uncertainty_combined(
+        loading_df_by_co2, ALL_CO2_LEVELS, ALL_REAL_PERCENTS,
+        n_bins_left=n_bins_right, n_bins_right=n_bins_right, dc_threshold=dc_threshold,
+        xlim_right=xlim_right,
+    )
+
+    fig.savefig(os.path.join(fig_dir, "ac_dc_ratio_vs_q_uncertainty_spread_combined.pdf"))
 
 
 if __name__ == "__main__":
