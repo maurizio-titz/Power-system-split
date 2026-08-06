@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
 from utils.config import path_to_ac_dc_comparison, path_to_figures_sclopf
-from utils.plot_style import setup_matplotlib_style, AXIS_LABEL_FONTSIZE, get_co2_color, TWO_PANEL_SIZE
+from utils.plot_style import setup_matplotlib_style, AXIS_LABEL_FONTSIZE, get_co2_color, TWO_PANEL_SIZE,TICK_LABEL_FONTSIZE
 from utils.data_handling import get_co2_levels, load_pypsa_network
 
 fig_dir = os.path.join(path_to_figures_sclopf, "ac_dc_comparison")
@@ -33,7 +33,7 @@ n_sub = n.sub_networks.obj[0]
 # %%
 # --- Collect AC and DC loading for every line, snapshot, repetition, per CO2 level ---
 ALL_CO2_LEVELS = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-ALL_REAL_PERCENTS = [0, 5, 10, 20, 30, 40, 50, 60]
+ALL_REAL_PERCENTS = [0, 5, 10, 20, 30, 40, 50, 58]
 
 loading_df_by_co2 = {}
 for co2lvl in ALL_CO2_LEVELS:
@@ -119,7 +119,7 @@ def plot_ac_dc_ratio_hist_with_median(
 
     ax.hist(filtered["ratio"], bins=bins, color="steelblue", edgecolor="white")
 
-    ax.axvline(1.0, color="black", linestyle="--", linewidth=1, label="AC = DC")
+    ax.axvline(1.0, color="black", linestyle="--", linewidth=1.5, label="AC = DC")
     ax.axvline(ratio_median, color="crimson", linestyle="-", linewidth=1.5,
                label=f"median ratio = {ratio_median:.2f}")
 
@@ -164,7 +164,7 @@ def select_lines_by_loading(loading_df, snapshot, targets=(1.0, 0.8),
     for target in targets:
         remaining = mean_dc.drop(index=used, errors="ignore")
         closest = (remaining - target).abs().sort_values().index[:n_per_target]
-        label = f"~{int(target * 100)}%"
+        label = f"~{int(target * 100)}\%"
         selected[label] = list(closest)
         used.update(closest)
     return selected
@@ -287,12 +287,13 @@ def _format_co2_label(value: float) -> str:
     (0-100, e.g. 58) and always renders "CO2 = NN%".
     """
     pct = value * 100 if abs(value) <= 1 else value
-    return f"CO$_2$ = {pct:.0f}%"
+    return f"CO$_2$ = {pct:.0f}\%"
 
 
 def _set_scientific_y(ax):
     """Force scientific-notation y-tick labels -- counts range from ~1e3 to ~1e5."""
     ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+    ax.yaxis.get_offset_text().set_fontsize(TICK_LABEL_FONTSIZE)
 
 
 def _fixed_range_clip_count(data, lo, hi):
@@ -422,7 +423,7 @@ def plot_ac_dc_vs_q_uncertainty(
             fig=fig, ax=ax_left, color="steelblue", xlim=xlim_left,
         )
         ax_left.set_xlim(*xlim_left)
-        ax_left.axvline(1.0, color="0.3", linestyle="--", linewidth=1, zorder=5)
+        ax_left.axvline(1.0, color="0.3", linestyle="--", linewidth=1.5, zorder=5)
 
         # --- right: Q-spread histogram, shared fixed-range bins across all rows ---
         n_clip_right, n_right = _fixed_range_clip_count(spread_q, xlim_right[0], xlim_right[1])
@@ -499,7 +500,7 @@ def plot_ac_dc_vs_q_uncertainty_combined(
         ax_left.hist(ratio, bins=bins_left, histtype="step", lw=2.5, color=color, label=label,alpha = .6)
         ax_right.hist(spread_q, bins=bins_right, histtype="step", lw=2.5, color=color, label=label,alpha = .6)
 
-    ax_left.axvline(1.0, color="0.3", linestyle="--", linewidth=1, zorder=5)
+    ax_left.axvline(1.0, color="0.3", linestyle="--", linewidth=1.5, zorder=5)
     ax_left.set_xlim(*xlim_left)
     ax_right.set_xlim(*xlim_right)
 
@@ -550,7 +551,7 @@ def plot_dc_ac_comparison():
         )
 
         # reference line at ratio = 1 (AC == DC loading)
-        ax.axvline(1.0, color="0.3", linestyle="--", linewidth=1, zorder=5)
+        ax.axvline(1.0, color="0.3", linestyle="--", linewidth=1.5, zorder=5)
 
         ax.set_ylabel("Counts", fontsize=AXIS_LABEL_FONTSIZE)
         ax.tick_params(axis="both", labelsize=AXIS_LABEL_FONTSIZE)
