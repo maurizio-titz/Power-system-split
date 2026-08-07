@@ -19,13 +19,18 @@ from utils.config import path_to_vis_results_sclopf
 
 
 def calculate_line_loadings_for_all_snapshots(co2lvl: float, n_nodes: int=600,
-                                              condition_on_split: bool = True,
+                                              condition_on_split: bool = False,
                                               blackout_threshold: float | None = None,
                                               verbose: bool = False) -> tuple[dict[str, np.ndarray], 
                                                                                                 dict[str, np.ndarray]]:
     """Get the line loadings for each snapshot by solving
-    the linear power flows. This return"""
+    the linear power flows. This returns two dictionaries with
+    the flows and the line loadings, respectively."""
     
+    if blackout_threshold is not None and not condition_on_split:
+        raise ValueError("A blackout_threshold only applies when conditioning on "
+                         "splits, so it requires condition_on_split=True!")
+
     snapshot_list = load_snapshot_list(co2lvl=co2lvl)
     if condition_on_split:
         split_property_df = pd.read_hdf(path_to_vis_results_sclopf + 
@@ -47,7 +52,11 @@ def calculate_line_loadings_for_all_snapshots(co2lvl: float, n_nodes: int=600,
         is_cut_subset = set(snapshot_list_cut).issubset(set(snapshot_list))
         if not is_cut_subset:
             raise ValueError("The conditioned snapshots should be a subset of all snapshots!")
-    
+
+        snapshot_list_to_eval = snapshot_list_cut
+    else:
+        snapshot_list_to_eval = snapshot_list
+        
     injections_all_snapshot = load_effective_injections(co2lvl=co2lvl)
     I_m, B_d, num_parallels, line_limits = load_grid_matrices('0', co2lvl)
     
@@ -55,7 +64,8 @@ def calculate_line_loadings_for_all_snapshots(co2lvl: float, n_nodes: int=600,
     
     flow_snapshot_dict: dict[str, np.ndarray] = dict()
     line_loading_snapshot_dict: dict[str, np.ndarray] = dict()
-    for snapshot_r in tqdm(snapshot_list, desc="Line Loading", 
+    
+    for snapshot_r in tqdm(snapshot_list_to_eval, desc="Line Loading", 
                            disable=not verbose):
         
         key_now = snapshot_r.strftime("%Y-%m-%d %H:%M")
