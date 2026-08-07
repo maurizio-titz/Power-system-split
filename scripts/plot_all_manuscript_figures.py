@@ -75,6 +75,7 @@ def plot_all_figures(also_supplementary_figures: bool=False,
     )
     plt.close('all')
     gc.collect()
+    
     # Fig. 5: Mitigation of split-induced blackouts via inertia and grid reinforcements
     create_combined_mitigation_plot(use_annualized_costs=True,
                                     co2_lvl_map=0.2,
@@ -204,6 +205,9 @@ def plot_supplementary_figures(low_memory: bool = False):
         red_lines_rank=[11],
         pad_deg=0.75,
     )
+    
+    # Sensitivity analysis of different RoCoF levels
+    
     
     return
 

@@ -148,9 +148,9 @@ def plot_inertia_loss_mitigation_curve_new(
             cumulative_annualized_cost_rescaled,
             linestyle=":",
             color=color,
-            label=f"Annualized Cost",
+            label=f"Annualized cost",
         )
-        ax_loss_twin.set_ylabel("Annualized Cost [billion €]")
+        ax_loss_twin.set_ylabel("Annualized cost [billion €]")
         ax_loss_twin.grid(False)
 
         ax_loss_twin.tick_params(axis="y", which="major", labelsize=TICK_LABEL_FONTSIZE)
