@@ -144,6 +144,11 @@ def create_weather_regime_blackout_plot(
         for i in range(len(blackout_centers)):
             low = blackout_bins[i]
             high = blackout_bins[i + 1]
+            # The last bin is closed on the right. Bins are otherwise half-open, but a
+            # fully blacked-out split sits exactly on (or one ulp above) the final edge, so
+            # a strict "< high" would silently drop precisely the total blackouts. Clipping
+            # the values alone cannot fix this — a clipped 100 still fails "< 100".
+            is_last_bin = i == len(blackout_centers) - 1
             color = cmap(
                 i / (len(blackout_centers) + 1) + (1 / (len(blackout_centers) + 1))
             )
@@ -161,8 +166,13 @@ def create_weather_regime_blackout_plot(
                 if total_weight <= 0:
                     counts_by_regime.append(np.nan)
                     continue
-                mask = (subset.lost_load_share_blackout.values * 100 >= low) & (
-                    subset.lost_load_share_blackout.values * 100 < high
+                # Clipped as well: the closed last bin catches an exact 100, the clip the
+                # one-ulp overshoot above it (see data_handling.clip_to_bin_range).
+                blackout_pct = data_handling.clip_to_bin_range(
+                    subset.lost_load_share_blackout.values * 100, blackout_bins
+                )
+                mask = (blackout_pct >= low) & (
+                    (blackout_pct <= high) if is_last_bin else (blackout_pct < high)
                 )
                 bin_weight = subset.loc[mask, "total_weighting"].sum()
                 value = bin_weight / total_weight
@@ -287,8 +297,11 @@ def create_blackout_statistics_plot(
         solar_capacity_gw[co2l] = p_nom.loc[solar_mask].sum() / 1000.0
         wind_capacity_gw[co2l] = p_nom.loc[wind_mask].sum() / 1000.0
 
-        vals = (
-            split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
+        # Clipped into the bin range, else the total-blackout splits are silently dropped
+        # from the last bin (see data_handling.clip_to_bin_range).
+        vals = data_handling.clip_to_bin_range(
+            split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100,
+            bins,
         )
         counts, _ = np.histogram(
             vals,
@@ -527,7 +540,12 @@ def create_capacity_factor_grid(
                 ax.set_axis_off()
                 continue
 
-            blackout_vals = props.lost_load_share_blackout.values * 100
+            # Clipped into the bin range so the total-blackout splits are not silently
+            # dropped from the last bin (see data_handling.clip_to_bin_range); the loop
+            # below additionally closes that bin on the right.
+            blackout_vals = data_handling.clip_to_bin_range(
+                props.lost_load_share_blackout.values * 100, blackout_bins
+            )
             weights = props.total_weighting.values
 
             freq_counts = None
@@ -547,7 +565,11 @@ def create_capacity_factor_grid(
             for i in range(len(blackout_centers)):
                 low = blackout_bins[i]
                 high = blackout_bins[i + 1]
-                mask = (blackout_vals >= low) & (blackout_vals < high)
+                # Last bin closed on the right — see the note in the regime plot above.
+                is_last_bin = i == len(blackout_centers) - 1
+                mask = (blackout_vals >= low) & (
+                    (blackout_vals <= high) if is_last_bin else (blackout_vals < high)
+                )
                 if not np.any(mask):
                     continue
                 counts, _ = np.histogram(

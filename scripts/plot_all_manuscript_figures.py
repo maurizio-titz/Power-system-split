@@ -25,6 +25,8 @@ from scripts.plots.plot_split_statistics import plot_blackout_size_histograms, p
 from scripts.plots.plot_inertia_by_country import create_inertia_by_country_all_co2_plot
 from scripts.plots.plot_compare_lineMitigation_plannedExtension import plot_planned_line_extensions_single_co2, run_planned_extension_comparison
 
+from scripts.plots.plot_rocof_statistics import plot_split_risk_categories_across_rocof_thresholds
+
 # Paths
 from utils.config import path_to_plot_data, path_to_line_extension_mitigation_sclopf
 
@@ -173,7 +175,8 @@ def plot_supplementary_figures(low_memory: bool = False):
                     "scripts/plots/plot_individual_cluster.py"])
     
     # Blackout Statistics same vs different corridor
-    create_blackout_statistics_common_vs_different_corridor_plot(save_prefix="SI")
+    create_blackout_statistics_common_vs_different_corridor_plot(save_prefix="SI", 
+                                                                 show_number_and_normalized=True)
     
     # Total inertia placed per country to compare with ENTSO-E results
     create_inertia_by_country_all_co2_plot(
@@ -207,7 +210,7 @@ def plot_supplementary_figures(low_memory: bool = False):
     )
     
     # Sensitivity analysis of different RoCoF levels
-    
+    plot_split_risk_categories_across_rocof_thresholds(save_fig=True)
     
     return
 

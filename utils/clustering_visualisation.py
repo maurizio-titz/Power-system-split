@@ -18,7 +18,7 @@ from matplotlib import colors
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
-from utils.data_handling import get_actual_co2_level
+from utils.data_handling import clip_to_bin_range, get_actual_co2_level
 from utils.config import (
     path_to_clustering_results_sclopf,
     path_to_evaluation_results_sclopf,
@@ -1100,29 +1100,37 @@ def plot_group_lost_load_hist_by_co2_single(
             for i in range(len(co2_lvls_hist))
         ]
         n_bins = 5
+        hist_bins = np.linspace(0, 100, n_bins + 1)
+        # Clipped into the bin range, else the total-blackout splits are silently dropped
+        # from the last bin (see data_handling.clip_to_bin_range).
         ax.hist(
-            lost_loads_lvl,
+            [clip_to_bin_range(v, hist_bins) for v in lost_loads_lvl],
             weights=weights_data,
             label=[
                 f"CO2={get_actual_co2_level(co2, percent=True)}%"
                 for co2 in co2_lvls_hist
             ],
-            bins=np.linspace(0, 100, n_bins + 1),
+            bins=hist_bins,
             alpha=0.8,
             log=True,
             color=colors,
             histtype="bar",
         )
     else:
+        hist_bins = np.linspace(0, 100, 21)
         for i, co2l_ind in enumerate(co2l_inds_hist):
             co2 = co2_lvls_hist[i]
             c = get_color_from_cmap(co2, co2ls, cmap)
+            # No further scaling here: lost_loads_lvl is already in percent (converted
+            # above). Multiplying by 100 a second time put the values on a 0-10000 range
+            # against these 0-100 bins, so every split above 1% load loss fell outside the
+            # range and was silently discarded by hist.
             ax.hist(
-                np.array(lost_loads_lvl[i]) * 100,
+                clip_to_bin_range(lost_loads_lvl[i], hist_bins),
                 weights=weights[group_mask & masks_sig_to_co2[co2l_ind]]
                 / (n_failures_weighted),
                 label=f"CO2={get_actual_co2_level(co2, percent=True)}%",
-                bins=np.linspace(0, 100, 21),
+                bins=hist_bins,
                 alpha=alphas[i],
                 log=True,
                 color=c,
@@ -1183,15 +1191,19 @@ def plot_group_lost_load_hist_by_co2(
             1, len(co2_lvls_hist), figsize=(len(co2_lvls_hist) * 3, 3), sharey=True
         )
     # fig, axes = plt.subplots(len(co2_lvls_hist),1, figsize=(3, 3), sharey=True)
+    # Bin edges 0, 5, ..., 100. Previously np.arange(0, 100, 5), whose last edge is 95 --
+    # np.arange excludes its stop value -- so every split at or above 95% load loss lay
+    # outside the range and was silently discarded by hist.
+    hist_bins = np.linspace(0, 100, 21)
     for i, (co2l_ind, ax) in enumerate(zip(co2l_inds_hist, axes[::-1])):
         co2 = co2_lvls_hist[i]
         ax.hist(
-            np.array(lost_loads_lvl[i]) * 100,
+            clip_to_bin_range(np.array(lost_loads_lvl[i]) * 100, hist_bins),
             weights=weights[group_mask & masks_sig_to_co2[co2l_ind]]
             / n_snapshots_weighted
             / 100,
             label=f"CO2={co2*100}%",
-            bins=np.arange(0, 100, 5),
+            bins=hist_bins,
             alpha=0.5,
             log=True,
             color=colors[i],

@@ -260,9 +260,12 @@ def create_combined_flow_and_split_statistics_plot(
         bin_centers = 0.5 * (bins[:-1] + bins[1:])
         data = []
         for co2l in co2ls[::-1]:
-            vals = (
+            # Clipped into the bin range, else the total-blackout splits are silently
+            # dropped from the last bin (see data_handling.clip_to_bin_range).
+            vals = data_handling.clip_to_bin_range(
                 split_props[split_props.co2l == co2l].lost_load_share_blackout.values
-                * 100
+                * 100,
+                bins,
             )
             counts, _ = np.histogram(vals, bins=bins)
             data.append(counts)

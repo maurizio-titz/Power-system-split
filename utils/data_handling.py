@@ -700,3 +700,51 @@ def get_actual_co2_level(lvls, n_nodes=600, percent=False) -> np.ndarray:
         lvls_actual = (lvls_actual * 100).round().astype(int)
 
     return lvls_actual
+
+
+def clip_to_bin_range(values, bins):
+    """Clip ``values`` into ``[bins[0], bins[-1]]`` so histogramming cannot silently drop
+    them.
+
+    Load-share quantities such as ``lost_load_share_blackout`` are sums of per-component
+    shares and are mathematically bounded by 1 (100 %), but a fully blacked-out split only
+    reaches that bound up to binary floating-point rounding — the observed maximum over the
+    600-node dataset is ``1.0000000000000004``, one ulp above 1. Scaled to percent that is
+    ``100.00000000000004``, which lies outside a bin range whose last edge is 100.
+    ``np.histogram`` discards out-of-range values without warning, so exactly the
+    total-blackout splits — the most severe events — would vanish from the last bin.
+
+    Clipping (rather than rounding, or widening the last edge) puts those values in the bin
+    they semantically belong to and also absorbs any ``-0.0``-style undershoot at the bottom
+    edge. Values genuinely outside the range would be clamped too, so only use this where the
+    range is known to bound the data.
+
+    **Only apply this where the upper edge is the physical maximum of the quantity** — 1 for
+    a share, 100 for a percent. Where a plot caps the axis below that (a zoomed ``xlims``, an
+    upper edge taken from the data maximum), values above the cap are deliberately out of
+    view and clipping would misrepresent them as in-range.
+
+    The two edges are treated differently, because they mean different things:
+
+    - The **upper** edge is always enforced. It is the bound the data cannot physically
+      exceed, so anything past it is the rounding artefact described above.
+    - The **lower** edge is enforced only when it is 0, the physical minimum. A positive
+      lower edge (a log axis starting at 1e-2, say) is a display cut-off, and the splits
+      below it are genuinely smaller — clamping would pile them into the first bin instead
+      of leaving them out.
+
+    Note that clipping alone does not help bin membership tests written as
+    ``(v >= low) & (v < high)``: a value of exactly ``bins[-1]`` still fails the strict upper
+    comparison. Such loops must additionally close their final bin.
+
+    See ``docs/rocof_threshold_split_risk_debugging.md`` for the diagnosis and the measured
+    impact.
+
+    Args:
+        values: array-like of values about to be histogrammed.
+        bins: the bin edges they will be histogrammed into (only first and last are used).
+
+    Returns:
+        np.ndarray: ``values`` clipped at ``bins[-1]``, and at ``bins[0]`` when that is 0.
+    """
+    return np.clip(values, bins[0] if bins[0] == 0 else None, bins[-1])

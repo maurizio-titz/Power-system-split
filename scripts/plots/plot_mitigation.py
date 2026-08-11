@@ -1287,6 +1287,17 @@ def blackout_size_histogram_after_mitigation(
     ax_ls_inertia = ax_arr[:, 0].flatten()
     
     bins = np.linspace(min(xlims), max(xlims), n_bins)
+
+    def _clip_vals(vals):
+        """Clip into the bin range so the total-blackout splits are not silently dropped
+        from the last bin (see ``data_handling.clip_to_bin_range``).
+
+        Applied whenever the axis reaches 100 %, the physical maximum, which is the
+        default. An ``xlims`` capping below that is a deliberately narrowed window and
+        splits above the cap are meant to stay out of view, so they are not clamped in."""
+        if max(xlims) == 100:
+            return data_handling.clip_to_bin_range(vals, bins)
+        return np.asarray(vals)
     
     ## Orignal Plots
     all_counts = list()
@@ -1297,10 +1308,9 @@ def blackout_size_histogram_after_mitigation(
         pbar.update()
         co2_mask = split_props.co2l == co2l_r
         split_props_co2 = split_props[co2_mask]
-        vals =(
-            split_props_co2.lost_load_share_blackout.values * 100.
-        )
-        
+        vals = _clip_vals(split_props_co2.lost_load_share_blackout.values * 100.)
+
+
         ax_ls_line[idx].hist(vals, bins=bins, 
                             weights=split_props_co2.total_weighting,
                             alpha=alpha, 
@@ -1342,7 +1352,9 @@ def blackout_size_histogram_after_mitigation(
             
             split_props_co2_lines = split_props_co2[~mask_sprops_lines]
             
-            vals_lines = split_props_co2_lines.lost_load_share_blackout.values * 100.
+            vals_lines = _clip_vals(
+                split_props_co2_lines.lost_load_share_blackout.values * 100.
+            )
             
             ax_ls_line[idx].hist(vals_lines, bins=bins,
                                 weights=split_props_co2_lines.total_weighting,
@@ -1478,7 +1490,9 @@ def blackout_size_histogram_after_mitigation(
             )
 
             # Plot it
-            vals_inertia = inertia_split_props_r.lost_load_share_blackout * 100.
+            vals_inertia = _clip_vals(
+                inertia_split_props_r.lost_load_share_blackout.values * 100.
+            )
             
             #color_i_r = f"C{idx_budget_i + 1}"
             ax_ls_inertia[idx].hist(vals_inertia, bins=bins,

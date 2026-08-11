@@ -467,13 +467,21 @@ def _split_props_fpath(rocof_r, n_nodes):
 def _split_counts_per_co2(fpath, co2ls_desc, bins):
     """Histogram each CO2 level's ``lost_load_share_blackout`` (in %) into ``bins``.
 
+    The values are clipped into the bin range first (see
+    ``data_handling.clip_to_bin_range``), otherwise the total-blackout splits are silently
+    dropped from the last bin. The bias this removes is threshold-dependent (~50k splits at
+    |RoCoF|_crit = 0.8 Hz/s, fewer at higher thresholds), so it does not cancel when
+    thresholds are compared.
+
     Returns a DataFrame indexed by ``co2ls_desc`` with the bin centers as columns."""
     split_props = pd.read_hdf(fpath)
     lost = split_props.lost_load_share_blackout.astype(float)
     bin_centers = 0.5 * (bins[:-1] + bins[1:])
     data = []
     for co2l in co2ls_desc:
-        vals = lost[split_props.co2l == co2l].values * 100
+        vals = data_handling.clip_to_bin_range(
+            lost[split_props.co2l == co2l].values * 100, bins
+        )
         counts, _ = np.histogram(vals, bins=bins)
         data.append(counts)
     return pd.DataFrame(np.stack(data), index=co2ls_desc, columns=bin_centers)

@@ -161,9 +161,12 @@ def create_split_statistics_plot(
         bin_centers = 0.5 * (bins[:-1] + bins[1:])
         data = []
         for co2l in co2ls[::-1]:
-            vals = (
+            # Clipped into the bin range, else the total-blackout splits are silently
+            # dropped from the last bin (see data_handling.clip_to_bin_range).
+            vals = data_handling.clip_to_bin_range(
                 split_props[split_props.co2l == co2l].lost_load_share_blackout.values
-                * 100
+                * 100,
+                bins,
             )
             counts, _ = np.histogram(vals, bins=bins)
             data.append(counts)
@@ -438,8 +441,12 @@ def create_blackout_statistics_plot(
     bin_centers = 0.5 * (bins[:-1] + bins[1:])
     data = []
     for co2l in co2ls[::-1]:
-        vals = (
-            split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
+        # Clipped into the bin range, else the total-blackout splits are silently dropped
+        # from the last bin — here together with their weight (see
+        # data_handling.clip_to_bin_range).
+        vals = data_handling.clip_to_bin_range(
+            split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100,
+            bins,
         )
         counts, _ = np.histogram(
             vals,
@@ -606,8 +613,16 @@ def ax_blackout_size_histogram(ax,
         bin_arr = np.linspace(min(bin_edges), 
                               max(bin_edges), n_bins)
             
+    # Clipped whenever the axis reaches 1, the physical maximum of a load share: a fully
+    # blacked-out split reaches it only up to floating point (1.0000000000000004 occurs) and
+    # would otherwise be dropped from the last bin (see data_handling.clip_to_bin_range).
+    # With use_total_lost_load the upper edge is the data maximum in MW, and caller-given
+    # bin_edges may cap below 1, so those are left alone.
+    if bin_arr[-1] == 1:
+        lost_load_val = data_handling.clip_to_bin_range(lost_load_val, bin_arr)
+
     # Plot it
-    ax.hist(lost_load_val, 
+    ax.hist(lost_load_val,
             weights=split_props_df_cut.total_weighting,
             bins=bin_arr, histtype="step", color=color,
             linewidth=linewidth,
@@ -693,6 +708,13 @@ def plot_blackout_size_histograms(
             vals = (
             split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
         )
+            # Clipped whenever the axis reaches the physical maximum of 100 %, which covers
+            # both the linear default and the log variant ending at 1e2 — otherwise the
+            # total-blackout splits are silently dropped from the last bin. A zoomed xlims
+            # capping below 100 is left alone, since splits above the cap are meant to be
+            # out of view (see data_handling.clip_to_bin_range).
+            if bins[-1] == 100:
+                vals = data_handling.clip_to_bin_range(vals, bins)
         counts, _ = np.histogram(
             vals,
             weights=split_props[split_props.co2l == co2l].total_weighting,
@@ -715,6 +737,9 @@ def plot_blackout_size_histograms(
         vals = (
             split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
         )
+        # Same clip as the counting pass above, so the drawn bars match the y-limits.
+        if bins[-1] == 100:
+            vals = data_handling.clip_to_bin_range(vals, bins)
         ax.hist(
             vals,
             weights=split_props[split_props.co2l == co2l].total_weighting,
@@ -942,15 +967,21 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
     
     for co2l_r in tqdm(co2_lvls_all, total=len(co2_lvls_all), desc="CO2 Lvls"):
         split_props_same_co2r = split_props_same[split_props_same.co2l == co2l_r]
-        vals = split_props_same_co2r.lost_load_share_blackout.values * 100.
-        
+        # Clipped into the bin range, else the total-blackout splits are silently dropped
+        # from the last bin (see data_handling.clip_to_bin_range).
+        vals = data_handling.clip_to_bin_range(
+            split_props_same_co2r.lost_load_share_blackout.values * 100., bins
+        )
+
         counts_same, _ = np.histogram(vals, bins=bins, weights=split_props_same_co2r.total_weighting)
-            
+
         split_props_different_co2_r = split_props_different[split_props_different.co2l == co2l_r]
-        
-        vals = split_props_different_co2_r.lost_load_share_blackout.values * 100.
-        
-        counts_different, _ = np.histogram(vals, bins=bins, 
+
+        vals = data_handling.clip_to_bin_range(
+            split_props_different_co2_r.lost_load_share_blackout.values * 100., bins
+        )
+
+        counts_different, _ = np.histogram(vals, bins=bins,
                                            weights=split_props_different_co2_r.total_weighting)
         
         if show_number_and_normalized:
@@ -1249,6 +1280,10 @@ def plot_component_number_vs_blackout_size(
 
     # bins
     lls_bins = np.linspace(0, 100, 11)
+    # Clipped into the bin range, else the total-blackout splits are silently dropped —
+    # here from the last column *and* from the column sums used to normalize below (see
+    # data_handling.clip_to_bin_range).
+    lls = data_handling.clip_to_bin_range(lls, lls_bins)
     n_comp_bins = np.unique(
         np.round(
             np.logspace(np.log10(np.nanmin(n_comp)), np.log10(np.nanmax(n_comp)), 11)
