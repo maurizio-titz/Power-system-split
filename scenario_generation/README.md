@@ -1,10 +1,5 @@
-<!--
-SPDX-FileCopyrightText: Martha Frysztacki (KIT, OET)
 
-SPDX-License-Identifier: MIT
--->
-
-# Repository Structure
+# Structure of Scenario 
 
 - `workflow` contains the all relevant data, configuration files, scripts, and submodules.
 - `workflow/configs` contains all relevant configuration files. `config.yaml` is the configuration file to create networks within PyPSA-Eur, `config.sclopf.yaml` is the configuration file used for the sclopf. 

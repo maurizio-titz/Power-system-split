@@ -1,12 +1,13 @@
 [project]
 name = "power-system-split"
-version = "0.1.0"
+version = "0.1.1"
 description = "Determine the likelihood and severity of system splits."
 readme = "README.md"
+license = "MIT"
 authors = [
+    {name = "Maurizio Titz"},
     {name = "Franz Kaiser"},
     {name = "Johannes Kruse"},
-    {name = "Maurizio Titz"},
     {name = "Philipp C. Böttcher"},
     {name = "Jan Lange"},
     {name = "Martha Frysztacki"}
