@@ -23,7 +23,7 @@ from utils.clustering_visualisation import plot_clusters_wrapper
 from utils.config import (
     path_to_clustering_results_sclopf,
     path_to_pypsa_network_sclopf,
-    path_to_sclopf_data,
+    path_to_pypsa_network_sclopf,
     path_to_sclopf_results,
 )
 

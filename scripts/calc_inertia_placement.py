@@ -14,7 +14,7 @@ from utils.synthetic_inertia_placement import (
     run_different_parameters_for_co2lvl,
     run_specific_co2lvl_n_size,
 )
-from utils.config import path_to_sclopf_data
+from utils.config import path_to_pypsa_network_sclopf
 import datetime
 import os
 

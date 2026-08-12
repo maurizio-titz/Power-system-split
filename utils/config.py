@@ -13,11 +13,9 @@ root_path = project_folder_path
 data_path = root_path + "/data"
 path_to_grid_data = root_path + "/results/grid_params"
 results_path = root_path + "/results"
-path_to_sclopf_data = data_path + "/European_networks_sclopf"
-path_to_lopf_data = data_path + "/European_networks_lopf"
 
 # lopf paths
-path_to_pypsa_network_lopf = data_path + "/European_networks_sclopf"
+path_to_pypsa_network_lopf = data_path + "/European_networks_lopf"
 path_to_lopf_results = results_path + "/lopf"
 path_to_cascade_results_lopf = path_to_lopf_results + "/cascade_results"
 
@@ -62,7 +60,7 @@ mattermost_url = None
 def setup_results_default_folders_sclopf():
     """Create default folder structure."""
     
-    list_folders = [data_path, path_to_grid_data, results_path, path_to_sclopf_data,
+    list_folders = [data_path, path_to_grid_data, results_path,
                     path_to_sclopf_results, path_to_indicator_vectors_sclopf,
                     path_to_clustering_results_sclopf, path_to_cascade_results_sclopf,
                     path_to_evaluation_results_sclopf, path_to_pypsa_network_sclopf,

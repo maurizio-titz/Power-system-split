@@ -987,7 +987,7 @@ def evaluate_cascade_wrapper(
 
 if __name__ == "__main__":
     import argparse
-    from utils.config import path_to_sclopf_data
+    from utils.config import path_to_pypsa_network_sclopf
     import os
 
     # Parse command line arguments
