@@ -658,9 +658,8 @@ def get_co2_levels(n_nodes, ignore_lvls=()):
     Returns:
         np.array: Sorted array of CO2 levels (descending)
     """
-    from utils.config import path_to_sclopf_data
 
-    sclopf_files = os.listdir(path_to_sclopf_data)
+    sclopf_files = os.listdir(path_to_pypsa_network_sclopf)
     sclopf_files = [file for file in sclopf_files if f"_{n_nodes}_" in file]
     co2l_list = [float(file.split("Co2L")[-1].split("-")[0]) for file in sclopf_files]
     co2l_list = sorted(list(set(co2l_list)), reverse=True)
