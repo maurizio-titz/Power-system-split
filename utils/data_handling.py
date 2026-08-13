@@ -747,3 +747,47 @@ def clip_to_bin_range(values, bins):
         np.ndarray: ``values`` clipped at ``bins[-1]``, and at ``bins[0]`` when that is 0.
     """
     return np.clip(values, bins[0] if bins[0] == 0 else None, bins[-1])
+
+
+def warn_if_out_of_bin_range(values, bins, context=""):
+    """Log a warning when finite ``values`` fall outside ``[bins[0], bins[-1]]``.
+
+    ``np.histogram`` and ``ax.hist`` discard out-of-range values without any signal, which is
+    what let the total-blackout splits vanish from the load-share histograms unnoticed (see
+    ``clip_to_bin_range``). This is the diagnostic counterpart: it does not change the data,
+    it only makes the silent drop visible.
+
+    Use it next to any histogram whose range is fixed rather than derived from the data.
+    Where the upper edge is the physical maximum of the quantity, ``clip_to_bin_range`` is
+    the fix and this guard is redundant; where the edge merely happens to bound the data
+    today — a line loading that is ``|flow| / limit`` from a re-solved load flow, say —
+    clipping would be wrong and this warning is what you want instead.
+
+    NaN and inf are ignored rather than counted, since they are dropped by the histogram for
+    a different reason and would drown out the signal this is looking for.
+
+    Args:
+        values: array-like of values about to be histogrammed.
+        bins: the bin edges they will be histogrammed into (only first and last are used).
+        context (str): name of the calling plot, used in the warning message.
+
+    Returns:
+        int: how many finite values lie outside the range. 0 if the range covers the data.
+    """
+    finite_vals = np.asarray(values, dtype=float).ravel()
+    finite_vals = finite_vals[np.isfinite(finite_vals)]
+
+    if finite_vals.size == 0:
+        return 0
+
+    low, high = bins[0], bins[-1]
+    n_out = int(np.count_nonzero((finite_vals < low) | (finite_vals > high)))
+
+    if n_out:
+        logger.warning(
+            f"{context or 'histogram'}: {n_out} of {finite_vals.size} values lie outside "
+            f"the bin range [{low}, {high}] and are dropped silently "
+            f"(data range [{finite_vals.min()}, {finite_vals.max()}])."
+        )
+
+    return n_out

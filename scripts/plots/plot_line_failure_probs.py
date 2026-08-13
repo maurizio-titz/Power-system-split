@@ -804,6 +804,14 @@ def create_total_line_failure_plot(
                 # Concat all line loadings
                 all_line_loadings = [item for sublist in line_loading_dict.values() for item in sublist]
                 
+                # Fixed bin range, so out-of-range loadings would be dropped silently. Not
+                # clipped: line loading comes from a re-solved load flow and is not bounded
+                # by 1 the way a load share is (see data_handling.warn_if_out_of_bin_range).
+                data_handling.warn_if_out_of_bin_range(
+                    all_line_loadings, line_loading_bins,
+                    context=f"line loading histogram (Co2L={co2l:.2f})",
+                )
+
                 axs_bottom.hist(all_line_loadings, bins=line_loading_bins,
                                 histtype='step', density=True,
                                 color=color_r,
@@ -842,6 +850,12 @@ def create_total_line_failure_plot(
                         
                 all_line_loadings = [item for sublist in line_loading_dict.values() for item in sublist]
                 
+                # Same guard as in the "line_loading" branch above.
+                data_handling.warn_if_out_of_bin_range(
+                    all_line_loadings, line_loading_bins,
+                    context=f"line loading histogram (Co2L={co2l:.2f})",
+                )
+
                 axs_bottom_line_loading.hist(all_line_loadings, bins=line_loading_bins,
                                              histtype='step', density=False,
                                              color=color_r,

@@ -9,8 +9,8 @@ import gzip
 import pickle
 
 from utils.data_handling import \
-    (load_pypsa_network, build_networkx_graph, 
-     get_co2_levels, get_actual_co2_level)
+    (load_pypsa_network, build_networkx_graph,
+     get_co2_levels, get_actual_co2_level, warn_if_out_of_bin_range)
 
 from utils.plot_style import *
 setup_matplotlib_style()
@@ -87,9 +87,18 @@ def histogram_lineloading_accross_co2lvls(n_nodes: int = 600,
         color_r = cmap_co2(np.where(available_co2_lvls == key_r)[0][0] / (len(co2ls) - 1))
         
         all_line_loadings = [item for sublist in ll_dict_r.values() for item in sublist]
+        # The bin range is fixed, not derived from the data. Line loading is |flow| divided
+        # by the line limit from a re-solved load flow, so it is not guaranteed to stay
+        # within bin_range the way a load share is bounded by 1 — clipping would misreport a
+        # genuine overload as exactly fully loaded. Warn instead, so a dropped tail shows up
+        # in the log rather than silently thinning the histogram.
+        warn_if_out_of_bin_range(
+            all_line_loadings, line_loading_bins,
+            context=f"histogram_lineloading_accross_co2lvls (Co2L={key_r:.2f})",
+        )
         ax.hist(all_line_loadings, bins=line_loading_bins,
                 histtype='step', density=True,
-                color=color_r, 
+                color=color_r,
                 linewidth=LINE_WIDTH, label=f"{key_r * 100}\\%")
     
     # Aesthetics

@@ -597,13 +597,18 @@ def ax_blackout_size_histogram(ax,
                 bin_edges = (1, lost_load_val.max())
             else:
                 bin_edges = (0, lost_load_val.max())
-    else: 
+    else:
         if bin_edges is None:
             if xscale_log:
-                bin_edges = (1, 0)
+                # A log axis cannot start at 0. The previous (1, 0) put np.log10(0) = -inf
+                # into the logspace below, which yields an all-NaN bin array and an empty
+                # histogram rather than an error. 1e-4 in share units is the same lower
+                # cut-off plot_blackout_size_histograms uses with its xlims=(1e-2, 1e2) in
+                # percent.
+                bin_edges = (1e-4, 1)
             else:
                 bin_edges = (0, 1)
-       
+
     if xscale_log:
         bin_arr = np.logspace(np.log10(min(bin_edges)), 
                               np.log10(max(bin_edges)), 
