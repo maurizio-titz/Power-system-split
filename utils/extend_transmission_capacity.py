@@ -18,6 +18,7 @@ from utils.config import (
     path_to_line_extension_mitigation_sclopf,
 )
 from utils.data_handling import get_matrices_from_nx_graph, nx_edges_to_matrix_indices
+from utils.normalize_split_risk import total_snapshot_weight, weighted_trigger_count
 from utils.visualization import calc_likelihood_failure
 
 if not os.path.exists(path_to_line_extension_mitigation_sclopf):
@@ -174,9 +175,11 @@ def increase_capacity_most_important_lines(
     nr_failures = calc_possible_double_line_failures(
         num_parallels, ignored_idxs=bridge_idxs
     )
-    number_simulations = (
-        len(nr_failures) * pypsa_net.snapshot_weightings.generators.sum()
-    )
+    # Recomputed from nx_graph_in rather than read from the cache: this graph may already
+    # carry extensions, which change num_parallel and thus the contingency set.
+    number_simulations = weighted_trigger_count(
+        nr_failures, same_corridor=None
+    ) * total_snapshot_weight(network=pypsa_net)
 
     if extension_type == "most_likely_primary":
         # List with edges to extend

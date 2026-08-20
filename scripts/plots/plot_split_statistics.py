@@ -4,8 +4,6 @@ Split Statistics Plot - Figure 5: split statistics
 Creates histograms of power imbalance, rotational energy, and loss of load share distributions.
 """
 
-import gzip
-import pickle
 import sys
 import copy
 import os
@@ -13,7 +11,6 @@ import warnings
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-import networkx as nx
 import pandas as pd
 import numpy as np
 import pypsa
@@ -36,7 +33,7 @@ from utils.config import (
     path_to_figures_sclopf,
     path_to_vis_results_sclopf,
 )
-from utils import data_handling, cascade_simulation
+from utils import data_handling, normalize_split_risk
 from utils.plot_style import (
     setup_matplotlib_style,
     AXIS_LABEL_FONTSIZE,
@@ -67,23 +64,13 @@ def create_split_statistics_plot(
     save_path = path_to_figures_sclopf
     os.makedirs(save_path, exist_ok=True)
 
-    # Load network
+    # Load network. Its CO2 level also identifies the contingency set used to normalize the
+    # split counts in panel c.
+    co2l_reference = 0.1
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_reference}-2920SEG.nc",
         True,
-    )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index='0')
-    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
-        nx_graph
-    )
-
-    # Determine number of simulations
-    bridge_idxs = data_handling.nx_edges_to_matrix_indices(
-        nx.bridges(nx_graph), nx_graph
-    )
-    n_2_failures = cascade_simulation.calc_possible_double_line_failures(
-        num_parallels, ignored_idxs=bridge_idxs
     )
 
     # Get CO2 levels
@@ -112,6 +99,10 @@ def create_split_statistics_plot(
     # Add snapshot weighting
     component_props["total_weighting"] = (
         component_props["snapshot_weighting"] * component_props["trigger_weighting"]
+    )
+
+    split_props["total_weighting"] = (
+        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
     )
 
     # Setup matplotlib styling
@@ -161,14 +152,16 @@ def create_split_statistics_plot(
         bin_centers = 0.5 * (bins[:-1] + bins[1:])
         data = []
         for co2l in co2ls[::-1]:
-            # Clipped into the bin range, else the total-blackout splits are silently
-            # dropped from the last bin (see data_handling.clip_to_bin_range).
+            split_props_co2 = split_props[split_props.co2l == co2l]
+            # Clip into the bin range so total-blackout splits land in the last bin.
             vals = data_handling.clip_to_bin_range(
-                split_props[split_props.co2l == co2l].lost_load_share_blackout.values
-                * 100,
+                split_props_co2.lost_load_share_blackout.values * 100,
                 bins,
             )
-            counts, _ = np.histogram(vals, bins=bins)
+            # Weighted like the denominator: trigger_weighting × snapshot_weighting.
+            counts, _ = np.histogram(
+                vals, bins=bins, weights=split_props_co2.total_weighting
+            )
             data.append(counts)
 
         data = np.stack(data)
@@ -209,15 +202,16 @@ def create_split_statistics_plot(
         if secondary_proba_axis:
             # add secondary axis for fraction of total simulations
             ax3_num_splits_secondary = ax3_num_splits.twinx()
+            contingency_norm = normalize_split_risk.contingency_normalization(
+                co2l_reference, network=network, same_corridor=None
+            )
             for i, bin_center in enumerate(bin_centers):
                 color = cmap(i / (len(bin_centers) + 1) + (1 / (len(bin_centers) + 1)))
                 counts = data.loc[:, bin_center]
                 # plot invisible lines to set the ticks
                 plt.plot(
                     get_actual_co2_level(co2ls[::-1], percent=True),
-                    counts
-                    / len(n_2_failures)
-                    / network.snapshot_weightings.generators.sum(),
+                    counts / contingency_norm,
                     label=rf"{bins[i]}-{bins[i+1]}\%",
                     alpha=0.0,
                 )
@@ -441,9 +435,7 @@ def create_blackout_statistics_plot(
     bin_centers = 0.5 * (bins[:-1] + bins[1:])
     data = []
     for co2l in co2ls[::-1]:
-        # Clipped into the bin range, else the total-blackout splits are silently dropped
-        # from the last bin — here together with their weight (see
-        # data_handling.clip_to_bin_range).
+        # Clip into the bin range so total-blackout splits land in the last bin.
         vals = data_handling.clip_to_bin_range(
             split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100,
             bins,
@@ -455,42 +447,19 @@ def create_blackout_statistics_plot(
         )
         data.append(counts)
         if normalize_by_total_splits:
-            file_path = (
-                data_handling.path_to_grid_data + f"/n_2_failures_co2lvl{co2l}.pklz"
-            )
-            with gzip.open(file_path, "rb") as fh:
-                n_2_failures = pickle.load(fh)
             network = data_handling.load_pypsa_network(
                 n_nodes=n_nodes,
                 co2lvl=co2l,
                 use_sclopf=True,
                 lopt=False,
             )
-            if same_corridor is not None:
-                n_2_failures = [
-                    n2_failure
-                    for n2_failure in n_2_failures
-                    if (n2_failure["failures"][0][0] == n2_failure["failures"][1][0])
-                    is same_corridor
-                ]
-                weighted_trigger_count = sum(
-                    [initial_failure["weight"] for initial_failure in n_2_failures]
-                )
-                # incorporating the weighting of the snapshots
-                number_of_simulations = (
-                    weighted_trigger_count
-                    * network.snapshot_weightings.generators.sum()
-                )
-            else:
-                weighted_trigger_count = sum(
-                    [initial_failure["weight"] for initial_failure in n_2_failures]
-                )
-                # incorporating the weighting of the snapshots
-                number_of_simulations = (
-                    weighted_trigger_count
-                    * network.snapshot_weightings.generators.sum()
-                )
-            total_counts = number_of_simulations
+            # recompute=False: only the snapshot weightings come from the network.
+            total_counts = normalize_split_risk.contingency_normalization(
+                co2l,
+                network=network,
+                same_corridor=same_corridor,
+                recompute=False,
+            )
             if total_counts > 0:
                 data[-1] = counts / total_counts
 
@@ -618,11 +587,7 @@ def ax_blackout_size_histogram(ax,
         bin_arr = np.linspace(min(bin_edges), 
                               max(bin_edges), n_bins)
             
-    # Clipped whenever the axis reaches 1, the physical maximum of a load share: a fully
-    # blacked-out split reaches it only up to floating point (1.0000000000000004 occurs) and
-    # would otherwise be dropped from the last bin (see data_handling.clip_to_bin_range).
-    # With use_total_lost_load the upper edge is the data maximum in MW, and caller-given
-    # bin_edges may cap below 1, so those are left alone.
+    # Clip only when the axis ends at 1, the physical maximum of a load share.
     if bin_arr[-1] == 1:
         lost_load_val = data_handling.clip_to_bin_range(lost_load_val, bin_arr)
 
@@ -713,11 +678,8 @@ def plot_blackout_size_histograms(
             vals = (
             split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
         )
-            # Clipped whenever the axis reaches the physical maximum of 100 %, which covers
-            # both the linear default and the log variant ending at 1e2 — otherwise the
-            # total-blackout splits are silently dropped from the last bin. A zoomed xlims
-            # capping below 100 is left alone, since splits above the cap are meant to be
-            # out of view (see data_handling.clip_to_bin_range).
+            # Clip only when the axis ends at 100 %, the physical maximum; a zoomed xlims
+            # is left alone.
             if bins[-1] == 100:
                 vals = data_handling.clip_to_bin_range(vals, bins)
         counts, _ = np.histogram(
@@ -742,7 +704,7 @@ def plot_blackout_size_histograms(
         vals = (
             split_props[split_props.co2l == co2l].lost_load_share_blackout.values * 100
         )
-        # Same clip as the counting pass above, so the drawn bars match the y-limits.
+        # Same clip as above, so the bars match the y-limits.
         if bins[-1] == 100:
             vals = data_handling.clip_to_bin_range(vals, bins)
         ax.hist(
@@ -934,32 +896,26 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
     
     # Find normalization factor if needed
     if use_normalized or show_number_and_normalized:
-        for idx_co2, co2l_r in enumerate(co2_lvls_all):
-            file_path = (
-                        os.path.join(data_handling.path_to_grid_data, f"n_2_failures_co2lvl{co2l_r}.pklz")
-                    )
-            with gzip.open(file_path, "rb") as fh_n2:
-                n_2_failures = pickle.load(fh_n2)
-                
-        
+        # One denominator per CO2 level.
+        number_of_simulations_same = dict()
+        number_of_simulations_different = dict()
+        for co2l_r in co2_lvls_all:
             network = data_handling.load_pypsa_network(n_nodes=n_nodes, co2lvl=co2l_r,
                                                     use_sclopf=True, lopt=False)
-            
-            n_2_failures_same = [n2_f for n2_f in n_2_failures 
-                                if (n2_f["failures"][0][0] == n2_f["failures"][1][0])]
-            n_2_failures_different = [n2_f for n2_f in n_2_failures 
-                                     if (n2_f["failures"][0][0] != n2_f["failures"][1][0])]   
-            
-            # Trigger and Snapshot weights
-            weighted_trigger_count_same = sum([init_failure["weight"] 
-                                               for init_failure in n_2_failures_same])
-            weighted_trigger_count_different = sum([init_failure["weight"] 
-                                               for init_failure in n_2_failures_different])
-            
-            number_of_simulations_same = weighted_trigger_count_same * network.snapshot_weightings.generators.sum()
-            number_of_simulations_different = weighted_trigger_count_different * network.snapshot_weightings.generators.sum()
-            
-            
+
+            # recompute=False: only the snapshot weightings come from the network.
+            number_of_simulations_same[co2l_r] = (
+                normalize_split_risk.contingency_normalization(
+                    co2l_r, network=network, same_corridor=True, recompute=False
+                )
+            )
+            number_of_simulations_different[co2l_r] = (
+                normalize_split_risk.contingency_normalization(
+                    co2l_r, network=network, same_corridor=False, recompute=False
+                )
+            )
+
+
     # Same + different corridor
     split_props_same = split_props[mask_same_corridor]
     split_props_different = split_props[~mask_same_corridor]
@@ -972,8 +928,7 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
     
     for co2l_r in tqdm(co2_lvls_all, total=len(co2_lvls_all), desc="CO2 Lvls"):
         split_props_same_co2r = split_props_same[split_props_same.co2l == co2l_r]
-        # Clipped into the bin range, else the total-blackout splits are silently dropped
-        # from the last bin (see data_handling.clip_to_bin_range).
+        # Clip into the bin range so total-blackout splits land in the last bin.
         vals = data_handling.clip_to_bin_range(
             split_props_same_co2r.lost_load_share_blackout.values * 100., bins
         )
@@ -993,12 +948,12 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
             data_same.append(counts_same)
             data_different.append(counts_different)
             
-            data_same_norm.append(counts_same / number_of_simulations_same) 
-            data_diff_norm.append(counts_different / number_of_simulations_different)
-            
+            data_same_norm.append(counts_same / number_of_simulations_same[co2l_r])
+            data_diff_norm.append(counts_different / number_of_simulations_different[co2l_r])
+
         elif use_normalized:
-            data_same.append(counts_same / number_of_simulations_same) 
-            data_different.append(counts_different / number_of_simulations_different)
+            data_same.append(counts_same / number_of_simulations_same[co2l_r])
+            data_different.append(counts_different / number_of_simulations_different[co2l_r])
         else:
             data_same.append(counts_same)
             data_different.append(counts_different)
@@ -1285,9 +1240,7 @@ def plot_component_number_vs_blackout_size(
 
     # bins
     lls_bins = np.linspace(0, 100, 11)
-    # Clipped into the bin range, else the total-blackout splits are silently dropped —
-    # here from the last column *and* from the column sums used to normalize below (see
-    # data_handling.clip_to_bin_range).
+    # Clip into the bin range: affects the last column and the column sums below.
     lls = data_handling.clip_to_bin_range(lls, lls_bins)
     n_comp_bins = np.unique(
         np.round(

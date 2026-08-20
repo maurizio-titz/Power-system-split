@@ -44,7 +44,7 @@ from utils.data_handling import get_co2_levels, get_actual_co2_level
 from utils.clustering_visualisation import *
 from utils import data_handling
 from utils.config import path_to_figures_sclopf, path_to_plot_data
-from utils import cascade_simulation
+from utils import normalize_split_risk
 from scripts.plots.plot_combined_generation_storage import LABEL_FONTSIZE
 from utils.plot_style import *
 
@@ -62,33 +62,24 @@ def load_clustering_data(
     """Load clustering data and network setup."""
     # Load network graph and node positions
     snet_index = '0'
-    network = data_handling.load_pypsa_network(0.6, n_nodes, True)
+    co2l_reference = 0.6
+    network = data_handling.load_pypsa_network(co2l_reference, n_nodes, True)
     nx_graph = data_handling.build_networkx_graph(network, snet_index=snet_index)
     pos = nx.get_node_attributes(nx_graph, "pos")
 
-    # Calculate failure statistics
-    I_m, B_d, num_parallels, line_limits = data_handling.get_matrices_from_nx_graph(
-        nx_graph
-    )
+    # Weighted contingency count; cached failures if available, recomputed otherwise.
     try:
-        file_path = data_handling.path_to_grid_data + f"/n_2_failures_co2lvl{0.0}.pklz"
-        with gzip.open(file_path, "rb") as fh:
-            n_2_failures = pickle.load(fh)
+        num_failures_weighted = normalize_split_risk.contingency_normalization(
+            co2l_reference, network=network, same_corridor=None, recompute=False
+        )
     except FileNotFoundError:
-        logger.warning("File not found. Fallback by creating possbile line failurres")
-        bridge_idxs = data_handling.nx_edges_to_matrix_indices(
-            nx.bridges(nx_graph), nx_graph
+        logger.warning(
+            "Cached double line failures not found. "
+            "Fallback by recomputing the possible line failures."
         )
-        n_2_failures = cascade_simulation.calc_possible_double_line_failures(
-            num_parallels, ignored_idxs=bridge_idxs
+        num_failures_weighted = normalize_split_risk.contingency_normalization(
+            co2l_reference, network=network, same_corridor=None, recompute=True
         )
-    weighted_trigger_count = sum(
-        [initial_failure["weight"] for initial_failure in n_2_failures]
-    )
-    # incorporating the weighting of the snapshots
-    num_failures_weighted = (
-        weighted_trigger_count * network.snapshot_weightings.generators
-    ).sum()
 
     return {
         "nx_graph": nx_graph,

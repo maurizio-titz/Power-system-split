@@ -26,7 +26,7 @@ from utils.alternative_split_indicator_vectors import (
     validate_rocofVec_splitProps_match,
 )
 from utils.data_handling import get_co2_levels
-from utils import cascade_simulation, data_handling
+from utils import data_handling, normalize_split_risk
 from utils import visualization as vis
 from utils.config import (
     path_to_cascade_results_sclopf,
@@ -229,16 +229,10 @@ for co2l in co2l_list:
     )
     if use_sclopf:
         if number_of_simulations is None:
-            n_2_failures = cascade_simulation.calc_possible_double_line_failures(
-                num_parallels, ignored_idxs=bridge_idxs
+            # weighted trigger count, incorporating the weighting of the snapshots
+            number_of_simulations = normalize_split_risk.contingency_normalization(
+                co2l, network=network, same_corridor=None
             )
-            weighted_trigger_count = sum(
-                [initial_failure["weight"] for initial_failure in n_2_failures]
-            )
-            # incorporating the weighting of the snapshots
-            number_of_simulations = (
-                weighted_trigger_count * network.snapshot_weightings.generators
-            ).sum()
     else:
         number_of_simulations = (
             nx_graph.number_of_edges() - len(bridge_idxs)

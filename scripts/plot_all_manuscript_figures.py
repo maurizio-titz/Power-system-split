@@ -46,7 +46,7 @@ def plot_manuscript_figures(
     
     # Fig. 2: Evolution of risks during decarbonistaion
     if low_memory:
-        logger.warning("Skipping 'Fig.2' + 'Fig.3' due to low memory!")
+        logger.warning("Skipping 'Fig.2' due to low memory!")
     else:
         create_combined_flow_and_split_statistics_plot(mean_distance=False, 
                                                    load_normalization=False, 

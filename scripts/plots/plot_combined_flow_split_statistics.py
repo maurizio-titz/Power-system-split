@@ -9,7 +9,6 @@ import warnings
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-import networkx as nx
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,7 +24,7 @@ from utils.config import (
     path_to_pre_outage_sclopf,
     path_to_vis_results_sclopf,
 )
-from utils import data_handling, cascade_simulation
+from utils import data_handling, normalize_split_risk
 from utils.plot_style import (
     setup_matplotlib_style,
     AXIS_LABEL_FONTSIZE,
@@ -52,13 +51,15 @@ def create_combined_flow_and_split_statistics_plot(
     save_path = path_to_figures_sclopf
     os.makedirs(save_path, exist_ok=True)
 
-    # Load network and data (flow/inertia)
+    # Load network and data (flow/inertia). The flow/inertia panels use this one reference
+    # network; its CO2 level also identifies the contingency set used to normalize the split
+    # counts in panel c.
+    co2l_reference = 0.1
     network = data_handling.load_pypsa_network_from_path(
         path_to_pypsa_network_sclopf
-        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L0.1-2920SEG.nc",
+        + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l_reference}-2920SEG.nc",
         True,
     )
-    nx_graph = data_handling.build_networkx_graph(network, snet_index='0')
 
     co2ls = get_co2_levels(n_nodes)
     networks = {
@@ -76,14 +77,6 @@ def create_combined_flow_and_split_statistics_plot(
     )
 
     # Load split statistics data
-    _, _, num_parallels, _ = data_handling.get_matrices_from_nx_graph(nx_graph)
-    bridge_idxs = data_handling.nx_edges_to_matrix_indices(
-        nx.bridges(nx_graph), nx_graph
-    )
-    n_2_failures = cascade_simulation.calc_possible_double_line_failures(
-        num_parallels, ignored_idxs=bridge_idxs
-    )
-
     component_props = pd.read_hdf(
         path_to_vis_results_sclopf + f"/component_properties_all_n{n_nodes}.h5"
     )
@@ -103,6 +96,10 @@ def create_combined_flow_and_split_statistics_plot(
 
     component_props["total_weighting"] = (
         component_props["snapshot_weighting"] * component_props["trigger_weighting"]
+    )
+
+    split_props["total_weighting"] = (
+        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
     )
 
     if load_normalization:
@@ -260,14 +257,16 @@ def create_combined_flow_and_split_statistics_plot(
         bin_centers = 0.5 * (bins[:-1] + bins[1:])
         data = []
         for co2l in co2ls[::-1]:
-            # Clipped into the bin range, else the total-blackout splits are silently
-            # dropped from the last bin (see data_handling.clip_to_bin_range).
+            split_props_co2 = split_props[split_props.co2l == co2l]
+            # Clip into the bin range so total-blackout splits land in the last bin.
             vals = data_handling.clip_to_bin_range(
-                split_props[split_props.co2l == co2l].lost_load_share_blackout.values
-                * 100,
+                split_props_co2.lost_load_share_blackout.values * 100,
                 bins,
             )
-            counts, _ = np.histogram(vals, bins=bins)
+            # Weighted like the denominator: trigger_weighting × snapshot_weighting.
+            counts, _ = np.histogram(
+                vals, bins=bins, weights=split_props_co2.total_weighting
+            )
             data.append(counts)
 
         data = np.stack(data)
@@ -323,8 +322,8 @@ def create_combined_flow_and_split_statistics_plot(
             # rescaled curves invisibly and hoping both axes autoscale consistently.
             # A twin axes is used rather than `secondary_yaxis` because only a real
             # Axes draws the horizontal grid lines at its major ticks.
-            contingency_norm = (
-                len(n_2_failures) * network.snapshot_weightings.generators.sum()
+            contingency_norm = normalize_split_risk.contingency_normalization(
+                co2l_reference, network=network, same_corridor=None
             )
             ax3_num_splits_secondary = ax3_num_splits.twinx()
             ax3_num_splits_secondary.set_yscale("log")

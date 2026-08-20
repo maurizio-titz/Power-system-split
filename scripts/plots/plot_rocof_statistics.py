@@ -13,7 +13,6 @@ import re
 import sys
 
 import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
 import pandas as pd
 from loguru import logger
@@ -21,7 +20,7 @@ from tqdm import tqdm
 
 sys.path.append("./")
 
-from utils import cascade_simulation, data_handling, send_mattermost_messages
+from utils import data_handling, normalize_split_risk, send_mattermost_messages
 from utils.config import (
     mattermost_url,
     path_to_figures_sclopf,
@@ -359,17 +358,24 @@ def _split_risk_norm_fpath(n_nodes):
 
     ``path_to_plot_data`` is resolved before the ``PLOT_STYLE``/``PLOT_OUTPUT_DIR`` override
     of ``path_to_figures_sclopf`` in ``utils.config``, so the cache is shared by all plot
-    styles instead of being recomputed per style."""
-    return os.path.join(path_to_plot_data, f"split_risk_normalization_n{n_nodes}.pklz")
+    styles instead of being recomputed per style.
+
+    The ``weightedTrigger`` marker pins the convention: the denominator sums the trigger
+    weighting, so pre-fix caches are not reused."""
+    return os.path.join(
+        path_to_plot_data, f"split_risk_normalization_weightedTrigger_n{n_nodes}.pklz"
+    )
 
 
 def _compute_split_risk_norm(co2ls_desc, n_nodes):
     """Compute the normalization for every CO2 level in ``co2ls_desc``.
 
     Each level uses its own network (``...Co2L{co2l}-2920SEG.nc``); the denominator is
-    ``n_double_line_failures * total_snapshot_weight``. Returns a ``pd.Series`` indexed by
-    ``co2l``. This is the expensive part (one PyPSA network load per level), so it only runs
-    when the cache file is missing."""
+    ``weighted_trigger_count * total_snapshot_weight`` as defined by
+    ``utils.normalize_split_risk``. Returns a ``pd.Series`` indexed by ``co2l``. The network is
+    loaded only for its snapshot weightings — the double line failures come from the cache
+    written by ``scripts/extract_grid_data.py``. This is still the expensive part (one PyPSA
+    network load per level), so it only runs when the cache file is missing."""
 
     norm = pd.Series(index=pd.Index(co2ls_desc, name="co2l"), dtype=float, name="norm")
     for co2l in tqdm(co2ls_desc, desc="normalization per co2 level"):
@@ -378,18 +384,14 @@ def _compute_split_risk_norm(co2ls_desc, n_nodes):
             + f"/sclopf-elec_s_{n_nodes}_ec_lv1.0_Co2L{co2l}-2920SEG.nc",
             True,
         )
-        nx_graph = data_handling.build_networkx_graph(network, snet_index="0")
-        _, _, num_parallels, _ = data_handling.get_matrices_from_nx_graph(nx_graph)
-        bridge_idxs = data_handling.nx_edges_to_matrix_indices(
-            nx.bridges(nx_graph), nx_graph
+        weighted_trigger_count = normalize_split_risk.weighted_trigger_count(
+            normalize_split_risk.get_n_2_failures(co2l, network=network),
+            same_corridor=None,
         )
-        n_2_failures = cascade_simulation.calc_possible_double_line_failures(
-            num_parallels, ignored_idxs=bridge_idxs
-        )
-        total_weight = network.snapshot_weightings.generators.sum()
-        norm.loc[co2l] = len(n_2_failures) * total_weight
+        total_weight = normalize_split_risk.total_snapshot_weight(network=network)
+        norm.loc[co2l] = weighted_trigger_count * total_weight
         logger.info(
-            f"Co2L={co2l}: {len(n_2_failures)} double line failures "
+            f"Co2L={co2l}: {weighted_trigger_count:g} weighted double line failures "
             f"× total snapshot weight {total_weight:g} → norm {norm.loc[co2l]:g}"
         )
     return norm
@@ -401,9 +403,11 @@ def _split_risk_normalization(n_nodes: int = 600, overwrite: bool = False):
 
     ``co2ls_desc`` are the CO2 levels sorted ascending (so the x-axis, once inverted, runs
     from high to low CO2), ``co2_x`` the matching actual CO2 percentages, and ``norm`` the
-    per-CO2-level denominator ``n_double_line_failures * total_snapshot_weight`` that turns
+    per-CO2-level denominator ``weighted_trigger_count * total_snapshot_weight`` that turns
     a split count into a fraction of total contingencies — the same normalization used by
-    the secondary axis of panel c in ``create_combined_flow_and_split_statistics_plot``.
+    the secondary axis of panel c in ``create_combined_flow_and_split_statistics_plot`` and
+    by the ``numGSS_per_contingency_hour`` column of
+    ``scripts/meteo/snapshot_vs_numGSS_plot.build_snapshot_gss_table``.
 
     ``norm`` is a ``pd.Series`` indexed by ``co2ls_desc``, computed from each CO2 level's own
     network rather than from a single hardcoded one. The levels are expected to agree — the
@@ -467,11 +471,8 @@ def _split_props_fpath(rocof_r, n_nodes):
 def _split_counts_per_co2(fpath, co2ls_desc, bins):
     """Histogram each CO2 level's ``lost_load_share_blackout`` (in %) into ``bins``.
 
-    The values are clipped into the bin range first (see
-    ``data_handling.clip_to_bin_range``), otherwise the total-blackout splits are silently
-    dropped from the last bin. The bias this removes is threshold-dependent (~50k splits at
-    |RoCoF|_crit = 0.8 Hz/s, fewer at higher thresholds), so it does not cancel when
-    thresholds are compared.
+    Values are clipped into the bin range and weighted by ``total_weighting``, matching the
+    denominator they are divided by.
 
     Returns a DataFrame indexed by ``co2ls_desc`` with the bin centers as columns."""
     split_props = pd.read_hdf(fpath)
@@ -479,10 +480,11 @@ def _split_counts_per_co2(fpath, co2ls_desc, bins):
     bin_centers = 0.5 * (bins[:-1] + bins[1:])
     data = []
     for co2l in co2ls_desc:
-        vals = data_handling.clip_to_bin_range(
-            lost[split_props.co2l == co2l].values * 100, bins
+        mask_co2 = split_props.co2l == co2l
+        vals = data_handling.clip_to_bin_range(lost[mask_co2].values * 100, bins)
+        counts, _ = np.histogram(
+            vals, bins=bins, weights=split_props.total_weighting[mask_co2]
         )
-        counts, _ = np.histogram(vals, bins=bins)
         data.append(counts)
     return pd.DataFrame(np.stack(data), index=co2ls_desc, columns=bin_centers)
 
@@ -547,7 +549,7 @@ def plot_split_risk_different_rocof_thresholds(
     (``split_properties_rocofThreshold{rocof_r:G}_n{n_nodes}.h5``).
 
     The y-axis is the fraction of total contingencies:
-    ``count / (n_double_line_failures * total_snapshot_weight)`` — the same normalization
+    ``count / (weighted_trigger_count * total_snapshot_weight)`` — the same normalization
     used by the secondary axis of panel c. The panels (one per RoCoF threshold) are laid
     out in a grid of ``ceil(len(rocof_thresholds) / n_cols)`` rows by ``n_cols`` columns;
     ``layout_2x3=True`` forces a 2-row × 3-column grid (overriding ``n_cols``), which fits
@@ -658,7 +660,7 @@ def plot_split_risk_categories_across_rocof_thresholds(
     panel fixes a RoCoF threshold and draws a line per load-loss category; here each panel
     fixes a load-loss category and draws a line per RoCoF threshold, so the thresholds are
     compared directly within a category. Same quantity and normalization as that function
-    (fraction of total contingencies ``count / (n_double_line_failures *
+    (fraction of total contingencies ``count / (weighted_trigger_count *
     total_snapshot_weight)``, log y, inverted x).
 
     Each threshold reads its per-threshold split properties file
