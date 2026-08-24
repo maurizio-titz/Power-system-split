@@ -1125,16 +1125,18 @@ def create_combined_mitigation_plot(
 
     label_index = 0
     default_y_offset = 0.13
+    x_offset_ls = [-0.1, 0.05, -0.15]
     for row_axes in axes_rows:
         row_positions = [ax.get_position() for ax in row_axes]
         row_max_y = max(pos.y1 for pos in row_positions)
         row_max_h = max(pos.height for pos in row_positions)
         y_target = row_max_y + default_y_offset * row_max_h
 
-        for ax in row_axes:
+        for idx_col, ax in enumerate(row_axes):
             pos = ax.get_position()
             y_offset = (y_target - pos.y1) / pos.height
-            add_panel_label(ax, label_index, x_offset=-0.10, y_offset=y_offset)
+            add_panel_label(ax, label_index, x_offset=x_offset_ls[idx_col], 
+                            y_offset=y_offset)
             label_index += 1
 
     # === APPLY CONSISTENT STYLING TO ALL AXES ===
