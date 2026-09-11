@@ -1107,7 +1107,7 @@ def plot_group_lost_load_hist_by_co2_single(
             [clip_to_bin_range(v, hist_bins) for v in lost_loads_lvl],
             weights=weights_data,
             label=[
-                f"CO2={get_actual_co2_level(co2, percent=True)}%"
+                f"{get_actual_co2_level(co2, percent=True)}%"
                 for co2 in co2_lvls_hist
             ],
             bins=hist_bins,
@@ -1129,7 +1129,7 @@ def plot_group_lost_load_hist_by_co2_single(
                 clip_to_bin_range(lost_loads_lvl[i], hist_bins),
                 weights=weights[group_mask & masks_sig_to_co2[co2l_ind]]
                 / (n_failures_weighted),
-                label=f"CO2={get_actual_co2_level(co2, percent=True)}%",
+                label=f"{get_actual_co2_level(co2, percent=True)}%",
                 bins=hist_bins,
                 alpha=alphas[i],
                 log=True,
