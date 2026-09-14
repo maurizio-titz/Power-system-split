@@ -94,12 +94,13 @@ def create_combined_flow_and_split_statistics_plot(
             columns={"neglidgeable_blackout": "negligible"}, inplace=True
         )
 
+    # The component properties do not store the total weighting, the split properties do.
     component_props["total_weighting"] = (
         component_props["snapshot_weighting"] * component_props["trigger_weighting"]
     )
 
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    data_handling.check_columns_exist(
+        split_props, ["total_weighting"], name="Split properties"
     )
 
     if load_normalization:

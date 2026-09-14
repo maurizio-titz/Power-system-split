@@ -1247,11 +1247,11 @@ def blackout_size_histogram_after_mitigation(
     split_props = pd.read_hdf(path_to_vis_results_sclopf + 
                               f"/split_properties_all_n{n_nodes}.h5", index_col=0)
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(float)
-    
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+
+    data_handling.check_columns_exist(
+        split_props, ["total_weighting"], name="Split properties"
     )
-    
+
     # Plot it
     setup_matplotlib_style()
     color_ls = ['#1b9e77',

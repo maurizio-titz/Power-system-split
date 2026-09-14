@@ -222,16 +222,13 @@ for cluster_number in np.arange(1, 13):
 
 # %%
 co2l = 0.0
+data_handling.check_columns_exist(
+    split_properties, ["total_weighting"], name="Split properties"
+)
 plot_df = split_properties.loc[
     (split_properties["cluster_idx"] > 0) & (split_properties.co2l == co2l),
     ["weather_regime", "cluster_idx", "total_weighting"],
 ].copy()
-
-if "total_weighting" not in plot_df.columns:
-    plot_df["total_weighting"] = (
-        split_properties.loc[plot_df.index, "snapshot_weighting"]
-        * split_properties.loc[plot_df.index, "trigger_weighting"]
-    )
 
 cluster_ids = [entry["cluster_number"] for entry in selected_clusters]
 weighted_freq = (

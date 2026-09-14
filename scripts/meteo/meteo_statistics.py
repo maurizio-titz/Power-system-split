@@ -73,8 +73,8 @@ def create_weather_regime_blackout_plot(
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
     )
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    data_handling.check_columns_exist(
+        split_props, ["total_weighting"], name="Split properties"
     )
     n_2_failures_file = (
         data_handling.path_to_grid_data + f"n_2_failures_co2lvl{0.6}.pklz"
@@ -249,8 +249,8 @@ def create_blackout_statistics_plot(
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
     )
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    data_handling.check_columns_exist(
+        split_props, ["total_weighting"], name="Split properties"
     )
     if same_corridor is not None:
         split_props["same_corridor"] = (
@@ -473,8 +473,8 @@ def create_capacity_factor_grid(
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
     )
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    data_handling.check_columns_exist(
+        split_props, ["total_weighting"], name="Split properties"
     )
 
     snapshot_column = "time_stamp"

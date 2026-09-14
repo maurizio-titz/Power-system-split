@@ -617,6 +617,32 @@ def get_adjacency_matrix_from_nx_graph(nx_graph):
     return adjacency_matrix
 
 
+def check_columns_exist(df, columns, name="dataframe"):
+    """Raise a KeyError if 'df' does not contain all of 'columns'.
+
+    Used where a dataframe is read from disk and the downstream code relies on columns
+    that the writing script is expected to have stored, e.g. 'total_weighting' in the
+    split properties files written by scripts/prepare_split_visualization.py. Checking
+    is preferred over recomputing such a column, since a recomputation would silently
+    overwrite whatever the file holds.
+
+    Args:
+        df (pandas.DataFrame): Dataframe to check.
+        columns (iterable of str): Column names that must be present.
+        name (str): Name of the dataframe used in the error message.
+
+    Raises:
+        KeyError: If at least one of 'columns' is missing.
+    """
+
+    missing = [col for col in columns if col not in df.columns]
+    if missing:
+        raise KeyError(
+            f"{name} is missing the column(s) {missing}. "
+            "Regenerate the underlying file with the script that writes it."
+        )
+
+
 def load_split_props(n_nodes: int, co2l=None, use_sclopf: bool = True):
     """Load component properties for a certain Co2 constraint and aggregation level of n_nodes. If co2l is None, return all lvls.
 

@@ -96,13 +96,14 @@ def create_split_statistics_plot(
             columns={"neglidgeable_blackout": "negligible"}, inplace=True
         )
 
-    # Add snapshot weighting
+    # Add snapshot weighting. The component properties do not store it, the split
+    # properties do.
     component_props["total_weighting"] = (
         component_props["snapshot_weighting"] * component_props["trigger_weighting"]
     )
 
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    data_handling.check_columns_exist(
+        split_props, ["total_weighting"], name="Split properties"
     )
 
     # Setup matplotlib styling
@@ -410,8 +411,8 @@ def create_blackout_statistics_plot(
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
     )
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    data_handling.check_columns_exist(
+        split_props, ["total_weighting"], name="Split properties"
     )
     if same_corridor is not None:
         split_props["same_corridor"] = (
@@ -543,19 +544,19 @@ def ax_blackout_size_histogram(ax,
     mask_co2lvl = split_props_df.co2l == co2lvl
     
     needed_cols = ["lost_load_share_blackout",
-                   "load", 
-                   "snapshot_weighting", 
-                   "trigger_weighting"]
-    
+                   "load",
+                   "snapshot_weighting",
+                   "trigger_weighting",
+                   "total_weighting"]
+
     dtype_dict = {xx: float for xx in needed_cols}
-    
+
+    data_handling.check_columns_exist(split_props_df, needed_cols,
+                                      name="Split properties")
+
     split_props_df_cut = split_props_df.loc[mask_co2lvl, needed_cols]
     split_props_df_cut = split_props_df_cut.astype(dtype_dict)
-    if "total_weighting" not in split_props_df_cut.columns:
-        split_props_df_cut["total_weighting"] = split_props_df_cut["snapshot_weighting"] * \
-            split_props_df_cut["trigger_weighting"]
-    
-    
+
     lost_load_val = split_props_df_cut["lost_load_share_blackout"].values
     
     if use_total_lost_load:
@@ -609,7 +610,7 @@ def ax_blackout_size_histogram(ax,
     
 
 def load_split_properties(n_nodes: int = 600) -> pd.DataFrame:
-    """Load the split properties and add the total weighting column."""
+    """Load the split properties. The total weighting column is stored in the file."""
 
     split_props = pd.read_hdf(
         path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
@@ -617,8 +618,8 @@ def load_split_properties(n_nodes: int = 600) -> pd.DataFrame:
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
         float
     )
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    data_handling.check_columns_exist(
+        split_props, ["total_weighting"], name="Split properties"
     )
 
     return split_props
@@ -1049,10 +1050,10 @@ def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 
     )
     split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(float)
     
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
+    data_handling.check_columns_exist(
+        split_props, ["total_weighting"], name="Split properties"
     )
-    
+
     mask_same_corridor = split_props.init_failure_0 == split_props.init_failure_1
     
     # Create histograms
