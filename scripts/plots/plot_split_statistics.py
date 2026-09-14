@@ -608,19 +608,9 @@ def ax_blackout_size_histogram(ax,
     return
     
 
-def plot_blackout_size_histograms(
-    save_path: str = path_to_figures_sclopf, 
-    yscale_log: bool = True, 
-    xscale_log: bool = False,
-    n_cols: int = 1,
-    n_bins: int = 101, 
-    n_nodes: int = 600, 
-    use_total_load_values: bool = False,
-    fname_suffix: str = "",
-    xlims: tuple[float, float] | None = None,
-    save_prefix: str | None = None
-):
-    # load split properties
+def load_split_properties(n_nodes: int = 600) -> pd.DataFrame:
+    """Load the split properties and add the total weighting column."""
+
     split_props = pd.read_hdf(
         path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
     )
@@ -630,22 +620,29 @@ def plot_blackout_size_histograms(
     split_props["total_weighting"] = (
         split_props["snapshot_weighting"] * split_props["trigger_weighting"]
     )
-    # setup matplotlib styling
-    setup_matplotlib_style()
 
-    co2ls = get_co2_levels(n_nodes)
-    # create histogram for each co2 level
-    n_cols = max(1, int(n_cols))
-    n_rows = int(np.ceil(len(co2ls) / n_cols))
-    fig, axes = plt.subplots(
-        n_rows,
-        n_cols,
-        figsize=(8, 2 * n_rows),
-        sharex=True,
-        sharey=True,
-    )
+    return split_props
+
+
+def axes_blackout_size_histogram_grid(
+    axes,
+    split_props: pd.DataFrame,
+    co2ls,
+    n_cols: int,
+    yscale_log: bool = True,
+    xscale_log: bool = False,
+    n_bins: int = 101,
+    n_nodes: int = 600,
+    use_total_load_values: bool = False,
+    xlims: tuple[float, float] | None = None,
+):
+    """Draw one blackout size histogram per CO2 level on the flat array of axes
+    'axes' (row-major, n_cols columns). Unused axes are switched off and only the
+    bottom row gets an x-label."""
+
     axes = np.atleast_1d(axes).flatten()
-    
+    n_rows = int(np.ceil(len(axes) / n_cols))
+
     if not use_total_load_values:
         if xscale_log:
             if xlims is None:
@@ -760,53 +757,87 @@ def plot_blackout_size_histograms(
             ax.set_xlabel(
                 r"Share of load not served [\%]", fontsize=AXIS_LABEL_FONTSIZE
             )
+
+    return
+
+
+def plot_blackout_size_histograms(
+    save_path: str = path_to_figures_sclopf,
+    yscale_log: bool = True,
+    xscale_log: bool = False,
+    n_cols: int = 1,
+    n_bins: int = 101,
+    n_nodes: int = 600,
+    use_total_load_values: bool = False,
+    fname_suffix: str = "",
+    xlims: tuple[float, float] | None = None,
+    save_prefix: str | None = None
+):
+    # load split properties
+    split_props = load_split_properties(n_nodes=n_nodes)
+
+    # setup matplotlib styling
+    setup_matplotlib_style()
+
+    co2ls = get_co2_levels(n_nodes)
+    # create histogram for each co2 level
+    n_cols = max(1, int(n_cols))
+    n_rows = int(np.ceil(len(co2ls) / n_cols))
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(8, 2 * n_rows),
+        sharex=True,
+        sharey=True,
+    )
+
+    axes_blackout_size_histogram_grid(
+        axes,
+        split_props,
+        co2ls,
+        n_cols=n_cols,
+        yscale_log=yscale_log,
+        xscale_log=xscale_log,
+        n_bins=n_bins,
+        n_nodes=n_nodes,
+        use_total_load_values=use_total_load_values,
+        xlims=xlims,
+    )
+
     # add suptitle
     plt.suptitle("Blackout Size Distribution", fontsize=PANEL_LABEL_FONTSIZE + 2)
 
     fname_fig = "blackout_size_histograms" + fname_suffix
-    
+
     plt.tight_layout()
-    
+
     if save_prefix is not None:
         fname_fig = save_prefix + "_" + fname_fig
-    
+
     save_figure(fig, fname_fig, save_path)
-    
-    
-def plot_blackout_size_distributions_with_zoom_in(
+
+
+def axes_blackout_size_distributions_with_zoom_in(
+    ax_overview,
+    ax_zoom,
+    split_props: pd.DataFrame,
     co2_lvls: tuple[float] = (.6, .2, .0),
     n_nodes: int = 600,
     cut_off_val: float | None = 2e4,
-    save_prefix: str | None = None):
-    """Plot a X by 2 plot that shows the blackout size distributions that
-    shows the different requested CO2 levels in the rows. First column shows 
-    the entire distribtuion while the second column shows the distribution beyond 
-    a chosen cut-off in log-log scale."""
-    
-    # load split properties
-    split_props = pd.read_hdf(
-        path_to_vis_results_sclopf + f"/split_properties_all_n{n_nodes}.h5", index_col=0
-    )
-    split_props.lost_load_share_blackout = split_props.lost_load_share_blackout.astype(
-        float
-    )
-    split_props["total_weighting"] = (
-        split_props["snapshot_weighting"] * split_props["trigger_weighting"]
-    )
-    
-    setup_matplotlib_style()
-    
+    legend_fontsize: float | None = None,
+    legend_ncols: int = 1,
+    legend_on_overview: bool = False,
+):
+    """Draw the blackout size distribution of the requested CO2 levels on
+    'ax_overview' (entire distribution) and on 'ax_zoom' (distribution beyond
+    'cut_off_val'), both in log-log scale.
+
+    'legend_fontsize' falls back to the rc default when None and
+    'legend_on_overview' moves the legend from the zoom-in to the overview
+    panel."""
+
     available_co2_lvls = get_co2_levels(n_nodes=n_nodes)
-    
-    figsize = (10, 4)
-    
-    fig, ax_arr = plt.subplots(1, 2, 
-                           figsize=figsize, sharey='all',
-                           )
-    
-    ax_overview = ax_arr[0]
-    ax_zoom = ax_arr[1]
-    
+
     cmap_co2 = plt.get_cmap('cividis').copy()
     
     for idx, co2_lvl_r in enumerate(sorted(co2_lvls)[::-1]):
@@ -844,24 +875,158 @@ def plot_blackout_size_distributions_with_zoom_in(
                          color='k')
             
 
-    ax_arr[0].set_ylabel("Count", size=AXIS_LABEL_FONTSIZE)
-    
-    """handles, leg = ax_zoom.get_legend_handles_labels()
-    leg_fig = fig.legend(handles, leg, title="CO$_2$ level [\\% of 1990]",
-                         bbox_anchor"center")
-    """
-    ax_zoom.legend(title="CO$_2$ level [\\% of 1990]",
-                   loc="lower left")
-    for idx_r, ax_r in enumerate(ax_arr):
+    ax_overview.set_ylabel("Count", size=AXIS_LABEL_FONTSIZE)
+
+    # Only the zoom-in histograms carry labels, the legend can still be drawn on
+    # the overview panel.
+    ax_legend = ax_overview if legend_on_overview else ax_zoom
+    handles, labels = ax_zoom.get_legend_handles_labels()
+
+    ax_legend.legend(handles, labels,
+                     title="CO$_2$ level [\\% of 1990]",
+                     loc="lower left",
+                     ncols=legend_ncols,
+                     fontsize=legend_fontsize,
+                     title_fontsize=legend_fontsize)
+    for ax_r in (ax_overview, ax_zoom):
         ax_r.set_xlabel("Load not served [MW]")
+
+    return
+
+
+def plot_blackout_size_distributions_with_zoom_in(
+    co2_lvls: tuple[float] = (.6, .2, .0),
+    n_nodes: int = 600,
+    cut_off_val: float | None = 2e4,
+    save_prefix: str | None = None):
+    """Plot a X by 2 plot that shows the blackout size distributions that
+    shows the different requested CO2 levels in the rows. First column shows
+    the entire distribtuion while the second column shows the distribution beyond
+    a chosen cut-off in log-log scale."""
+
+    # load split properties
+    split_props = load_split_properties(n_nodes=n_nodes)
+
+    setup_matplotlib_style()
+
+    figsize = (10, 4)
+
+    fig, ax_arr = plt.subplots(1, 2,
+                           figsize=figsize, sharey='all',
+                           )
+
+    axes_blackout_size_distributions_with_zoom_in(
+        ax_arr[0],
+        ax_arr[1],
+        split_props,
+        co2_lvls=co2_lvls,
+        n_nodes=n_nodes,
+        cut_off_val=cut_off_val,
+    )
+
+    for idx_r, ax_r in enumerate(ax_arr):
         add_panel_label(ax_r, idx_r)
-    
+
     fname = "blackout_sizes_three_lvls_w_zoom"
-    
+
     if save_prefix is not None:
         fname = save_prefix + "_" + fname
-    
+
     save_figure(fig, fname, path_to_figures_sclopf, organize_plots=False)
+
+
+def plot_blackout_size_histograms_with_zoom_in(
+    save_path: str = path_to_figures_sclopf,
+    co2_lvls_zoom: tuple[float] = (.6, .2, .0),
+    n_nodes: int = 600,
+    n_cols: int = 2,
+    n_bins: int = 50,
+    yscale_log: bool = True,
+    xscale_log: bool = False,
+    use_total_load_values: bool = False,
+    xlims: tuple[float, float] | None = None,
+    cut_off_val: float | None = 2e4,
+    add_panel_labels: bool = True,
+    height_zoom: float = 3.,
+    legend_fontsize: float = 12.,
+    legend_ncols: int = 1,
+    fname_suffix: str = "_lessbins",
+    save_prefix: str | None = None,
+):
+    """Stack the per-CO2-level blackout size histograms (top block, see
+    'plot_blackout_size_histograms') and the blackout size distributions with the
+    zoom-in beyond 'cut_off_val' (bottom row, see
+    'plot_blackout_size_distributions_with_zoom_in') into a single figure.
+
+    'height_zoom' is the height (in inches) of the zoom-in row, which controls how
+    tall the zoom-in panels are relative to the histogram grid. 'legend_fontsize'
+    and 'legend_ncols' shape the legend of the zoom-in panel, which sits on top of
+    the distributions.
+
+    The defaults reproduce the '_lessbins' version of the histograms."""
+
+    # load split properties once for both blocks
+    split_props = load_split_properties(n_nodes=n_nodes)
+
+    setup_matplotlib_style()
+
+    co2ls = get_co2_levels(n_nodes)
+    n_cols = max(1, int(n_cols))
+    n_rows = int(np.ceil(len(co2ls) / n_cols))
+
+    height_grid = 2. * n_rows
+
+    fig = plt.figure(figsize=(9, height_grid + height_zoom))
+    gs = fig.add_gridspec(
+        2, 1, height_ratios=[height_grid, height_zoom], hspace=0.3
+    )
+
+    axes_grid = gs[0].subgridspec(n_rows, n_cols).subplots(
+        sharex=True, sharey=True
+    )
+    axes_grid = np.atleast_1d(axes_grid).flatten()
+
+    axes_blackout_size_histogram_grid(
+        axes_grid,
+        split_props,
+        co2ls,
+        n_cols=n_cols,
+        yscale_log=yscale_log,
+        xscale_log=xscale_log,
+        n_bins=n_bins,
+        n_nodes=n_nodes,
+        use_total_load_values=use_total_load_values,
+        xlims=xlims,
+    )
+
+    ax_overview, ax_zoom = gs[1].subgridspec(1, 2).subplots(sharey="all")
+
+    axes_blackout_size_distributions_with_zoom_in(
+        ax_overview,
+        ax_zoom,
+        split_props,
+        co2_lvls=co2_lvls_zoom,
+        n_nodes=n_nodes,
+        cut_off_val=cut_off_val,
+        legend_fontsize=legend_fontsize,
+        legend_ncols=legend_ncols,
+        legend_on_overview=True,
+    )
+
+    if add_panel_labels:
+        # The whole histogram grid is one panel (A), the two zoom-in panels are B
+        # and C. The labels of the left column clear the y-tick labels, the one of
+        # the grid sits above its topmost tick label.
+        add_panel_label(axes_grid[0], 0, x_offset=-0.22, y_offset=0.16)
+        add_panel_label(ax_overview, 1, x_offset=-0.19, y_offset=0.07)
+        add_panel_label(ax_zoom, 2, x_offset=-0.09, y_offset=0.07)
+
+    fname_fig = "blackout_size_histograms_w_zoom" + fname_suffix
+
+    if save_prefix is not None:
+        fname_fig = save_prefix + "_" + fname_fig
+
+    save_figure(fig, fname_fig, save_path, organize_plots=False)
 
 
 def create_blackout_statistics_common_vs_different_corridor_plot(n_nodes: int = 600,

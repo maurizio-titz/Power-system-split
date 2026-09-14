@@ -26,6 +26,7 @@ from utils import plot_style
 
 import matplotlib.pyplot as plt
 import networkx as nx
+from loguru import logger
 
 from utils import subgraph_evaluation
 
@@ -33,6 +34,195 @@ plot_style.setup_matplotlib_style()
 
 # Paths
 from utils.config import path_to_sclopf_results
+
+MONTH_STARTS = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+MONTH_LABELS = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+]
+
+# a node counts as over-frequency if it ends up in an island with a RoCoF above
+# ROCOF_THRESHOLD (the threshold of the "blackout" transformation, see
+# utils.clustering.data_handling.transform_indicator_vectors) in more than
+# OVER_FREQUENCY_SHARE of the cluster's splits
+ROCOF_THRESHOLD = 1.0  # Hz/s
+OVER_FREQUENCY_SHARE = 0.5
+
+
+def plot_cluster_summary(
+    gen_by_carrier,
+    storage_by_carrier,
+    load,
+    power_imbalance,
+    snaps_clust,
+    all_snapshots,
+    co2l,
+    save_dir,
+    cluster_number=None,
+    f_name=None,
+):
+    """Combine generation by carrier, the temporal blackout profiles and the
+    load/storage/generation/imbalance histograms into a single figure.
+
+    Layout: the upper row holds two equally sized plots (the daily and yearly
+    blackout profiles on the left, generation by carrier on the right), the lower
+    row holds the four load/storage/generation/imbalance histograms. Each of the
+    three parts carries its own heading.
+
+    Args:
+        gen_by_carrier: DataFrame of generation per carrier [MW], snapshots x carriers
+        storage_by_carrier: DataFrame of storage dispatch per carrier [MW]
+        load: Series of total load [MW] per snapshot
+        power_imbalance: Series of generation + storage - load - HVDC export [MW] per
+            snapshot
+        snaps_clust: snapshots of the cluster (used for the temporal profiles)
+        all_snapshots: all snapshots of the network (used for the hour ticks)
+        co2l: CO2 level, only used for the file name
+        save_dir: directory the figure is written to
+        cluster_number: cluster the data belongs to, only used for the file name
+        f_name: file name without extension (default: cluster_summary_cluster
+            {cluster_number}_co2l{co2l})
+    """
+    # axis labels and titles are larger than the default, as the panels are small
+    label_fs = plot_style.AXIS_LABEL_FONTSIZE + 4
+    tick_fs = plot_style.TICK_LABEL_FONTSIZE + 2
+    heading_fs = plot_style.TITLE_FONTSIZE + 6
+    # the panel titles of the profile part are set in the same size as the labels
+    title_fs = label_fs
+
+    # subfigures instead of a plain gridspec, so each of the three parts can
+    # carry its own heading and the upper two are separated more clearly
+    fig = plt.figure(figsize=(15, 10.5), layout="constrained")
+    # the bottom row carries no heading any more, so the rows are put right next to each
+    # other; the padding of the constrained layout keeps them apart, which is why
+    # negative values do not close the gap any further
+    sfig_top, sfig_bottom = fig.subfigures(2, 1, height_ratios=[1, 1], hspace=0.0)
+    # the profile part gets more of the upper row than the carrier histogram
+    sfig_profile, sfig_carrier = sfig_top.subfigures(
+        1, 2, width_ratios=[1.2, 0.8], wspace=0.12
+    )
+
+    ax_daily, ax_yearly = sfig_profile.subplots(1, 2, width_ratios=[0.5, 1])
+    ax_carrier = sfig_carrier.subplots()
+    axs_bottom = list(sfig_bottom.subplots(1, 4))
+
+    sfig_profile.suptitle("Temporal Distribution of Blackouts", fontsize=heading_fs)
+    # the node selection is not named here, it belongs into the caption of the figure
+    head_carrier = sfig_carrier.suptitle("Generation by Carrier", fontsize=heading_fs)
+    # the bottom row carries no heading, its panels are labelled well enough by their
+    # x labels
+
+    # --- generation by carrier ---------------------------------------------
+    bins = np.arange(0, gen_by_carrier.sum(axis=1).max() / 1000 * 1.2, step=0.5)
+    for col in gen_by_carrier.columns:
+        sign_vals = gen_by_carrier[col].values[gen_by_carrier[col].values >= 500]
+        if len(sign_vals) == 0:
+            continue
+        ax_carrier.hist(
+            gen_by_carrier[col].values / 1000,
+            alpha=0.5,
+            bins=bins,
+            edgecolor="black",
+            label=col.replace("_", r"\_"),
+            weights=np.ones(len(gen_by_carrier[col])) / len(gen_by_carrier[col]),
+        )
+    ax_carrier.set_yscale("log")
+    ax_carrier.legend(fontsize=plot_style.LEGEND_FONTSIZE + 3)
+    ax_carrier.set_xlabel("Generation [GW]", fontsize=label_fs)
+    ax_carrier.set_ylabel("Relative Frequency", fontsize=label_fs)
+
+    # --- daily and yearly blackout profile ----------------------------------
+    snapshots_dt = pd.to_datetime(snaps_clust)
+    possible_hours = list(pd.to_datetime(all_snapshots).hour.unique()) + [24]
+
+    hours_counts = snapshots_dt.hour.value_counts().sort_index()
+    hours_rel = hours_counts.values / hours_counts.values.sum()
+    ax_daily.bar(
+        hours_counts.index + 1.5, hours_rel, width=3, edgecolor="black", alpha=0.7
+    )
+    ax_daily.set_title("Daily Profile", fontsize=title_fs)
+    ax_daily.set_xlabel("Hour of Day", fontsize=label_fs)
+    # only the left panel of the profile part carries the y label
+    ax_daily.set_ylabel("Relative Frequency", fontsize=label_fs)
+    ax_daily.set_xticks(possible_hours)
+    ax_daily.set_xticklabels(possible_hours, rotation=90)
+    ax_daily.set_xlim(0, 24)
+    ax_daily.grid(axis="y", alpha=0.3)
+
+    day_of_year = snapshots_dt.dayofyear
+    ax_yearly.hist(
+        day_of_year,
+        bins=len(snapshots_dt.dayofyear.unique()),
+        range=(1, 366),
+        edgecolor="black",
+        alpha=0.7,
+        weights=np.ones(len(day_of_year)) / len(day_of_year),
+    )
+    ax_yearly.set_title("Yearly Profile", fontsize=title_fs)
+    ax_yearly.set_xlabel("Month", fontsize=label_fs)
+    ax_yearly.set_xticks(MONTH_STARTS)
+    ax_yearly.set_xticklabels(MONTH_LABELS, rotation=90)
+    ax_yearly.grid(axis="y", alpha=0.3)
+    ax_yearly.set_xlim(1, 366)
+
+    # --- load, storage, generation and power imbalance ----------------------
+    panels = [
+        (load.values / 1000, "Load [GW]"),
+        # the sign convention of PyPSA is kept, so the label states it explicitly
+        (storage_by_carrier.sum(axis=1).values / 1000, "Storage Dispatch [GW]"),
+        (gen_by_carrier.sum(axis=1).values / 1000, "Generation [GW]"),
+        (power_imbalance.values / 1000, "Power Imbalance [GW]"),
+    ]
+    for ax, (vals, xlabel) in zip(axs_bottom, panels):
+        ax.hist(
+            vals,
+            bins=30,
+            alpha=0.7,
+            edgecolor="black",
+            weights=np.ones(len(vals)) / len(vals),
+        )
+        ax.set_xlabel(xlabel, fontsize=label_fs)
+    # only the left panel of the bottom row carries the y label
+    axs_bottom[0].set_ylabel("Relative Frequency", fontsize=label_fs)
+
+    # the panel labels follow the reading order of the figure
+    for i, ax in enumerate([ax_daily, ax_yearly, ax_carrier] + axs_bottom):
+        # the labels of the bottom row are lifted a bit, otherwise they touch the
+        # uppermost y tick label of their panel
+        plot_style.add_panel_label(
+            ax, i, y_offset=0.05 if ax not in axs_bottom else 0.085
+        )
+        ax.tick_params(axis="both", which="both", labelsize=tick_fs)
+
+    # a suptitle is centred on its subfigure, but the y label and the tick labels only
+    # take space on the left, so the panel itself sits right of the subfigure centre.
+    # the heading is centred on the panel instead, once the layout has settled
+    fig.canvas.draw()
+    head_carrier.set_x(
+        sfig_carrier.transSubfigure.inverted().transform(
+            (ax_carrier.get_window_extent().intervalx.mean(), 0)
+        )[0]
+    )
+
+    if f_name is None:
+        cluster_part = "" if cluster_number is None else f"_cluster{cluster_number}"
+        f_name = f"cluster_summary{cluster_part}_co2l{co2l}"
+    # the subdirectory is set explicitly, otherwise it would be derived from the
+    # file name and carry the cluster number as well
+    plot_style.save_figure(
+        fig, f_name, os.path.join(save_dir, "cluster_summary"), organize_plots=False
+    )
+
 
 for cluster_number in [11, 12]:
     # sort_by = "n_samples"
@@ -187,10 +377,19 @@ for cluster_number in [11, 12]:
         cb_edge = f.colorbar(sm_edge, ax=ax)
         # plt.colorbar(sm_edges, ax=ax, label="Edge failure probability")
 
-    node_idxs_red = np.where(centroid[:, 2] > 0.5)
-    nx_graph = data_handling.load_networkx_graph(snet_index='0', 
+    # the third class of the centroid holds the weighted share of the cluster's splits
+    # in which the node ended up in an island with a RoCoF above ROCOF_THRESHOLD
+    node_idxs_red = np.where(centroid[:, 2] > OVER_FREQUENCY_SHARE)
+    nx_graph = data_handling.load_networkx_graph(snet_index='0',
                                                  co2lvl=0.0)
     nodes_red = np.array(nx_graph.nodes)[node_idxs_red]
+    logger.info(
+        f"cluster {cluster_number}: {len(nodes_red)} of {centroid.shape[0]} nodes of the "
+        f"AC subnetwork have a RoCoF > {ROCOF_THRESHOLD:g} Hz/s in more than "
+        f"{OVER_FREQUENCY_SHARE:.0%} of the cluster's splits "
+        f"({', '.join(nodes_red)}; shares "
+        f"{np.round(centroid[node_idxs_red, 2], 3).ravel().tolist()})"
+    )
     cluster_mask = cluster_res["group_masks"][cluster_idx]
     split_properties = pd.read_hdf(
         f"{cl.data_dir}/data_filtered.h5",
@@ -257,6 +456,9 @@ for cluster_number in [11, 12]:
         .index.get_level_values("time_stamp")
         .unique()
         .values
+    )
+    logger.info(
+        f"cluster {cluster_number}: {len(snapshots)} snapshots at co2l={co2l}"
     )
 
     all_snapshots = pd.to_datetime(n.loads_t["p"].index)
@@ -430,7 +632,36 @@ for cluster_number in [11, 12]:
     )
     # storage_by_carrier = storage_by_carrier.loc[:,storage_by_carrier.abs().max(axis=0) > storage_by_carrier.sum(axis=1).mean() * 0.05]
     # storage_by_carrier
-    power_imbalance = gen_by_carrier.sum(axis=1) - storage_by_carrier.sum(axis=1) - load
+    # net power leaving the nodes through HVDC links; links without a time series carry
+    # no power and are filled with zero
+    links_red = n.links[n.links.bus0.isin(nodes_red) | n.links.bus1.isin(nodes_red)]
+    p0_red = n.links_t["p0"].reindex(columns=links_red.index, fill_value=0.0).loc[
+        snapshots
+    ]
+    p1_red = n.links_t["p1"].reindex(columns=links_red.index, fill_value=0.0).loc[
+        snapshots
+    ]
+    hvdc_export = (
+        p0_red.loc[:, links_red.bus0.isin(nodes_red)].sum(axis=1)
+        + p1_red.loc[:, links_red.bus1.isin(nodes_red)].sum(axis=1)
+    )
+    if links_red.empty:
+        logger.info(f"cluster {cluster_number}: no HVDC links connect to these nodes")
+    else:
+        logger.info(
+            f"cluster {cluster_number}: {len(links_red)} HVDC links connect to these "
+            f"nodes ({', '.join(links_red.index)}), max net export "
+            f"{hvdc_export.abs().max() / 1000:.2f} GW"
+        )
+
+    # storage_units_t.p is discharge-positive and hvdc_export is the power leaving the
+    # nodes, following subgraph_evaluation.calc_power_imbalance_subgraph
+    power_imbalance = (
+        gen_by_carrier.sum(axis=1)
+        + storage_by_carrier.sum(axis=1)
+        - load
+        - hvdc_export
+    )
 
     inertia_time_cluster = inertia_time[np.isin(all_snapshots, snapshots)]
 
@@ -600,6 +831,19 @@ for cluster_number in [11, 12]:
     
     f_name = f"blackout_daily_yearly_profile_co2l{co2l}"
     plot_style.save_figure(plt.gcf(), f_name, save_dir)
+
+    # combined figure of the three plots above
+    plot_cluster_summary(
+        gen_by_carrier=gen_by_carrier,
+        storage_by_carrier=storage_by_carrier,
+        load=load,
+        power_imbalance=power_imbalance,
+        snaps_clust=snaps_clust,
+        all_snapshots=all_snapshots,
+        co2l=co2l,
+        save_dir=save_dir,
+        cluster_number=cluster_number,
+    )
 
     # get installed generation capacity in the nodes of the cluster
     gen_capacity = (

@@ -19,9 +19,11 @@ from scripts.plots.plot_mitigation import create_combined_mitigation_plot, black
 from scripts.plots.plot_line_failure_probs import create_total_line_failure_plot
 from scripts.plots.plot_spatial_power_inhomogeneity import plot_spi_histograms_n_mean_spi_per_month
 from scripts.plots.plot_additional_pypsa_figures import histogram_lineloading_accross_co2lvls, \
-    graph_with_num_parallel, plot_load_dispatch, \
+    graph_with_num_parallel, plot_load_dispatch_grid, \
     plot_investments_capital_costs
-from scripts.plots.plot_split_statistics import plot_blackout_size_histograms, plot_blackout_size_distributions_with_zoom_in, plot_component_number_vs_blackout_size, create_blackout_statistics_common_vs_different_corridor_plot
+from scripts.plots.plot_split_statistics import plot_blackout_size_histograms, \
+    plot_blackout_size_distributions_with_zoom_in, plot_blackout_size_histograms_with_zoom_in, \
+    plot_component_number_vs_blackout_size, create_blackout_statistics_common_vs_different_corridor_plot
 from scripts.plots.plot_inertia_by_country import create_inertia_by_country_all_co2_plot
 from scripts.plots.plot_compare_lineMitigation_plannedExtension import plot_planned_line_extensions_single_co2, run_planned_extension_comparison
 
@@ -132,8 +134,9 @@ def plot_supplementary_figures(low_memory: bool = False):
     plt.close('all')
     gc.collect()
     
-    # System Energy Balance 0, 20, 60 % in seasons
-    plot_load_dispatch(save_prefix="SI")
+    # System Power Balance 0, 20, 60 % in seasons stacked
+    plot_load_dispatch_grid(save_prefix="SI")
+    
     if low_memory:
         logger.warning("Skipping figures showing histograms of blackout sizes" + 
                        " histograms.")
@@ -145,7 +148,7 @@ def plot_supplementary_figures(low_memory: bool = False):
                                                 n_bins=50)
         # Blackout Size Distribution (different versions) and for 3 with zoom in
         ## Blackout Size (different versions)
-        plot_blackout_size_histograms(yscale_log=True, n_cols=2, save_prefix="SI")
+        """plot_blackout_size_histograms(yscale_log=True, n_cols=2, save_prefix="SI")
         plot_blackout_size_histograms(yscale_log=True, n_cols=2, n_bins=50,
                                     fname_suffix="_lessbins", save_prefix="SI")
         
@@ -156,7 +159,11 @@ def plot_supplementary_figures(low_memory: bool = False):
                                     fname_suffix="_log_lessbins", save_prefix="SI")
     
         ## Zoom in
-        plot_blackout_size_distributions_with_zoom_in(save_prefix="SI")
+        plot_blackout_size_distributions_with_zoom_in(save_prefix="SI")"""
+
+        ## Blackout Sizes histograms as share of load not served and total load (with zoom in) 
+        ## stacked.
+        plot_blackout_size_histograms_with_zoom_in(save_prefix="SI")
     
         # 2D Historgram of Number of Components and Share of load not served
         plot_component_number_vs_blackout_size(save_prefix="SI")

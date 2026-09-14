@@ -425,8 +425,156 @@ def plot_investments_capital_costs(n_nodes: int = 600,
     return
 
 
-def plot_load_dispatch(n_nodes: int = 600, 
-                       agg_solar:bool = True, 
+_SEASONS = {"Winter": (12, 1, 2),
+            "Spring": (3, 4, 5),
+            "Summer": (6, 7, 8),
+            "Autumn": (9, 10, 11)}
+
+
+def _dispatch_carrier_style(n_ref):
+    """Return (nice_names, colors_gens) for the dispatch plots.
+
+    The carrier table of the network is patched with the aggregated carriers
+    ('gas', 'offwind') and with explicit colours for the storage carriers.
+
+    args:
+        n_ref: PyPSA network used as reference for carrier names and colours.
+    """
+    nice_names = n_ref.carriers.nice_name.copy()
+    colors_gens = n_ref.carriers.set_index("nice_name").color.copy()
+
+    colors_gens["Offshore Wind"] = n_ref.carriers.color.get("offwind-dc", "#1f77b4")
+    colors_gens['Hydrogen Storage'] = "green"
+    colors_gens['Battery Storage'] = "tab:olive"
+    nice_names.loc['gas'] = 'Gas'
+    nice_names['offwind'] = 'Offshore Wind'
+    colors_gens['Gas'] =   "#cc0099"
+
+    return nice_names, colors_gens
+
+
+def _agg_dispatch_carriers(df,
+                           agg_solar: bool = True,
+                           agg_gas: bool = True,
+                           agg_offwind: bool = True,
+                           drop_carriers: bool = True):
+    """Aggregate the dispatch columns of ``df`` by technology family.
+
+    args:
+        df (pd.DataFrame): dispatch with one column per carrier.
+        agg_solar (bool): aggregate solar and solar-hsat into "solar".
+        agg_gas (bool): aggregate CCGT and OCGT into "gas".
+        agg_offwind (bool): aggregate offwind-dc/-ac/-float into "offwind".
+        drop_carriers (bool): drop geothermal, art_load and load.
+    """
+    df = df.copy()
+    if drop_carriers:
+        drop_cols = ["geothermal", "art_load","load"]
+        df = df.drop(columns=drop_cols)
+    if agg_gas:
+        cols = [c for c in ["CCGT", "OCGT"] if c in df.columns]
+        if cols:
+            df["gas"] = df[cols].sum(axis=1)
+            df = df.drop(columns=cols)
+    if agg_solar:
+        cols = [c for c in ["solar", "solar-hsat"] if c in df.columns]
+        if len(cols) > 1:
+            df["solar"] = df[cols].sum(axis=1)
+            df = df.drop(columns=[c for c in cols if c != "solar"])
+    if agg_offwind:
+        cols = [c for c in ["offwind-ac", "offwind-dc", "offwind-float"]
+                if c in df.columns]
+        if cols:
+            df["offwind"] = df[cols].sum(axis=1)
+            df = df.drop(columns=cols)
+    return df
+
+
+def _stacked_dispatch_plot(ax, df, colors, x_col=None, alpha=0.8, width=None,
+                           align="center", edgecolor=None, linewidth=None):
+    """Draw a stacked bar plot that stacks positive and negative values apart.
+
+    args:
+        ax: matplotlib axes to draw on.
+        df (pd.DataFrame): values to stack, one column per carrier.
+        colors (list): one colour per data column.
+        x_col (str | None): column to use as x values, index if None.
+        alpha (float): opacity of the bars.
+        width (float | None): bar width in x units, matplotlib default if None.
+        align (str): "center" to centre the bars on x, "edge" to let them start
+            at x and extend over ``width`` (a snapshot stands for the interval
+            that begins at its time stamp).
+        edgecolor: colour of the bar outline, matplotlib default if None.
+        linewidth (float | None): width of the bar outline, default if None.
+    """
+    # with an explicit width the bars are meant to tile the x-axis, so the
+    # axis limits have to follow the bar edges instead of the default margin
+    bar_width = 0.8 if width is None else width
+    margin = 0.5 if width is None else 0.5 * bar_width
+
+    # only override the bar styling when asked for, so that callers relying on
+    # the matplotlib defaults keep their appearance
+    bar_kw = {}
+    if edgecolor is not None:
+        bar_kw["edgecolor"] = edgecolor
+    if linewidth is not None:
+        bar_kw["linewidth"] = linewidth
+
+    if x_col is not None:
+        x = df[x_col].values
+        data_cols = [c for c in df.columns if c != x_col]
+    else:
+        x = df.index.values
+        data_cols = list(df.columns)
+    # split into pos and neg values for stacking
+    pos_bottoms = np.zeros(len(x))
+    neg_bottoms = np.zeros(len(x))
+
+    #  plot each column separately
+    for i, col in enumerate(data_cols):
+        vals = df[col].values
+        pos_vals = np.clip(vals, 0, None)
+        neg_vals = np.clip(vals, None, 0)
+
+        ax.bar(x, pos_vals, bottom=pos_bottoms, width=bar_width, align=align,
+                label=col,  color=colors[i], alpha=alpha, **bar_kw)
+        ax.bar(x, neg_vals, bottom=neg_bottoms, width=bar_width, align=align,
+                color=colors[i], alpha=alpha, **bar_kw)
+
+        pos_bottoms += pos_vals
+        neg_bottoms += neg_vals
+
+    ax.axhline(0, color="black", linewidth=1., linestyle="--")
+    if align == "edge":
+        ax.set_xlim(x[0], x[-1] + bar_width)
+    else:
+        ax.set_xlim(x[0] - margin, x[-1] + margin)
+
+
+def _select_co2_levels(co2_lvls_selected, n_nodes: int):
+    """Match the requested CO2 levels against the ones available on disk.
+
+    args:
+        co2_lvls_selected (tuple | None): requested levels, all if None.
+        n_nodes (int): number of nodes of the networks to look for.
+    """
+    co2ls = get_co2_levels(n_nodes=n_nodes)
+    if co2_lvls_selected is None:
+        return list(co2ls)
+
+    co2_in_list = list()
+    for co2_r in co2_lvls_selected:
+        diff_r = abs(co2ls - co2_r)
+        idx_co2 = np.argmin(diff_r)
+        if diff_r[idx_co2] < 1e-6:
+            co2_in_list.append(co2ls[idx_co2])
+
+    logger.info(f"Selected Co2 lvls {co2_in_list}")
+    return co2_in_list
+
+
+def plot_load_dispatch(n_nodes: int = 600,
+                       agg_solar:bool = True,
                        agg_gas:bool = True, 
                        agg_offwind:bool = True, 
                        drop_carriers:bool = True,
@@ -445,18 +593,8 @@ def plot_load_dispatch(n_nodes: int = 600,
         drop_carriers (bool): Whether to drop certain carriers (geothermal, art_load, load) from the profiles before plotting.
     """
     # Load networks for all CO2 levels
-    co2ls = get_co2_levels(n_nodes=n_nodes)
-    if co2_lvls_selected is not None:
-        co2_in_list = list()
-        for co2_r in co2_lvls_selected:
-            diff_r = abs(co2ls - co2_r)
-            idx_co2 = np.argmin(diff_r)
-            if diff_r[idx_co2] < 1e-6:
-                co2_in_list.append(co2ls[idx_co2])
-                
-        logger.info(f"Selected Co2 lvls {co2_in_list}")
-        co2ls = co2_in_list
-    
+    co2ls = _select_co2_levels(co2_lvls_selected, n_nodes=n_nodes)
+
     networks = {
         c:   load_pypsa_network(co2lvl=c, n_nodes=n_nodes)
         for c in co2ls
@@ -464,92 +602,33 @@ def plot_load_dispatch(n_nodes: int = 600,
 
     n_ref = networks[co2ls[0]]
 
-    nice_names = n_ref.carriers.nice_name
-    colors_gens = n_ref.carriers.set_index("nice_name").color
-
-    colors_gens["Offshore Wind"] = n_ref.carriers.color.get("offwind-dc", "#1f77b4")
-    colors_gens['Hydrogen Storage'] = "green"
-    colors_gens['Battery Storage'] = "tab:olive"
-    nice_names.loc['gas'] = 'Gas'
-    nice_names['offwind'] = 'Offshore Wind'
-    colors_gens['Gas'] =   "#cc0099"
-
+    nice_names, colors_gens = _dispatch_carrier_style(n_ref)
 
     idx = n_ref.snapshots
 
-    winter = idx.month.isin([12, 1, 2])
-    spring = idx.month.isin([3, 4, 5])
-    summer = idx.month.isin([6, 7, 8])
-    autumn = idx.month.isin([9, 10, 11])
-    
+    season_masks = {name: idx.month.isin(months)
+                    for name, months in _SEASONS.items()}
+
     def _agg_carriers(df):
-        df = df.copy()
-        if drop_carriers:
-            drop_cols = ["geothermal", "art_load","load"]
-            df = df.drop(columns=drop_cols)
-        if agg_gas:
-            cols = [c for c in ["CCGT", "OCGT"] if c in df.columns]
-            if cols:
-                df["gas"] = df[cols].sum(axis=1)
-                df = df.drop(columns=cols)
-        if agg_solar:
-            cols = [c for c in ["solar", "solar-hsat"] if c in df.columns]
-            if len(cols) > 1:
-                df["solar"] = df[cols].sum(axis=1)
-                df = df.drop(columns=[c for c in cols if c != "solar"])
-        if agg_offwind:
-            cols = [c for c in ["offwind-ac", "offwind-dc", "offwind-float"]
-                    if c in df.columns]
-            if cols:
-                df["offwind"] = df[cols].sum(axis=1)
-                df = df.drop(columns=cols)
-        return df
+        return _agg_dispatch_carriers(df,
+                                      agg_solar=agg_solar,
+                                      agg_gas=agg_gas,
+                                      agg_offwind=agg_offwind,
+                                      drop_carriers=drop_carriers)
 
-    def stackedplot(ax, df, colors, x_col=None, alpha=0.8):
-        if x_col is not None:
-            x = df[x_col].values
-            data_cols = [c for c in df.columns if c != x_col]
-        else:
-            x = df.index.values
-            data_cols = list(df.columns)
-        # split into pos and neg values for stacking
-        pos_bottoms = np.zeros(len(x))
-        neg_bottoms = np.zeros(len(x))
-
-        #  plot each column separately
-        for i, col in enumerate(data_cols):
-            vals = df[col].values
-            pos_vals = np.clip(vals, 0, None)
-            neg_vals = np.clip(vals, None, 0)
-
-            ax.bar(x, pos_vals, bottom=pos_bottoms, 
-                    label=col,  color=colors[i], alpha=alpha)
-            ax.bar(x, neg_vals, bottom=neg_bottoms, 
-                    color=colors[i], alpha=alpha)
-
-            pos_bottoms += pos_vals
-            neg_bottoms += neg_vals
-
-        ax.axhline(0, color="black", linewidth=0.8)
-        ax.set_xlim(x[0] - 0.5, x[-1] + 0.5)
+    stackedplot = _stacked_dispatch_plot
 
     for co2, n in networks.items():
         fig, axes = plt.subplots(2, 2,sharex=True,
                                  sharey=True, figsize=FOUR_PANEL_SIZE)
-        for ax, season, title in zip(axes.flatten(), 
-                                     [winter, spring, summer, autumn],
-                                     ["Winter", "Spring", "Summer", "Autumn"]):
+        for ax, (title, season) in zip(axes.flatten(),
+                                       season_masks.items()):
             gen = n.generators_t.p.T.groupby(n.generators.carrier).sum().T
             sto = n.storage_units_t.p.T.groupby(n.storage_units.carrier).sum().T
             supply = sto.add(gen, fill_value=0)
 
-            load = n.loads_t.p.sum(axis=1)
-
             supply = _agg_carriers(supply)
             supply_season = supply.loc[season]
-            load_season = load.loc[season]
-
-
 
             hour = supply_season.index.hour
             avg_profile = supply_season.groupby(hour).mean()
@@ -557,9 +636,9 @@ def plot_load_dispatch(n_nodes: int = 600,
             load_season = load.loc[season]
             avg_load = load_season.groupby(load_season.index.hour).mean()
 
-            
+
             # plot supply and load
-            stackedplot(ax, avg_profile/1e3, 
+            stackedplot(ax, avg_profile/1e3,
                         colors=[colors_gens.get(c, "#333333") for c in nice_names[avg_profile.columns]], x_col=None, alpha=0.8)
             ax.plot(avg_load.index, avg_load/1e3, 
                     color="black", linewidth=2,label="Load")
@@ -588,7 +667,204 @@ def plot_load_dispatch(n_nodes: int = 600,
 
         save_prefix_str = save_prefix + "_" if save_prefix is not None else ""
         
-        save_figure(fig, f"{save_prefix_str}load_dispatch_{n_nodes}_{co2}", 
+        save_figure(fig, f"{save_prefix_str}load_dispatch_{n_nodes}_{co2}",
                     path_to_figures_sclopf)
-        
+
+    return
+
+
+def _co2_row_label(co2, n_nodes: int) -> str:
+    """Build the CO2 row label, falling back to the target level if needed.
+
+    ``get_actual_co2_level`` is only available for the 600 node networks, so for
+    every other resolution the target level of the scenario is shown instead.
+
+    args:
+        co2 (float): CO2 level of the scenario.
+        n_nodes (int): number of nodes of the network.
+    """
+    try:
+        lvl_percent = get_actual_co2_level(co2, n_nodes=n_nodes, percent=True)
+    except NotImplementedError:
+        lvl_percent = co2 * 100.
+
+    return rf"CO$_2$ level $= {lvl_percent:g}\,\%$"
+
+
+def plot_load_dispatch_grid(n_nodes: int = 600,
+                            agg_solar: bool = True,
+                            agg_gas: bool = True,
+                            agg_offwind: bool = True,
+                            drop_carriers: bool = True,
+                            co2_lvls_selected: tuple[float, ...] | None = (0.6, 0.2, 0.0),
+                            figsize: tuple[float, float] | None = None,
+                            save_prefix: str | None = None):
+
+    """Plot load and dispatch profiles as a single CO2-by-season grid figure.
+
+    Same content as :func:`plot_load_dispatch`, but instead of one figure per CO2
+    level this draws a single figure with one CO2 level per row (in descending
+    order) and one season per column. All panels share the same y-axis, so the
+    rows can be compared directly.
+
+    args:
+        n_nodes (int): The number of nodes in the PyPSA networks to load and analyze.
+        agg_solar (bool): Whether to aggregate solar and solar-hsat profiles into a single "solar" category.
+        agg_gas (bool): Whether to aggregate CCGT and OCGT profiles into a single "gas" category.
+        agg_offwind (bool): Whether to aggregate offwind-dc, offwind-ac, and offwind-float profiles into a single "offwind" category.
+        drop_carriers (bool): Whether to drop certain carriers (geothermal, art_load, load) from the profiles before plotting.
+        co2_lvls_selected (tuple | None): CO2 levels to show as rows, all available ones if None.
+        figsize (tuple | None): Figure size, derived from the grid shape if None.
+        save_prefix (str | None): Prefix prepended to the file name.
+    """
+    # Load networks for all CO2 levels
+    co2ls = _select_co2_levels(co2_lvls_selected, n_nodes=n_nodes)
+
+    if not co2ls:
+        logger.warning("No matching CO2 levels found, skipping load dispatch grid.")
+        return
+
+    # rows run from the highest to the lowest CO2 level, independent of the
+    # order in which the levels were requested
+    co2ls = sorted(co2ls, reverse=True)
+
+    networks = {
+        c:   load_pypsa_network(co2lvl=c, n_nodes=n_nodes)
+        for c in co2ls
+    }
+
+    n_ref = networks[co2ls[0]]
+
+    nice_names, colors_gens = _dispatch_carrier_style(n_ref)
+
+    idx = n_ref.snapshots
+
+    season_masks = {name: idx.month.isin(months)
+                    for name, months in _SEASONS.items()}
+
+    # the load is expected to be identical across the CO2 scenarios, which is
+    # what makes the rows comparable -- verify instead of assuming it
+    ref_load = n_ref.loads_t.p.sum(axis=1)
+    for c, n in networks.items():
+        if not np.allclose(n.loads_t.p.sum(axis=1), ref_load, rtol=1e-6):
+            logger.warning(f"Load profile for Co2L{c} differs from the reference "
+                           f"level {co2ls[0]}; rows are not directly comparable.")
+
+    n_rows, n_cols = len(co2ls), len(season_masks)
+    fig, axes = plt.subplots(n_rows, n_cols,
+                             sharex=True, sharey=True, squeeze=False,
+                             figsize=figsize or (2.6 * n_cols, 2.1 * n_rows))
+
+    for row, co2 in enumerate(co2ls):
+        n = networks[co2]
+
+        gen = n.generators_t.p.T.groupby(n.generators.carrier).sum().T
+        sto = n.storage_units_t.p.T.groupby(n.storage_units.carrier).sum().T
+        supply = _agg_dispatch_carriers(sto.add(gen, fill_value=0),
+                                        agg_solar=agg_solar,
+                                        agg_gas=agg_gas,
+                                        agg_offwind=agg_offwind,
+                                        drop_carriers=drop_carriers)
+        load = n.loads_t.p.sum(axis=1)
+
+        for col, (season_name, season) in enumerate(season_masks.items()):
+            ax = axes[row, col]
+
+            supply_season = supply.loc[season]
+            avg_profile = supply_season.groupby(supply_season.index.hour).mean()
+
+            load_season = load.loc[season]
+            avg_load = load_season.groupby(load_season.index.hour).mean()
+
+            # A snapshot stands for the interval that starts at its time
+            # stamp and lasts snapshot_weightings hours (3 h at the 3H
+            # resolution used here). The bars are therefore as wide as that
+            # interval and start at the stamp, so that they tile the day.
+            hours = avg_profile.index.values
+            bar_width = float(np.diff(hours).min()) if len(hours) > 1 else 1.
+
+            # plot supply and load
+            _stacked_dispatch_plot(ax, avg_profile/1e3,
+                                   colors=[colors_gens.get(c, "#333333")
+                                           for c in nice_names[avg_profile.columns]],
+                                   x_col=None, alpha=0.8,
+                                   width=bar_width, align="edge",
+                                   edgecolor="0.4", linewidth=0.3)
+
+            # the load is an interval average as well, so it is drawn as a
+            # step that is constant over each interval instead of a line
+            # interpolating between the stamps
+            load_x = np.append(avg_load.index.values, hours[-1] + bar_width)
+            load_y = np.append(avg_load.values, avg_load.values[-1])
+            ax.step(load_x, load_y/1e3, where="post",
+                    color="black", linewidth=2, label="Load")
+
+            ax.set_xticks(np.arange(hours[0], hours[-1] + bar_width + 1e-9, 6))
+            ax.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+
+            # only label the outer edges of the grid
+            if col == 0:
+                ax.set_ylabel("Power [GW]", size=AXIS_LABEL_FONTSIZE)
+            if row == n_rows - 1:
+                ax.set_xlabel("Hour of day", size=AXIS_LABEL_FONTSIZE)
+            if row == 0:
+                # season as an annotation above the panel, not as an axes title
+                ax.text(0.5, 1.03, season_name,
+                        transform=ax.transAxes,
+                        ha="center", va="bottom",
+                        fontsize=AXIS_LABEL_FONTSIZE)
+
+    fig.tight_layout()
+
+    # CO2 level of each row, placed left of everything the row already draws
+    # (y-label and tick labels). The position is taken from the rendered
+    # extent so that it holds for any figure size.
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    inv = fig.transFigure.inverted()
+
+    row_extents = [
+        axes[row, 0].get_tightbbox(renderer).transformed(inv)
+        for row in range(n_rows)
+    ]
+    x_label = min(bb.x0 for bb in row_extents) - 0.1 / fig.get_size_inches()[0]
+
+    for row, co2 in enumerate(co2ls):
+        pos = axes[row, 0].get_position()
+        fig.text(x_label, 0.5 * (pos.y0 + pos.y1),
+                 _co2_row_label(co2, n_nodes=n_nodes),
+                 rotation=90, ha="right", va="center",
+                 fontsize=AXIS_LABEL_FONTSIZE)
+
+    # add legend
+    # placed below the rendered extent of the bottom row -- using the tight
+    # bounding box instead of the axes box keeps it clear of the tick labels
+    # and the "Hour of day" labels whatever the font size and figure size are
+    fig_h = fig.get_size_inches()[1]
+    bottom_extent = min(
+        axes[n_rows - 1, col].get_tightbbox(renderer).transformed(inv).y0
+        for col in range(n_cols)
+    )
+    gap_in, legend_h_in = 0.3, 1.0
+
+    legend_ax = fig.add_axes([0.02,
+                              bottom_extent - (gap_in + legend_h_in) / fig_h,
+                              0.96,
+                              legend_h_in / fig_h])
+    legend_ax.axis("off")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+
+    labels = [nice_names.get(l, l) for l in labels]
+    labels = [name.capitalize().replace("&", "\\&") for name in labels]
+
+    legend_ax.legend(handles, labels,
+                     ncol=4, loc="center",
+                     frameon=True,
+                     fontsize=LEGEND_FONTSIZE)
+
+    save_prefix_str = save_prefix + "_" if save_prefix is not None else ""
+
+    save_figure(fig, f"{save_prefix_str}load_dispatch_seasons_grid_n{n_nodes}",
+                path_to_figures_sclopf)
+
     return
