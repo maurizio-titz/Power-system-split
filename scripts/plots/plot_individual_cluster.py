@@ -224,6 +224,117 @@ def plot_cluster_summary(
     )
 
 
+def plot_largest_component_two_panel(
+    largest_component,
+    inertia_share,
+    co2l,
+    save_dir,
+    f_name=None,
+):
+    """Plot the load/inertia share and the power imbalance/rotational energy of the
+    largest component of each split next to each other.
+
+    Layout: the left panel holds the load share against the inertia share together with
+    the 1:1 line, the right panel holds the power imbalance against the rotational
+    energy, coloured by the load share and shaded by the RoCoF border.
+
+    Args:
+        largest_component: DataFrame of the largest component of each split, holding
+            load_share, power_imbalance [MW] and rot_energy [MWs]
+        inertia_share: Series of the share of the system inertia the largest component
+            carries, aligned with largest_component
+        co2l: CO2 level, only used for the file name
+        save_dir: directory the figure is written to
+        f_name: file name without extension (default:
+            largest_component_two_panel_co2l{co2l})
+    """
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+    # Plot 1 (left): Load share vs inertia share
+    axs[0].scatter(
+        largest_component.load_share,
+        inertia_share,
+        alpha=0.5,
+        s=10,
+    )
+    axs[0].set_xlabel("Load Share of Component")
+    axs[0].set_ylabel("Inertia Share of Component")
+    xlims = axs[0].get_xlim()
+    ylims = axs[0].get_ylim()
+    axs[0].plot([0, 1], [0, 1], color="red", linestyle="-", linewidth=0.5)
+    axs[0].set_xlim(xlims)
+    axs[0].set_ylim(ylims)
+
+    # Plot 2 (right): Power imbalance vs rotational energy
+    sc = axs[1].scatter(
+        largest_component.power_imbalance / 1000,
+        largest_component.rot_energy / 1000,
+        c=largest_component.load_share,
+        cmap="viridis",
+        alpha=1,
+        s=10,
+    )
+    fig.colorbar(sc, ax=axs[1], label="Load Share of Component", orientation="vertical")
+    cbar_lims = (inertia_share.min(), 1)
+    sc.set_clim(cbar_lims)
+    axs[1].set_xlabel("Power Imbalance [GW]")
+    axs[1].set_ylabel("Rotational Energy [GWs]")
+    xlims = axs[1].get_xlim()
+    ylims = axs[1].get_ylim()
+    x = np.array([0, largest_component.power_imbalance.min() * 2])
+    inertia_rocof_border = -50 * np.array(x) / 2
+    axs[1].plot(
+        x / 1000,
+        inertia_rocof_border / 1000,
+        label="RoCoF Border",
+        linewidth=0.5,
+        color="red",
+    )
+    axs[1].fill_between(
+        x / 1000,
+        inertia_rocof_border / 1000,
+        ylims[1],
+        color="lightgrey",
+        alpha=1,
+        zorder=0,
+    )
+    axs[1].text(
+        x=largest_component.power_imbalance.max() / 1000 * 1.1,
+        y=largest_component.rot_energy.max() / 1000 * 0.95,
+        s="Stable",
+        horizontalalignment="right",
+        verticalalignment="top",
+        fontsize=14,
+    )
+    axs[1].fill_between(
+        x / 1000,
+        ylims[0],
+        inertia_rocof_border / 1000,
+        color="red",
+        alpha=0.1,
+        zorder=0,
+    )
+    axs[1].text(
+        x=largest_component.power_imbalance.min() / 1000 * 0.9,
+        y=largest_component.rot_energy.max() / 1000 * 0.95,
+        s="RoCoF Violation",
+        horizontalalignment="left",
+        verticalalignment="top",
+        fontsize=14,
+    )
+    axs[1].set_xlim(xlims)
+    axs[1].set_ylim(ylims)
+
+    for i, ax in enumerate(axs):
+        plot_style.add_panel_label(ax, i)
+
+    plt.tight_layout()
+
+    if f_name is None:
+        f_name = f"largest_component_two_panel_co2l{co2l}"
+    plot_style.save_figure(fig, f_name, save_dir)
+
+
 for cluster_number in [11, 12]:
     # sort_by = "n_samples"
     sort_by = "weighted_lost_load"
@@ -509,97 +620,12 @@ for cluster_number in [11, 12]:
         largest_component_sub.rot_energy / (total_inertia_sub + 1e-8) / 1000
     )
 
-    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-
-    # Plot 1 (left): Load share vs inertia share
-    axs[0].scatter(
-        largest_component_sub.load_share,
-        inertia_share_largest_component,
-        alpha=0.5,
-        s=10,
+    plot_largest_component_two_panel(
+        largest_component=largest_component_sub,
+        inertia_share=inertia_share_largest_component,
+        co2l=co2l,
+        save_dir=save_dir,
     )
-    axs[0].set_xlabel("Load Share of Component")
-    axs[0].set_ylabel("Inertia Share of Component")
-    # axs[0].set_title("Largest Component")
-    xlims = axs[0].get_xlim()
-    ylims = axs[0].get_ylim()
-    axs[0].plot([0, 1], [0, 1], color="red", linestyle="-", linewidth=0.5)
-    axs[0].set_xlim(xlims)
-    axs[0].set_ylim(ylims)
-
-    # Plot 2 (right): Power imbalance vs rotational energy
-    sc = axs[1].scatter(
-        largest_component_sub.power_imbalance / 1000,
-        largest_component_sub.rot_energy / 1000,
-        c=largest_component_sub.load_share,
-        cmap="viridis",
-        alpha=1,
-        s=10,
-    )
-    fig.colorbar(sc, ax=axs[1], label="Load Share of Component", orientation="vertical")
-    cbar_lims = (inertia_share_largest_component.min(), 1)
-    sc.set_clim(cbar_lims)
-    axs[1].set_xlabel("Power Imbalance [GW]")
-    axs[1].set_ylabel("Rotational Energy [GWs]")
-    xlims = axs[1].get_xlim()
-    ylims = axs[1].get_ylim()
-    x = np.array([0, largest_component_sub.power_imbalance.min() * 2])
-    inertia_rocof_border = -50 * np.array(x) / 2
-    axs[1].plot(
-        x / 1000,
-        inertia_rocof_border / 1000,
-        label="RoCoF Border",
-        linewidth=0.5,
-        color="red",
-    )
-    axs[1].fill_between(
-        x / 1000,
-        inertia_rocof_border / 1000,
-        ylims[1],
-        color="lightgrey",
-        alpha=1,
-        zorder=0,
-    )
-    axs[1].fill_between(
-        x / 1000,
-        inertia_rocof_border / 1000,
-        ylims[1],
-        color="lightgrey",
-        alpha=1,
-        zorder=0,
-    )
-    axs[1].text(
-        x=largest_component_sub.power_imbalance.max() / 1000 * 1.1,
-        y=largest_component_sub.rot_energy.max() / 1000 * 0.95,
-        s="Stable",
-        horizontalalignment="right",
-        verticalalignment="top",
-        fontsize=14,
-    )
-    axs[1].fill_between(
-        x / 1000,
-        ylims[0],
-        inertia_rocof_border / 1000,
-        color="red",
-        alpha=0.1,
-        zorder=0,
-    )
-    axs[1].text(
-        x=largest_component_sub.power_imbalance.min() / 1000 * 0.9,
-        y=largest_component_sub.rot_energy.max() / 1000 * 0.95,
-        s="RoCoF Violation",
-        horizontalalignment="left",
-        verticalalignment="top",
-        fontsize=14,
-    )
-    axs[1].set_xlim(xlims)
-    axs[1].set_ylim(ylims)
-    # axs[1].set_title("Largest Component")
-
-    plt.tight_layout()
-
-    f_name = f"largest_component_two_panel_co2l{co2l}"
-    plot_style.save_figure(fig, f_name, save_dir)
 
     # analyse overfrequency nodes
 
