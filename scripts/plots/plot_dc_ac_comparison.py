@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
 from utils.config import path_to_ac_dc_comparison, path_to_figures_sclopf
-from utils.plot_style import setup_matplotlib_style, AXIS_LABEL_FONTSIZE, get_co2_color, TWO_PANEL_SIZE,TICK_LABEL_FONTSIZE
+from utils.plot_style import setup_matplotlib_style, AXIS_LABEL_FONTSIZE, get_co2_color, TWO_PANEL_SIZE,TICK_LABEL_FONTSIZE, add_panel_label
 from utils.data_handling import get_co2_levels, load_pypsa_network
 
 fig_dir = os.path.join(path_to_figures_sclopf, "ac_dc_comparison")
@@ -534,7 +534,7 @@ def plot_ac_dc_ratio_log_lin_spread_q_combined(
     real_percents: list,
     n_bins: int = 60,
     dc_threshold: float = 0.2,
-    xlim_log: tuple = (10**(-0.5), 10**(0.5)),
+    xlim_log: tuple = (1e-1, 1e1),
     xlim_ratio: tuple = (0, 2),
     xlim_spread_q: tuple = (0, .1),
     figsize: tuple = (16, 5),
@@ -606,6 +606,83 @@ def plot_ac_dc_ratio_log_lin_spread_q_combined(
     return fig, (ax_log, ax_lin, ax_spread_q)
 
 
+def plot_ac_dc_ratio_log_lin_combined(
+    loading_df_by_co2: dict,
+    co2_levels: list,
+    real_percents: list,
+    n_bins: int = 60,
+    dc_threshold: float = 0.2,
+    xlim_log: tuple = (1e-1, 1e1),
+    xlim_ratio: tuple = (0, 2),
+    figsize: tuple = (32 / 3, 5),
+    legend_fontsize: int = 18,
+):
+    """2-panel version of :func:`plot_ac_dc_ratio_log_lin_spread_q_combined`,
+    dropping the Q-spread panel:
+
+    left  = AC/DC ratio, log x-scale, fixed range ``xlim_log``
+    right = AC/DC ratio, linear x-scale, fixed range ``xlim_ratio``
+
+    Both panels show the same quantity, so the two x-ranges are deliberately
+    independent: the log panel is centred on ratio=1 to resolve the tails, the
+    linear one keeps the conventional 0-2 window. All CO2 levels are overlaid
+    as ``histtype='step'`` outlines coloured by :func:`get_co2_color`.
+
+    Bins and x-limits match the first two panels of the 3-panel version, and
+    the default ``figsize`` is two of its panels wide (16/3 in each), so the
+    two figures can be compared directly. Each panel keeps its own autoscaled
+    y-limit -- the log and linear bins have different widths, so their counts
+    are not directly comparable anyway.
+    """
+    fig, (ax_log, ax_lin) = plt.subplots(1, 2, figsize=figsize)
+
+    ratios = {}
+    for co2lvl in co2_levels:
+        filtered = loading_df_by_co2[co2lvl]
+        if dc_threshold > 0:
+            filtered = filtered[filtered["dc_loading"] > dc_threshold]
+        ratio = filtered["ratio"].replace([np.inf, -np.inf], np.nan).dropna()
+        ratios[co2lvl] = ratio[ratio != 0]  # exclude zero-ratio (ac_loading == 0) entries
+
+    # shared bins across all CO2 levels, fixed ranges so panels stay comparable
+    bins_log = np.logspace(np.log10(xlim_log[0]), np.log10(xlim_log[1]), n_bins + 1)
+    bins_lin = np.linspace(xlim_ratio[0], xlim_ratio[1], n_bins + 1)
+
+    for co2lvl, real_pct in zip(co2_levels, real_percents):
+        color = get_co2_color(co2lvl)
+        # bare percentage -- the shared legend title carries "[% of 1990]"
+        label = f"{int(real_pct)}\%"
+
+        ax_log.hist(ratios[co2lvl], bins=bins_log, histtype="step", lw=2.5, color=color, label=label, alpha=.9)
+        ax_lin.hist(ratios[co2lvl], bins=bins_lin, histtype="step", lw=2.5, color=color, label=label, alpha=.9)
+
+    ax_log.set_xscale("log")
+    ax_log.set_xlim(bins_log[0], bins_log[-1])
+    ax_lin.set_xlim(*xlim_ratio)
+
+    for i, ax in enumerate((ax_log, ax_lin)):
+        ax.axvline(1.0, color="0.3", linestyle="--", linewidth=1.5, zorder=5)
+        ax.tick_params(axis="both", labelsize=AXIS_LABEL_FONTSIZE)
+        ax.set_ylabel("Counts", fontsize=AXIS_LABEL_FONTSIZE)
+        ax.set_xlabel("AC / DC loading", fontsize=AXIS_LABEL_FONTSIZE)
+        _set_scientific_y(ax)
+        add_panel_label(ax, i)
+
+    # one legend in the linear panel only -- the colors are shared, so
+    # repeating it in the log panel would just eat plotting area
+    leg = ax_lin.legend(
+        title="CO$_2$ level \n[\\% of 1990]",
+        loc="upper right", frameon=True,
+        fontsize=legend_fontsize,
+        title_fontsize=legend_fontsize,
+    )
+    # centre the two title lines against each other (default is left-aligned)
+    leg.get_title().set_multialignment("center")
+
+    fig.tight_layout()
+    return fig, (ax_log, ax_lin)
+
+
 # %% [markdown]
 # ## Figures
 def plot_dc_ac_comparison():
@@ -675,6 +752,15 @@ def plot_dc_ac_comparison():
     )
 
     fig.savefig(os.path.join(fig_dir, "ac_dc_ratio_log_lin_spread_q_combined.pdf"))
+
+    # %%
+    # --- 2-panel: AC/DC ratio (log) and AC/DC ratio (linear) only ---
+    fig, axes = plot_ac_dc_ratio_log_lin_combined(
+        loading_df_by_co2, [0.6, 0.2, 0.0], [58, 20, 0],
+        dc_threshold=dc_threshold,
+    )
+
+    fig.savefig(os.path.join(fig_dir, "ac_dc_ratio_log_lin_combined.pdf"))
 
 
 if __name__ == "__main__":
