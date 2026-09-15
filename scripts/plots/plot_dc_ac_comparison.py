@@ -5,7 +5,7 @@ import sys
 
 sys.path.append("./")
 sys.path.append("./../")
-
+import matplotlib as mpl
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -270,8 +270,8 @@ def compute_ac_dc_metrics(loading_df: pd.DataFrame, dc_threshold: float = 0.0):
     ac_max = grouped.transform("max")
     ac_min = grouped.transform("min")
 
-    diff_ac_dc = (loading_df["ac_loading"] - loading_df["dc_loading"]) / loading_df["dc_loading"] * 100
-    spread_q_full = (ac_max - ac_min) * 100
+    diff_ac_dc = (loading_df["ac_loading"] - loading_df["dc_loading"]) / loading_df["dc_loading"]
+    spread_q_full = (ac_max - ac_min)
     # one row per (snapshot, Line) -- the value is identical across the pf
     # duplicates by construction (it's a transform), so .first() is exact,
     # not a lossy aggregation.
@@ -497,8 +497,8 @@ def plot_ac_dc_vs_q_uncertainty_combined(
 
         _, spread_q = compute_ac_dc_metrics(loading_df, dc_threshold=dc_threshold)
 
-        ax_left.hist(ratio, bins=bins_left, histtype="step", lw=2.5, color=color, label=label,alpha = .6)
-        ax_right.hist(spread_q, bins=bins_right, histtype="step", lw=2.5, color=color, label=label,alpha = .6)
+        ax_left.hist(ratio, bins=bins_left, histtype="step", lw=2.5, color=color, label=label,alpha = .9)
+        ax_right.hist(spread_q, bins=bins_right, histtype="step", lw=2.5, color=color, label=label,alpha = .9)
 
     ax_left.axvline(1.0, color="0.3", linestyle="--", linewidth=1.5, zorder=5)
     ax_left.set_xlim(*xlim_left)
@@ -522,9 +522,88 @@ def plot_ac_dc_vs_q_uncertainty_combined(
         fontsize=AXIS_LABEL_FONTSIZE,
     )
     ax_left.legend(title="CO$_2$ level", loc="upper right", frameon=True)
+    ax_right.legend(title="CO$_2$ level", loc="upper right", frameon=True)
 
     fig.tight_layout()
     return fig, (ax_left, ax_right)
+
+
+def plot_ac_dc_ratio_log_lin_spread_q_combined(
+    loading_df_by_co2: dict,
+    co2_levels: list,
+    real_percents: list,
+    n_bins: int = 60,
+    dc_threshold: float = 0.2,
+    xlim_log: tuple = (10**(-0.5), 10**(0.5)),
+    xlim_ratio: tuple = (0, 2),
+    xlim_spread_q: tuple = (0, .1),
+    figsize: tuple = (16, 5),
+):
+    """3-panel figure, all CO2 levels overlaid as step histograms per panel:
+
+    left   = AC/DC ratio, log x-scale, fixed range ``xlim_log``
+    middle = AC/DC ratio, linear x-scale, fixed range ``xlim_ratio``
+    right  = (AC - DC) / DC loading ("delta"), linear x-scale, fixed range
+             ``xlim_delta``
+
+    Uses ``histtype='step'`` and :func:`get_co2_color` so levels stay
+    distinguishable and colors match every other CO2-level figure.
+    """
+    fig, (ax_log, ax_lin, ax_spread_q) = plt.subplots(1, 3, figsize=figsize)
+
+    ratios = {}
+    spread_qs = {}
+    for co2lvl in co2_levels:
+        loading_df = loading_df_by_co2[co2lvl]
+        filtered = loading_df
+        if dc_threshold > 0:
+            filtered = filtered[filtered["dc_loading"] > dc_threshold]
+        ratio = filtered["ratio"].replace([np.inf, -np.inf], np.nan).dropna()
+        ratio = ratio[ratio != 0]  # exclude zero-ratio (ac_loading == 0) entries
+        ratios[co2lvl] = ratio
+
+        _, spread_q = compute_ac_dc_metrics(loading_df, dc_threshold=dc_threshold)
+        spread_qs[co2lvl] = spread_q
+
+    # shared log bins across all CO2 levels, fixed range xlim_log
+    bins_log = np.logspace(np.log10(xlim_log[0]), np.log10(xlim_log[1]), n_bins + 1)
+    bins_lin = np.linspace(xlim_ratio[0], xlim_ratio[1], n_bins + 1)
+    bins_spread_q = np.linspace(xlim_spread_q[0], xlim_spread_q[1], n_bins + 1)
+
+    for co2lvl, real_pct in zip(co2_levels, real_percents):
+        color = get_co2_color(co2lvl)
+        label = _format_co2_label(real_pct)
+
+        ax_log.hist(ratios[co2lvl], bins=bins_log, histtype="step", lw=2.5, color=color, label=label, alpha=.9)
+        ax_lin.hist(ratios[co2lvl], bins=bins_lin, histtype="step", lw=2.5, color=color, label=label, alpha=.9)
+        ax_spread_q.hist(spread_qs[co2lvl], bins=bins_spread_q, histtype="step", lw=2.5, color=color, label=label, alpha=.9)
+
+    ax_log.set_xscale("log")
+    ax_log.set_xlim(bins_log[0], bins_log[-1])
+    ax_lin.set_xlim(*xlim_ratio)
+    ax_spread_q.set_xlim(*xlim_spread_q)
+
+    ax_log.axvline(1.0, color="0.3", linestyle="--", linewidth=1.5, zorder=5)
+    ax_lin.axvline(1.0, color="0.3", linestyle="--", linewidth=1.5, zorder=5)
+    ax_spread_q.axvline(0.0, color="0.3", linestyle="--", linewidth=1.5, zorder=5)
+
+    for ax in (ax_log, ax_lin, ax_spread_q):
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.grid(axis="y", alpha=0.3, linewidth=0.5)
+        ax.tick_params(axis="both", labelsize=AXIS_LABEL_FONTSIZE)
+        ax.set_ylabel("Counts", fontsize=AXIS_LABEL_FONTSIZE)
+        _set_scientific_y(ax)
+        ax.legend(title="CO$_2$ level", loc="upper right", frameon=True)
+
+    ax_log.set_xlabel("AC / DC loading", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_lin.set_xlabel("AC / DC loading", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_spread_q.set_xlabel(r"$(\max_{Q}$ AC loading $-$ $\min_{Q}$ AC loading)" "\n" r"/ DC loading",
+    fontsize=AXIS_LABEL_FONTSIZE,)
+
+
+    fig.tight_layout()
+    return fig, (ax_log, ax_lin, ax_spread_q)
 
 
 # %% [markdown]
@@ -568,7 +647,7 @@ def plot_dc_ac_comparison():
     # %%
     # --- AC/DC ratio vs. Q-uncertainty spread, one row per CO2 level ---
     dc_threshold = 0.2
-    xlim_right = (0, 10)
+    xlim_right = (0, 1e-1)
     n_bins_right = 40
     fig, axes = plot_ac_dc_vs_q_uncertainty(
         loading_df_by_co2, [0.6,0.2,0], [0.58,0.2,0],
@@ -587,6 +666,15 @@ def plot_dc_ac_comparison():
     )
 
     fig.savefig(os.path.join(fig_dir, "ac_dc_ratio_vs_q_uncertainty_spread_combined.pdf"))
+
+    # %%
+    # --- 3-panel: AC/DC ratio (log), AC/DC ratio (linear), AC diff (linear) ---
+    fig, axes = plot_ac_dc_ratio_log_lin_spread_q_combined(
+        loading_df_by_co2, [0.6, 0.2, 0.0], [58, 20, 0],
+        dc_threshold=dc_threshold,
+    )
+
+    fig.savefig(os.path.join(fig_dir, "ac_dc_ratio_log_lin_spread_q_combined.pdf"))
 
 
 if __name__ == "__main__":
