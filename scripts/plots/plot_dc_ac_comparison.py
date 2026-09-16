@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
 from utils.config import path_to_ac_dc_comparison, path_to_figures_sclopf
-from utils.plot_style import setup_matplotlib_style, AXIS_LABEL_FONTSIZE, get_co2_color, TWO_PANEL_SIZE,TICK_LABEL_FONTSIZE, add_panel_label
+from utils.plot_style import setup_matplotlib_style, AXIS_LABEL_FONTSIZE, get_co2_color, TWO_PANEL_SIZE,TICK_LABEL_FONTSIZE, add_panel_label, save_figure
 from utils.data_handling import get_co2_levels, load_pypsa_network
 
 fig_dir = os.path.join(path_to_figures_sclopf, "ac_dc_comparison")
@@ -681,6 +681,30 @@ def plot_ac_dc_ratio_log_lin_combined(
 
     fig.tight_layout()
     return fig, (ax_log, ax_lin)
+
+
+def plot_ac_dc_loading_comparison_two_panel(dc_threshold: float = 0.2,
+                                            save_prefix: str | None = None):
+    """Plot and save only the 2-panel AC/DC loading comparison for the SI.
+
+    Entry point used by 'scripts/plot_all_manuscript_figures.py'; all the other
+    AC/DC figures are produced by :func:`plot_dc_ac_comparison`.
+
+    Args:
+        dc_threshold (float): Drop lines whose DC loading is below this value.
+        save_prefix (str | None): Prefix prepended to the file name.
+    """
+    setup_matplotlib_style()
+
+    fig, _ = plot_ac_dc_ratio_log_lin_combined(
+        loading_df_by_co2, [0.6, 0.2, 0.0], [58, 20, 0],
+        dc_threshold=dc_threshold,
+    )
+
+    save_prefix_str = save_prefix + "_" if save_prefix is not None else ""
+    save_figure(fig, f"{save_prefix_str}ac_dc_ratio_log_lin_combined", fig_dir)
+
+    return
 
 
 # %% [markdown]

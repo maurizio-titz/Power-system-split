@@ -222,6 +222,14 @@ def plot_supplementary_figures(low_memory: bool = False):
     
     # Sensitivity analysis of different RoCoF levels
     plot_split_risk_categories_across_rocof_thresholds(save_fig=True)
+
+    # AC vs. DC line loading (2 panels: log and linear x-scale)
+    ## imported here and not at the top, since importing the module already loads
+    ## all AC and DC power flow results.
+    from scripts.plots.plot_dc_ac_comparison import plot_ac_dc_loading_comparison_two_panel
+    plot_ac_dc_loading_comparison_two_panel(save_prefix="SI")
+    
+    
     
     return
 
