@@ -193,6 +193,7 @@ def ax_plot_split_network(nx_graph: nx.Graph, ax: plt.Axes | None,
                           node_size: float = 100,
                           node_edge_width: float = 0.,
                           edge_width: float = 3.,
+                          failed_edge_width_scale: float = 1.5,
                           component_cmap: str = "Dark2"):
     """Plot the split network components on given axis from networkx graph and failed links.
     Args:
@@ -203,6 +204,10 @@ def ax_plot_split_network(nx_graph: nx.Graph, ax: plt.Axes | None,
         node_edge_width (float): Width of the outline around each node. 0 draws
             no outline, which is the default.
         edge_width (float): Width of the edges.
+        failed_edge_width_scale (float): How much wider the dashed lines of the
+            failed corridors are drawn than the intact ones. They are the point
+            of the panel and are dashed and grey, which already makes them
+            lighter than the solid black lines around them.
         component_cmap (str): Qualitative colormap the components are colored
             from. Taken explicitly instead of through the "C0", "C1", ... cycle,
             because importing ``utils.plot_style`` resets the cycle to the
@@ -241,7 +246,7 @@ def ax_plot_split_network(nx_graph: nx.Graph, ax: plt.Axes | None,
     if ax is not None:
         nx.draw_networkx_edges(nx_graph, pos, ax=ax, edgelist=failed_edges_names,
                                edge_color='gray', style='dashed',
-                               **edges_kwargs)
+                               width=edge_width * failed_edge_width_scale)
     
     cmap_components = plt.get_cmap(component_cmap)
 
@@ -263,6 +268,7 @@ def ax_plot_full_network(nx_graph: nx.Graph, ax: plt.Axes,
                          node_edge_width: float = 0.,
                          node_size: float = 100,
                          edge_width: float = 3.,
+                         failed_edge_width_scale: float = 1.5,
                          fail_color: str | tuple = 'r',
                          failed_link_names: list | None = None):
     """Plot the full network on given axis from networkx graph.
@@ -275,6 +281,8 @@ def ax_plot_full_network(nx_graph: nx.Graph, ax: plt.Axes,
             no outline, which is the default, as in 'ax_plot_split_network'.
         node_size (int): Size of the nodes.
         edge_width (float): Width of the edges.
+        failed_edge_width_scale (float): How much wider the failed corridors are
+            drawn than the intact ones, as in 'ax_plot_split_network'.
         fail_color (str | tuple): Color of the failed edges.
         failed_link_names (list | None): List of failed link names to plot in fail_color.
     Returns:
@@ -289,10 +297,11 @@ def ax_plot_full_network(nx_graph: nx.Graph, ax: plt.Axes,
                            linewidths=node_edge_width,
                            node_size=node_size, ax=ax)
     if failed_link_names is not None:
-        # Plot failed edges in gray dashed lines in background
+        # The failed corridors are what the panel is about, so they are drawn
+        # wider than the rest of the grid.
         nx.draw_networkx_edges(nx_graph, pos, edgelist=failed_link_names,
                                edge_color=fail_color,
-                               width=edge_width, ax=ax)
+                               width=edge_width * failed_edge_width_scale, ax=ax)
         nx.draw_networkx_edges(nx_graph, pos, ax=ax, width=edge_width,
                                edgelist=[edge for edge in nx_graph.edges if edge not in failed_link_names])
         
@@ -414,7 +423,9 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
                                            map_pad_deg: float = 1.,
                                            geomap: bool = True,
                                            geomap_color: str = "0.65",
-                                           geomap_linewidth: float = 4.5,
+                                           geomap_linewidth: float = 0.3,
+                                           panel_box_in: tuple = (1.125, 0.879),
+                                           edge_width: float = 0.2,
                                            save_fig: bool = True,
                                            rasterize: bool = False):
     """Plot entire network and split components for a given trigger line.
@@ -447,7 +458,16 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
         geomap_color (str): Colour of borders and coastlines, see
             'add_geomap_to_ax'.
         geomap_linewidth (float): Their width in points at the size the panels
-            are drawn here, see 'add_geomap_to_ax'.
+            are drawn here, see 'add_geomap_to_ax'. 0.3 pt is what pypsa draws
+            them at on the scenario map, so the three panels of the top row
+            carry the same coastline.
+        panel_box_in (tuple): Box in inches the panel has to fit into. The map
+            is drawn as large as fits, and the canvas is made exactly that size,
+            so the svg carries no margin and goes into inkscape at 100 %.
+        edge_width (float): Width of the transmission lines in points, at the
+            size the panel is actually drawn. Far below the value that suited
+            the old 20 in figures: line widths do not scale with the panel, so
+            drawing at final size means setting them for that size.
         save_fig (bool): Whether to save the figures or show them.
     Returns:
         None
@@ -492,13 +512,30 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
             add_geomap_to_ax(axis, geomap_color=geomap_color,
                              geomap_linewidth=geomap_linewidth)
 
-    # Same node diameter on both, in degrees rather than in points.
+    # Drawn at the size they are placed at, rather than at 20 in and scaled down
+    # by hand afterwards: the panel has to sit beside the scenario map, whose
+    # text fixes it at 100 %, so these two have to arrive at their final size as
+    # well. The map is made as large as 'panel_box_in' allows and the canvas cut
+    # to it, which is also why there is no tight bbox at the save below.
+    map_ratio = ((map_xlim[1] - map_xlim[0]) / (map_ylim[1] - map_ylim[0]))
+    map_width_in = min(panel_box_in[0], panel_box_in[1] * map_ratio)
+    map_height_in = map_width_in / map_ratio
+    for figure, axis in ((fig_full, ax_full), (fig_split, ax_split)):
+        figure.set_size_inches(map_width_in, map_height_in)
+        # The canvas already has the aspect the data wants, so filling it edge
+        # to edge leaves nothing for the aspect machinery to shrink.
+        axis.set_position([0., 0., 1., 1.])
+
+    # Same node diameter on both, in degrees rather than in points. After the
+    # resize: the conversion reads the axes' scale, which the resize changes.
     node_size = node_size_for_data_diameter(ax_full, node_diameter_deg)
 
     ax_plot_full_network(nx_graph, ax_full, node_size=node_size,
+                         edge_width=edge_width,
                          failed_link_names=[list(nx_graph.edges)[xx] for xx in failed_links])
 
-    ax_plot_split_network(nx_graph, ax_split, failed_links, node_size=node_size)
+    ax_plot_split_network(nx_graph, ax_split, failed_links, node_size=node_size,
+                          edge_width=edge_width)
 
     if rasterize:
         ax_full.set_rasterized(True)
@@ -513,7 +550,9 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
             fig_path_full += "_rasterized.png"
         else:
             fig_path_full += ".svg"            
-        fig_full.savefig(os.path.join(path_to_figures_sclopf, fig_path_full), bbox_inches='tight',
+        # No tight bbox: the canvas IS the map, so cropping could only shave
+        # pixels off it, and 'tight' would add its 0.1 in pad back on top.
+        fig_full.savefig(os.path.join(path_to_figures_sclopf, fig_path_full),
                          transparent=True, dpi=dpi_fig)
         fig_full.clear()
         plt.close(fig_full)
@@ -523,7 +562,7 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
             fig_path_split += "_rasterized.png"
         else:
             fig_path_split += ".svg"
-        fig_split.savefig(os.path.join(path_to_figures_sclopf, fig_path_split), bbox_inches='tight',
+        fig_split.savefig(os.path.join(path_to_figures_sclopf, fig_path_split),
                           transparent=True, dpi=dpi_fig)
         fig_split.clear()
         plt.close(fig_split)
@@ -1200,7 +1239,7 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
                                       target: str = "num_GSS",
                                       blackoutthreshold: float = 0.8,
                                       ref_loss_factor: int = 1,
-                                      fontsize: float = 8,
+                                      fontsize: float = 9,
                                       figsize: tuple = (2.6, 2.2),
                                       max_node_size: float = 50.,
                                       edge_width: float = 0.25,
@@ -1210,13 +1249,13 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
                                       legend_loc: str = "upper center",
                                       legend_bbox_to_anchor: tuple | None = (0.5, 0.0),
                                       legend_ncols: int = 2,
-                                      legend_title: str | None = "Additional Inertia",
+                                      legend_title: str | None = "Additional Inertia:",
                                       annotate_total: bool = False,
                                       total_xy: tuple = (0.0, 1.0),
                                       map_xlim: tuple | None = None,
                                       map_ylim: tuple | None = None,
                                       map_pad_deg: float = 1.0,
-                                      map_height_in: float = 1.37,
+                                      map_height_in: float = 1.18,
                                       panel_height_in: float = 2.,
                                       aspect: float | str = "equal",
                                       panel_label: int | None = None,
@@ -1415,9 +1454,12 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
             fname = (f"method_inertia_placement_map_co2l{co2_level}"
                      f"_{target}_blackoutthres{blackoutthreshold}.svg")
             # svg only, like the other parts of the method figure -- assembled
-            # in inkscape.
+            # in inkscape. pad_inches=0: 'tight' otherwise adds the rcParam
+            # default of 0.1 in on every side, which both pushes the file over
+            # the height budget and hangs invisible margins on a panel that is
+            # placed by hand.
             fig.savefig(os.path.join(path_to_figures_sclopf, fname),
-                        bbox_inches='tight', transparent=True)
+                        bbox_inches='tight', pad_inches=0., transparent=True)
             logger.info(f"Saved {fname} to {path_to_figures_sclopf}")
 
             fig.clear()
