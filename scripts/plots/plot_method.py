@@ -682,8 +682,9 @@ def setup_arimo_style(fontsize: float = 8):
 
 def plot_lost_load_share_distribution(n_nodes: int = 600,
                                       fontsize: float = 6,
+                                      label_fontsize: float = 8,
                                       ticklabel_fontsize: float = 5.25,
-                                      figsize: tuple = (1.118, 1.5),
+                                      figsize: tuple = (1.118, 1.55),
                                       legend_ncols: int = 2,
                                       panel_label: int | None = None,
                                       plot_dir: str | None = None,
@@ -714,6 +715,15 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
     "Number of system splits" is ~1.3 in of text at 8 pt and would not fit along
     the count axis, so the labels are abbreviated rather than the font shrunk.
 
+    The axis labels run at ``label_fontsize`` and everything else at
+    ``fontsize``, because the two are limited by different things. The legend is
+    what fixes the panel width -- it already spans 1.036 of the 1.118 in at 6 pt
+    -- so it cannot grow without widening the panel. The labels are bounded by
+    the axes instead: the abbreviated "System Splits" is only about half the
+    height of the count axis, and the row's extra 0.05 in (1.55 rather than 1.5)
+    pays for the taller x-label with room left over, so at 8 pt the data area
+    ends up slightly LARGER than it was with 6 pt labels at 1.5 in.
+
     The legend sits in the figure, below the axes, so the panel is a single
     self-contained svg. It is what sets the figure width: "Lost load:" and the
     5 bins fill a 3-row x 2-column grid, reading left to right, and are wider
@@ -729,12 +739,18 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
 
     Args:
         n_nodes (int): Network resolution the split properties were computed for.
-        fontsize (float): Point size of every text element. 8 pt is the floor
-            for readability, hence the default.
+        fontsize (float): Point size of every text element other than the axis
+            and tick labels, i.e. in practice the legend -- which is what the
+            panel width is set by, so raising this widens the panel.
+        label_fontsize (float): Point size of the two axis labels alone. Free to
+            run above ``fontsize`` because it is paid for out of the axes rather
+            than out of the panel width; see the note above.
         ticklabel_fontsize (float): Point size of the tick labels only. A little
             below ``fontsize``, so the numbers step back behind the axis labels
             and leave more of the canvas to the axes.
         figsize (tuple): Final size of the panel in inches, legend included.
+            1.55 in of height is the bottom row of the graphical abstract, which
+            the two map panels are built to as well.
         legend_ncols (int): Columns of the legend grid. The 5 bins are laid out
             row by row, so 2 gives 3 rows with the last cell empty.
         panel_label (int, optional): If given, stamp a panel label (0 = A, ...).
@@ -786,7 +802,7 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
     setup_matplotlib_style()
     # with plt.rc_context(setup_arimo_style(fontsize)):  # Arimo, no LaTeX
     with plt.rc_context({"font.size": fontsize,
-                         "axes.labelsize": fontsize,
+                         "axes.labelsize": label_fontsize,
                          "xtick.labelsize": ticklabel_fontsize,
                          "ytick.labelsize": ticklabel_fontsize,
                          "legend.fontsize": fontsize,
@@ -1307,13 +1323,14 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
                                       legend_bbox_to_anchor: tuple | None = (0.5, 0.0),
                                       legend_ncols: int = 2,
                                       legend_title: str | None = "Additional inertia:",
+                                      legend_title_fontsize: float | None = 8,
                                       annotate_total: bool = False,
                                       total_xy: tuple = (0.0, 1.0),
                                       map_xlim: tuple | None = None,
                                       map_ylim: tuple | None = None,
                                       map_pad_deg: float = 1.0,
-                                      map_height_in: float = 0.788,
-                                      panel_height_in: float = 1.5,
+                                      map_height_in: float = 0.814,
+                                      panel_height_in: float = 1.55,
                                       aspect: float | str = "equal",
                                       panel_label: int | None = None,
                                       plot_dir: str | None = None,
@@ -1380,6 +1397,14 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
             empty margin. None places the legend inside the axes at ``legend_loc``.
         legend_ncols (int): Columns of the size legend.
         legend_title (str | None): Title above the size legend; None for no title.
+        legend_title_fontsize (float | None): Point size of that title alone;
+            None ties it to ``fontsize``. Separated out because the title is the
+            one line of the panel that is read rather than looked up, while
+            ``fontsize`` also sets the GWs labels, which have to stay small
+            enough for two of them to fit side by side under the map. What caps
+            it is the width: the svg is cropped to its content, so a title wider
+            than the map widens the file and the panel stops matching the
+            cluster map it is placed next to.
         annotate_total (bool): Whether to write the total placed inertia onto
             the map. Off by default; the caption carries the number instead.
         total_xy (tuple): Position of that annotation in axes coordinates; it
@@ -1393,9 +1418,12 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
             limits are derived from the data.
         map_height_in (float): Height of the map itself in inches, not of the
             panel. 'create_single_cluster_plot_from_data' is given the same
-            value, which is what makes the two networks come out identical.
+            value, which is what makes the two networks come out identical --
+            change the one and the other has to follow.
         panel_height_in (float): Height the whole panel has to fit into, size
-            legend included. The bottom row of the abstract is 2 in high.
+            legend included. The bottom row of the abstract is 1.55 in high;
+            ``map_height_in`` was scaled by the same 1.55/1.5 when the row grew
+            from 1.5, so the map keeps its share of the panel.
         aspect (float | str): Aspect ratio of the axes. "equal", so this map is
             drawn on the same geometry as the other maps of the abstract -- the
             two split panels and the cluster map are all equal-aspect, and a
@@ -1492,6 +1520,8 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
                   bbox_to_anchor=legend_bbox_to_anchor,
                   ncols=legend_ncols,
                   title=legend_title,
+                  title_fontsize=(fontsize if legend_title_fontsize is None
+                                  else legend_title_fontsize),
                   frameon=False,
                   labelspacing=0.4,
                   handletextpad=0.2,
@@ -1552,8 +1582,11 @@ def generate_graphical_abstract_parts(
     Every part is drawn at the size it is placed at, so they go into the
     assembly at 100 %: scaling one afterwards scales its text with it and takes
     the type off the point size it was set in. The row budgets they are built
-    to are a 1.125 x 0.879 in box for the top row and 1.5 in of height for the
+    to are a 1.125 x 0.879 in box for the top row and 1.55 in of height for the
     bottom row; the two panels that overrun warn rather than silently rescale.
+    All three bottom panels carry that height, so the row is set by changing the
+    three defaults together -- the risk panel's ``figsize`` and the two maps'
+    ``panel_height_in``, with ``map_height_in`` scaled alongside.
 
     The six, in the order they are drawn:
 
