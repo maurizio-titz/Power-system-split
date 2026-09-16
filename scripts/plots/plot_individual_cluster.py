@@ -629,11 +629,10 @@ for cluster_number in [11, 12]:
 
     # analyse overfrequency nodes
 
-    node_cols_gen = [
-        col
-        for col in n.generators_t["p"].columns
-        if any(str(node) in col for node in nodes_red)
-    ]
+    # the generators are picked by their bus attribute, not by a substring of the
+    # column name: a bus name such as "DE1 1" is a prefix of "DE1 19", so a substring
+    # match would pull in the generators of the other nodes as well
+    node_cols_gen = n.generators.index[n.generators.bus.isin(nodes_red)].tolist()
     node_cols_store = n.storage_units.index[
         n.storage_units.bus.isin(nodes_red)
     ].tolist()
