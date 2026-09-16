@@ -297,8 +297,7 @@ def ax_plot_full_network(nx_graph: nx.Graph, ax: plt.Axes,
                            linewidths=node_edge_width,
                            node_size=node_size, ax=ax)
     if failed_link_names is not None:
-        # The failed corridors are what the panel is about, so they are drawn
-        # wider than the rest of the grid.
+        # Failed corridors wider than the rest of the grid.
         nx.draw_networkx_edges(nx_graph, pos, edgelist=failed_link_names,
                                edge_color=fail_color,
                                width=edge_width * failed_edge_width_scale, ax=ax)
@@ -425,6 +424,9 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
                                            geomap_color: str = "0.65",
                                            geomap_linewidth: float = 0.3,
                                            panel_box_in: tuple = (1.125, 0.879),
+                                           fit_box: bool = True,
+                                           box_fill: float = 0.98,
+                                           plot_dir: str | None = None,
                                            edge_width: float = 0.2,
                                            save_fig: bool = True,
                                            rasterize: bool = False):
@@ -464,14 +466,27 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
         panel_box_in (tuple): Box in inches the panel has to fit into. The map
             is drawn as large as fits, and the canvas is made exactly that size,
             so the svg carries no margin and goes into inkscape at 100 %.
+        fit_box (bool): Whether the map window is opened up to the proportions
+            of 'panel_box_in' so the map fills the box. The grid is 1.7 times as
+            wide as it is tall and the box is 1.3, so without this the panel
+            comes out a wide strip that uses three quarters of the height it is
+            given. False frames the grid alone.
+        box_fill (float): Fraction of 'panel_box_in' the panel is drawn at, so
+            it sits inside the box with a margin instead of exactly on its
+            edges. Applied to both dimensions, so the proportions are kept.
         edge_width (float): Width of the transmission lines in points, at the
             size the panel is actually drawn. Far below the value that suited
             the old 20 in figures: line widths do not scale with the panel, so
             drawing at final size means setting them for that size.
         save_fig (bool): Whether to save the figures or show them.
+        plot_dir (str, optional): Directory the svg is written to. None is
+            the project's figure directory, which already carries the
+            'PLOT_STYLE' subfolder.
     Returns:
         None
     """
+    if plot_dir is None:
+        plot_dir = path_to_figures_sclopf
 
     # Load network
     pypsa_nw = data_handling.load_pypsa_network_from_path(path_to_pypsa_network, 
@@ -494,14 +509,27 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
     fig_full, ax_full = plt.subplots(figsize=(20, 15), subplot_kw=subplot_kw)
     fig_split, ax_split = plt.subplots(figsize=(20, 15), subplot_kw=subplot_kw)
 
-    # One scale and equal aspect on both, fixed before drawing -- see the
-    # docstring. Setting the limits explicitly also switches autoscaling off,
-    # so the draw calls below cannot pull them apart again.
+    # Fixed before drawing; setting the limits also switches autoscaling off.
     pos_arr = np.array(list(nx.get_node_attributes(nx_graph, 'pos').values()))
     map_xlim = (pos_arr[:, 0].min() - map_pad_deg,
                 pos_arr[:, 0].max() + map_pad_deg)
     map_ylim = (pos_arr[:, 1].min() - map_pad_deg,
                 pos_arr[:, 1].max() + map_pad_deg)
+
+    if fit_box:
+        # Open the window up to the box's proportions; never crop.
+        box_ratio = panel_box_in[0] / panel_box_in[1]
+        lon_span = map_xlim[1] - map_xlim[0]
+        lat_span = map_ylim[1] - map_ylim[0]
+        if lon_span / lat_span > box_ratio:
+            grown = lon_span / box_ratio
+            centre = 0.5 * (map_ylim[0] + map_ylim[1])
+            map_ylim = (centre - 0.5 * grown, centre + 0.5 * grown)
+        else:
+            grown = lat_span * box_ratio
+            centre = 0.5 * (map_xlim[0] + map_xlim[1])
+            map_xlim = (centre - 0.5 * grown, centre + 0.5 * grown)
+
     for axis in (ax_full, ax_split):
         axis.set_xlim(*map_xlim)
         axis.set_ylim(*map_ylim)
@@ -512,22 +540,16 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
             add_geomap_to_ax(axis, geomap_color=geomap_color,
                              geomap_linewidth=geomap_linewidth)
 
-    # Drawn at the size they are placed at, rather than at 20 in and scaled down
-    # by hand afterwards: the panel has to sit beside the scenario map, whose
-    # text fixes it at 100 %, so these two have to arrive at their final size as
-    # well. The map is made as large as 'panel_box_in' allows and the canvas cut
-    # to it, which is also why there is no tight bbox at the save below.
+    # Drawn at final size, so the panel goes into the assembly at 100 %.
     map_ratio = ((map_xlim[1] - map_xlim[0]) / (map_ylim[1] - map_ylim[0]))
-    map_width_in = min(panel_box_in[0], panel_box_in[1] * map_ratio)
+    map_width_in = min(panel_box_in[0] * box_fill,
+                       panel_box_in[1] * box_fill * map_ratio)
     map_height_in = map_width_in / map_ratio
     for figure, axis in ((fig_full, ax_full), (fig_split, ax_split)):
         figure.set_size_inches(map_width_in, map_height_in)
-        # The canvas already has the aspect the data wants, so filling it edge
-        # to edge leaves nothing for the aspect machinery to shrink.
         axis.set_position([0., 0., 1., 1.])
 
-    # Same node diameter on both, in degrees rather than in points. After the
-    # resize: the conversion reads the axes' scale, which the resize changes.
+    # After the resize: the conversion reads the axes' scale.
     node_size = node_size_for_data_diameter(ax_full, node_diameter_deg)
 
     ax_plot_full_network(nx_graph, ax_full, node_size=node_size,
@@ -550,9 +572,8 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
             fig_path_full += "_rasterized.png"
         else:
             fig_path_full += ".svg"            
-        # No tight bbox: the canvas IS the map, so cropping could only shave
-        # pixels off it, and 'tight' would add its 0.1 in pad back on top.
-        fig_full.savefig(os.path.join(path_to_figures_sclopf, fig_path_full),
+        # No tight bbox: the canvas is the map.
+        fig_full.savefig(os.path.join(plot_dir, fig_path_full),
                          transparent=True, dpi=dpi_fig)
         fig_full.clear()
         plt.close(fig_full)
@@ -562,7 +583,7 @@ def plot_entire_network_n_split_components(trigger_tuple: tuple[int, int] = (387
             fig_path_split += "_rasterized.png"
         else:
             fig_path_split += ".svg"
-        fig_split.savefig(os.path.join(path_to_figures_sclopf, fig_path_split),
+        fig_split.savefig(os.path.join(plot_dir, fig_path_split),
                           transparent=True, dpi=dpi_fig)
         fig_split.clear()
         plt.close(fig_split)
@@ -660,11 +681,12 @@ def setup_arimo_style(fontsize: float = 8):
 
 
 def plot_lost_load_share_distribution(n_nodes: int = 600,
-                                      fontsize: float = 8,
-                                      ticklabel_fontsize: float = 7,
-                                      figsize: tuple = (1.49, 2.),
+                                      fontsize: float = 6,
+                                      ticklabel_fontsize: float = 5.25,
+                                      figsize: tuple = (1.118, 1.5),
                                       legend_ncols: int = 2,
                                       panel_label: int | None = None,
+                                      plot_dir: str | None = None,
                                       save_fig: bool = True):
     """Number of system splits per not-served-load-share bin over the CO2 levels.
 
@@ -718,10 +740,16 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
         panel_label (int, optional): If given, stamp a panel label (0 = A, ...).
             The graphical abstract wants none, hence the None default.
         save_fig (bool): Whether to save the figure or show it.
+        plot_dir (str, optional): Directory the svg is written to. None is
+            the project's figure directory, which already carries the
+            'PLOT_STYLE' subfolder.
 
     Returns:
         tuple: The figure and its axes.
     """
+    if plot_dir is None:
+        plot_dir = path_to_figures_sclopf
+
     co2ls = data_handling.get_co2_levels(n_nodes)
 
     split_props = pd.read_hdf(path_to_vis_results_sclopf
@@ -754,9 +782,7 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
     markers = ["o", "s", "D", "^", "v", "."]
     co2_axis = data_handling.get_actual_co2_level(co2ls[::-1], percent=True)
 
-    # The project style, so this panel matches the rest of the figures. Applied
-    # before the rc_context, which then only overrides the sizes -- those have
-    # to come down a long way for a panel this small.
+    # Project style; the rc_context below only overrides the sizes.
     setup_matplotlib_style()
     # with plt.rc_context(setup_arimo_style(fontsize)):  # Arimo, no LaTeX
     with plt.rc_context({"font.size": fontsize,
@@ -765,11 +791,11 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
                          "ytick.labelsize": ticklabel_fontsize,
                          "legend.fontsize": fontsize,
                          "legend.title_fontsize": fontsize}):
-        # Constrained layout, so the strip the legend occupies below the axes is
-        # subtracted from the axes instead of being drawn over them -- see the
-        # docstring. The figure keeps exactly ``figsize`` either way.
+        # Constrained: the legend's strip is subtracted from the axes, not drawn over it.
         fig = plt.figure(figsize=figsize, layout="constrained")
-        fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01,
+        # w_pad=0: the axes and the outside-right legend then both end at the
+        # figure edge, which is what lines them up.
+        fig.get_layout_engine().set(w_pad=0., h_pad=0.01,
                                     wspace=0., hspace=0.)
         ax = fig.add_subplot()
 
@@ -792,7 +818,7 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
 
         # Abbreviated -- see the docstring: the full wording does not fit at 8 pt.
         ax.set_xlabel(r"CO$_2$ level [\%]", labelpad=1.5)
-        ax.set_ylabel("System splits", labelpad=1.5)
+        ax.set_ylabel("System Splits", labelpad=1.5)
         ax.set_xticks([0, 30, 60])
         ax.set_xticks([10, 20, 40, 50], minor=True)
         # Only the gridlines of the count axis -- horizontal lines at its major
@@ -817,12 +843,9 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
             add_panel_label(ax, panel_label, y_offset=0.1, x_offset=-.125,
                             fontsize=fontsize)
 
-        # Fresh proxy artists rather than the axes' handles, so the marker and
-        # line sizes of the legend can be set independently of the curves, which
-        # are drawn thin to stay legible at this size.
-        # "Lost load share" rides along as the first entry, on an invisible
-        # handle, instead of being a legend title of its own: that saves the
-        # row a title would occupy, which goes to the axes.
+        # Proxy artists, so legend marker sizes are independent of the curves.
+        # "Lost load:" is the first entry on an invisible handle rather than a
+        # legend title, which saves the row a title would take.
         handles = [plt.Line2D([], [], color="none")] + \
             [plt.Line2D([], [], color=colors[i],
                         marker=markers[i % len(markers)],
@@ -830,9 +853,7 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
              for i in range(len(bin_centers))]
         entry_labels = ["Lost load:"] + labels
 
-        # ``legend`` fills its columns top to bottom, so the entries would read
-        # down the first column and only then jump to the second. Transposing
-        # the order here makes them read left to right, row by row.
+        # ``legend`` fills columns top to bottom; transpose to read row by row.
         n_legend_rows = int(np.ceil(len(handles) / legend_ncols))
         row_major_order = [row * legend_ncols + col
                            for col in range(legend_ncols)
@@ -842,11 +863,12 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
         legend_labels = [entry_labels[i] for i in row_major_order]
 
         # "outside" is what makes the layout engine shrink the axes by the
-        # height of the legend. Centred on the figure rather than on the axes:
-        # the legend is wider than the axes box, which is indented on the left
-        # by the y-label.
+        # height of the legend. Right rather than centre, and then nudged into
+        # place below: centred it sat 0.03 in inside the axes, because the axes
+        # is pushed right by the y-label while the legend is centred on the
+        # whole figure.
         legend = fig.legend(handles, legend_labels,
-                            loc="outside lower center",
+                            loc="outside lower right",
                             ncols=legend_ncols,
                             frameon=True,
                             fancybox=True,
@@ -867,13 +889,10 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
         legend.get_frame().set_edgecolor((0.8, 0.8, 0.8, 0.8))
         legend.get_frame().set_facecolor((1.0, 1.0, 1.0, 0.8))
 
-        # Collapse the empty marker slot in front of "Lost load:", so the text
-        # starts at the left edge of the column instead of hanging behind a gap
-        # where the other entries carry their marker. ``handlelength`` and
-        # ``handletextpad`` are legend-wide, so this has to reach into the
-        # offsetbox tree the legend builds: an HPacker of the columns, each a
-        # VPacker of entries, each of those an HPacker of handle and text.
-        # Private attribute, and checked against matplotlib 3.10.
+        # Collapse the empty marker slot in front of "Lost load:".
+        # ``handlelength`` is legend-wide, so this reaches into the offsetbox
+        # tree: HPacker of columns -> VPacker of entries -> HPacker of
+        # handle + text. Private attribute, checked against matplotlib 3.10.
         first_entry = \
             legend._legend_handle_box.get_children()[0].get_children()[0]
         first_entry.get_children()[0].set_width(0.)
@@ -882,7 +901,7 @@ def plot_lost_load_share_distribution(n_nodes: int = 600,
         if save_fig:
             # svg only, like the other parts here -- assembled in inkscape.
             # No tight bbox: the panel has to keep exactly the requested figsize.
-            fig.savefig(os.path.join(path_to_figures_sclopf,
+            fig.savefig(os.path.join(plot_dir,
                                      "graphical_abstract_risk.svg"),
                         transparent=True)
 
@@ -898,7 +917,7 @@ def plot_generation_map_scenario(n_nodes: int = 600,
                                  co2_level: float = 0.6,
                                  month: int = 12,
                                  fontsize: float = 8,
-                                 figsize: tuple = (0.982, 0.879),
+                                 figsize: tuple = (0.962, 0.861),
                                  bus_size_scale: float = 7e6,
                                  line_width: float = 0.1,
                                  geomap_color: str = "0.65",
@@ -908,7 +927,11 @@ def plot_generation_map_scenario(n_nodes: int = 600,
                                  legend_fontsize: float | None = 4.5,
                                  map_xlim: tuple = (-10.6, 28.5),
                                  map_ylim: tuple = (35, 70),
+                                 panel_box_in: tuple = (1.125, 0.879),
+                                 fit_box: bool = True,
+                                 box_fill: float = 0.98,
                                  panel_label: int | None = None,
+                                 plot_dir: str | None = None,
                                  save_fig: bool = True):
     """Map of the generation mix in one month of one CO2 scenario.
 
@@ -996,13 +1019,29 @@ def plot_generation_map_scenario(n_nodes: int = 600,
             way and only the panel gets wider.
         map_ylim (tuple): Latitude window of the map. Untouched, so the map
             still stands on the same latitudes as Fig. 1.
+        panel_box_in (tuple): Box in inches the panel has to fit into, the same
+            one the two split panels are built to.
+        fit_box (bool): Whether the window is opened up to the proportions of
+            'panel_box_in' so the map fills the box, as in
+            'plot_entire_network_n_split_components'. Here it is longitude that
+            grows: this window is nearly square against a box half again as wide
+            as it is tall, so left alone the panel stands well short of the
+            box's width. Only ever opened up, never cropped.
+        box_fill (float): Fraction of 'panel_box_in' the panel is drawn at, so
+            it sits inside the box with a margin rather than on its edges.
         panel_label (int, optional): If given, stamp a panel label (0 = A, ...).
             The graphical abstract wants none, hence the None default.
         save_fig (bool): Whether to save the figure or show it.
+        plot_dir (str, optional): Directory the svg is written to. None is
+            the project's figure directory, which already carries the
+            'PLOT_STYLE' subfolder.
 
     Returns:
         tuple: The panel figure and its axes.
     """
+    if plot_dir is None:
+        plot_dir = path_to_figures_sclopf
+
     network = data_handling.load_pypsa_network(co2lvl=co2_level, n_nodes=n_nodes,
                                                use_sclopf=True, lopt=False)
 
@@ -1035,6 +1074,21 @@ def plot_generation_map_scenario(n_nodes: int = 600,
                 f"{dict(dropped.round(5))}")
     generation = generation[generation.index
                             .get_level_values("carrier").isin(kept_carriers)]
+
+    if fit_box:
+        # As in 'plot_entire_network_n_split_components'; here longitude grows.
+        box_ratio = panel_box_in[0] / panel_box_in[1]
+        lon_span = map_xlim[1] - map_xlim[0]
+        lat_span = map_ylim[1] - map_ylim[0]
+        if lon_span / lat_span > box_ratio:
+            grown = lon_span / box_ratio
+            centre = 0.5 * (map_ylim[0] + map_ylim[1])
+            map_ylim = (centre - 0.5 * grown, centre + 0.5 * grown)
+        else:
+            grown = lat_span * box_ratio
+            centre = 0.5 * (map_xlim[0] + map_xlim[1])
+            map_xlim = (centre - 0.5 * grown, centre + 0.5 * grown)
+        figsize = (panel_box_in[0] * box_fill, panel_box_in[1] * box_fill)
 
     with plt.rc_context(setup_arimo_style(fontsize)):
         fig = plt.figure(figsize=figsize)
@@ -1120,20 +1174,23 @@ def plot_generation_map_scenario(n_nodes: int = 600,
             # rather than floating over the lines; without it the labels are
             # unreadable wherever a line crosses them.
             legend = ax.legend(handles, labels,
-                               title="Carriers",
+                               title="Carriers:",
                                loc="upper right",
                                alignment="left",
                                fontsize=legend_fontsize,
                                title_fontsize=legend_fontsize,
                                frameon=True,
-                               facecolor="white",
-                               edgecolor="none",
-                               framealpha=0.75,
+                               fancybox=True,
                                handlelength=1.0,
                                handletextpad=0.4,
                                borderpad=0.2,
                                borderaxespad=0.4,
                                labelspacing=0.25)
+            # Same frame as the risk and cluster legends. The fill also keeps
+            # the key readable where the network runs under it.
+            legend.get_frame().set_linewidth(1.0)
+            legend.get_frame().set_edgecolor((0.8, 0.8, 0.8, 0.8))
+            legend.get_frame().set_facecolor((1.0, 1.0, 1.0, 0.8))
             # Attached to the axes explicitly: a later ax.legend call -- the size
             # key, if it is switched on -- would otherwise drop this one.
             ax.add_artist(legend)
@@ -1149,7 +1206,7 @@ def plot_generation_map_scenario(n_nodes: int = 600,
             # No bbox_inches and no pad: the canvas already is the panel, and
             # the default pad of 0.1 in per side would add 0.2 in to both
             # dimensions of the saved file.
-            fig.savefig(os.path.join(path_to_figures_sclopf, fname),
+            fig.savefig(os.path.join(plot_dir, fname),
                         pad_inches=0, transparent=True)
 
             fig.clear()
@@ -1239,9 +1296,9 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
                                       target: str = "num_GSS",
                                       blackoutthreshold: float = 0.8,
                                       ref_loss_factor: int = 1,
-                                      fontsize: float = 9,
+                                      fontsize: float = 6.75,
                                       figsize: tuple = (2.6, 2.2),
-                                      max_node_size: float = 50.,
+                                      max_node_diameter_deg: float = 1.9,
                                       edge_width: float = 0.25,
                                       edge_color: str = "black",
                                       legend_fractions: tuple = (1., .4),
@@ -1249,16 +1306,17 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
                                       legend_loc: str = "upper center",
                                       legend_bbox_to_anchor: tuple | None = (0.5, 0.0),
                                       legend_ncols: int = 2,
-                                      legend_title: str | None = "Additional Inertia:",
+                                      legend_title: str | None = "Additional inertia:",
                                       annotate_total: bool = False,
                                       total_xy: tuple = (0.0, 1.0),
                                       map_xlim: tuple | None = None,
                                       map_ylim: tuple | None = None,
                                       map_pad_deg: float = 1.0,
-                                      map_height_in: float = 1.18,
-                                      panel_height_in: float = 2.,
+                                      map_height_in: float = 0.788,
+                                      panel_height_in: float = 1.5,
                                       aspect: float | str = "equal",
                                       panel_label: int | None = None,
+                                      plot_dir: str | None = None,
                                       save_fig: bool = True):
     """Map of where the greedy placement puts synthetic inertia.
 
@@ -1299,8 +1357,12 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
             out slightly smaller in width and taller in height, because
             ``bbox_inches='tight'`` crops the side margins and takes in the
             legend, which sits outside the axes.
-        max_node_size (float): Marker area in pt^2 of the node with the most
-            inertia. Everything else scales linearly below it.
+        max_node_diameter_deg (float): Diameter in degrees of the node with
+            the most inertia; everything else scales linearly in AREA below it.
+            In degrees, like 'node_diameter_deg' of the split panels, so the
+            bubbles keep their share of the map at any panel size -- as a fixed
+            area in points they grew relative to the map every time the panel
+            was made smaller.
         edge_width (float): Line width of the transmission lines.
         edge_color (str): Colour of the transmission lines.
         legend_fractions (tuple): Fractions of the largest node to show as size
@@ -1343,10 +1405,16 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
             about 1.5 times in latitude against the others.
         panel_label (int, optional): If given, stamp a panel label (0 = A, ...).
         save_fig (bool): Whether to save the figure or show it.
+        plot_dir (str, optional): Directory the svg is written to. None is
+            the project's figure directory, which already carries the
+            'PLOT_STYLE' subfolder.
 
     Returns:
         tuple: The figure and its axes.
     """
+    if plot_dir is None:
+        plot_dir = path_to_figures_sclopf
+
     pypsa_nw = data_handling.load_pypsa_network(co2_level, n_nodes, True)
     nx_graph = data_handling.build_networkx_graph(pypsa_nw, snet_index='0')
     pos_nodes = nx.get_node_attributes(nx_graph, "pos")
@@ -1361,13 +1429,42 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
     )
 
     max_inertia_node = inertia_by_node.max()
-    node_sizes = inertia_by_node / max_inertia_node * max_node_size
 
     # MWs -> GWs, the unit Fig. 5 reports.
     unit_factor = 1e-3
 
     with plt.rc_context(setup_arimo_style(fontsize)):
         fig, ax = plt.subplots(figsize=figsize)
+
+        # === LAYOUT ===
+        # Ahead of the drawing: the bubble areas below come from the map scale.
+        pos_arr = np.array(list(pos_nodes.values()))
+        if map_xlim is None:
+            map_xlim = (pos_arr[:, 0].min() - map_pad_deg,
+                        pos_arr[:, 0].max() + map_pad_deg)
+        if map_ylim is None:
+            map_ylim = (pos_arr[:, 1].min() - map_pad_deg,
+                        pos_arr[:, 1].max() + map_pad_deg)
+        ax.set_xlim(*map_xlim)
+        ax.set_ylim(*map_ylim)
+
+        if aspect == "latitude":
+            aspect = 1 / np.cos(np.deg2rad(pos_arr[:, 1].mean()))
+        ax.set_aspect(aspect)
+        ax.axis("off")
+
+        # Pinned to an exact height, so this and the cluster panel draw the
+        # grid at the same size. No ``tight_layout``: it would undo the pinning.
+        map_width_in = map_width_for_height(ax, map_height_in)
+        side_pad_in = 0.02
+        fig.set_size_inches(map_width_in + 2 * side_pad_in, panel_height_in)
+        set_axes_size_in_inches(ax, map_width_in, map_height_in,
+                                side_pad_in, side_pad_in)
+
+        # In degrees, so the bubbles keep their share of the map at any panel
+        # size. Area stays proportional to the inertia placed.
+        max_node_size = node_size_for_data_diameter(ax, max_node_diameter_deg)
+        node_sizes = inertia_by_node / max_inertia_node * max_node_size
 
         nx.draw_networkx_edges(nx_graph, pos_nodes, ax=ax,
                                width=edge_width, edge_color=edge_color)
@@ -1410,36 +1507,9 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
                     transform=ax.transAxes,
                     ha="left", va="top")
 
-        pos_arr = np.array(list(pos_nodes.values()))
-        if map_xlim is None:
-            map_xlim = (pos_arr[:, 0].min() - map_pad_deg,
-                        pos_arr[:, 0].max() + map_pad_deg)
-        if map_ylim is None:
-            map_ylim = (pos_arr[:, 1].min() - map_pad_deg,
-                        pos_arr[:, 1].max() + map_pad_deg)
-        ax.set_xlim(*map_xlim)
-        ax.set_ylim(*map_ylim)
-
-        if aspect == "latitude":
-            aspect = 1 / np.cos(np.deg2rad(pos_arr[:, 1].mean()))
-        ax.set_aspect(aspect)
-        ax.axis("off")
-
         if panel_label is not None:
             add_panel_label(ax, panel_label, y_offset=0.02, x_offset=-0.02,
                             fontsize=fontsize)
-
-        # === LAYOUT ===
-        # Same construction as the cluster panel: the map is pinned to an exact
-        # height in inches so the two draw the same grid at the same size, the
-        # canvas is made exactly as wide as the map needs, and the size legend
-        # below rides along because it is anchored to the axes. No
-        # ``tight_layout`` -- it would rescale the axes and undo the pinning.
-        map_width_in = map_width_for_height(ax, map_height_in)
-        side_pad_in = 0.02
-        fig.set_size_inches(map_width_in + 2 * side_pad_in, panel_height_in)
-        set_axes_size_in_inches(ax, map_width_in, map_height_in,
-                                side_pad_in, side_pad_in)
 
         fig.canvas.draw()
         content_height_in = fig.get_tightbbox().height
@@ -1458,9 +1528,9 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
             # default of 0.1 in on every side, which both pushes the file over
             # the height budget and hangs invisible margins on a panel that is
             # placed by hand.
-            fig.savefig(os.path.join(path_to_figures_sclopf, fname),
+            fig.savefig(os.path.join(plot_dir, fname),
                         bbox_inches='tight', pad_inches=0., transparent=True)
-            logger.info(f"Saved {fname} to {path_to_figures_sclopf}")
+            logger.info(f"Saved {fname} to {plot_dir}")
 
             fig.clear()
             plt.close(fig)
@@ -1468,6 +1538,83 @@ def plot_inertia_placement_map_method(n_nodes: int = 600,
             plt.show()
 
     return fig, ax
+
+
+def generate_graphical_abstract_parts(
+        plot_dir: str | None = None,
+        fpath_cluster_plot_data: str | None = None) -> str:
+    """Generate the six parts of the graphical abstract into one folder.
+
+    The parts are assembled by hand in inkscape, so what this buys is that they
+    are all current and all in one place, rather than scattered among the
+    manuscript figures with whatever was last regenerated.
+
+    Every part is drawn at the size it is placed at, so they go into the
+    assembly at 100 %: scaling one afterwards scales its text with it and takes
+    the type off the point size it was set in. The row budgets they are built
+    to are a 1.125 x 0.879 in box for the top row and 1.5 in of height for the
+    bottom row; the two panels that overrun warn rather than silently rescale.
+
+    The six, in the order they are drawn:
+
+    ==========================  ==========================================
+    top    generation map       the Fig. 1 scenario, one December
+    top    entire network       the grid with the triggering corridors
+    top    split network        the two components the trigger leaves
+    bottom risk                 splits per lost-load bin over the CO2 levels
+    bottom inertia map          where the Fig. 5 placement puts inertia
+    bottom cluster 1 map        the most frequent split pattern of Fig. 3
+    ==========================  ==========================================
+
+    Args:
+        plot_dir (str, optional): Directory the parts are written to. None puts
+            them in a 'graphical_abstract' folder inside the project's figure
+            directory, which already carries the 'PLOT_STYLE' subfolder -- so
+            with PLOT_STYLE=joule they land next to the manuscript figures
+            rather than in a tree of their own.
+        fpath_cluster_plot_data (str, optional): Aggregated cluster plot data
+            ('.pklz') the cluster panel is built from. None takes the same
+            aggregation the manuscript figures use. This is the one part that
+            cannot be computed from the network alone; 'plot_clusts.py' writes
+            it.
+
+    Returns:
+        str: The directory the parts were written to.
+    """
+    if plot_dir is None:
+        plot_dir = os.path.join(path_to_figures_sclopf, "graphical_abstract")
+    if fpath_cluster_plot_data is None:
+        fpath_cluster_plot_data = os.path.join(
+            path_to_plot_data, "plot_data_agg_params_01bf408e.pklz")
+
+    os.makedirs(plot_dir, exist_ok=True)
+    logger.info(f"Generating the graphical abstract parts in {plot_dir}")
+
+    logger.info("[1/6] top row: scenario generation map")
+    plot_generation_map_scenario(plot_dir=plot_dir, save_fig=True)
+
+    # Two panels from one call: both read the same network and the same cascade
+    # results, and they have to end up on one scale, which is what that function
+    # guarantees by drawing them together.
+    logger.info("[2/6, 3/6] top row: entire network and split components")
+    plot_entire_network_n_split_components(plot_dir=plot_dir, save_fig=True)
+
+    logger.info("[4/6] bottom row: lost load share distribution")
+    plot_lost_load_share_distribution(plot_dir=plot_dir, save_fig=True)
+
+    logger.info("[5/6] bottom row: inertia placement map")
+    plot_inertia_placement_map_method(plot_dir=plot_dir, save_fig=True)
+
+    # Last, and from the clustering module rather than this one: it is the only
+    # part that needs the aggregated plot data instead of the network.
+    logger.info("[6/6] bottom row: single cluster map")
+    figure = create_single_cluster_plot_from_data(fpath_cluster_plot_data,
+                                                  plot_dir=plot_dir)
+    plt.close(figure)
+
+    logger.info(f"Graphical abstract parts written to {plot_dir}")
+
+    return plot_dir
 
 
 if __name__ == "__main__":
@@ -1480,24 +1627,4 @@ if __name__ == "__main__":
 
     logger.info("Finished parts of small abstract network")
 
-    # Graphical abstract part. Runs last because it switches matplotlib to the
-    # project style (LaTeX rendering), which the network sketches above do not use.
-    logger.info("Generating graphical abstract part: lost load share distribution")
-    plot_lost_load_share_distribution(save_fig=True)
-
-    # Graphical abstract part: the scenario of Fig. 1, as the generation mix of
-    # one December at the 60 % CO2 level.
-    logger.info("Generating graphical abstract part: scenario generation map")
-    plot_generation_map_scenario(save_fig=True)
-
-    # Graphical abstract part: the map of a single cluster of Fig. 3. Needs the
-    # aggregated cluster plot data, which 'plot_clusts.py' creates.
-    logger.info("Generating graphical abstract part: single cluster map")
-    create_single_cluster_plot_from_data(
-        os.path.join(path_to_plot_data, "plot_data_agg_params_01bf408e.pklz"))
-
-    # Method figure part: where the additional inertia of Fig. 5 is placed.
-    logger.info("Generating method figure part: inertia placement map")
-    plot_inertia_placement_map_method(save_fig=True)
-    
-    #plot_entire_network_n_split_components()
+    generate_graphical_abstract_parts()
