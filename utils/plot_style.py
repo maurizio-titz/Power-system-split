@@ -572,6 +572,55 @@ def set_axis_style(
     )
 
 
+def set_axes_size_in_inches(ax, width_in, height_in, left_in, top_in):
+    """Pin an axes to an exact physical size, measured from the figure's top left.
+
+    Matplotlib positions axes in fractions of the figure, so two panels of
+    different figure size never draw the same content at the same size by
+    accident. Where two panels have to agree exactly -- the map of the cluster
+    panel and the map of the inertia panel in the graphical abstract -- the size
+    has to be stated in inches and converted here.
+
+    On an axes with a fixed aspect this only holds if the rectangle already has
+    the aspect the data demands. Otherwise matplotlib shrinks the box inside the
+    given rectangle at draw time to satisfy the aspect, and the axes comes out
+    smaller than asked for.
+
+    Args:
+        ax (matplotlib.axes.Axes): Axes to position.
+        width_in (float): Width in inches.
+        height_in (float): Height in inches.
+        left_in (float): Distance from the left edge of the figure in inches.
+        top_in (float): Distance from the top edge of the figure in inches.
+
+    Returns:
+        None
+    """
+    fig_width, fig_height = ax.get_figure().get_size_inches()
+    ax.set_position([left_in / fig_width,
+                     (fig_height - top_in - height_in) / fig_height,
+                     width_in / fig_width,
+                     height_in / fig_height])
+
+
+def map_width_for_height(ax, height_in):
+    """Width in inches an equal-aspect map axes needs for a given height.
+
+    Read off the axes' own limits, so the two maps of the abstract stay in step
+    even if their extent changes.
+
+    Args:
+        ax (matplotlib.axes.Axes): Map axes, limits already set.
+        height_in (float): Target height in inches.
+
+    Returns:
+        float: Matching width in inches.
+    """
+    x_lo, x_hi = ax.get_xlim()
+    y_lo, y_hi = ax.get_ylim()
+    return height_in * abs(x_hi - x_lo) / abs(y_hi - y_lo)
+
+
 # === CUSTOM COLORMAPS ===
 def create_failure_probability_colormap():
     """Create colormap specifically for failure probabilities."""
