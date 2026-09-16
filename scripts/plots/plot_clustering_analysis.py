@@ -537,9 +537,9 @@ def create_clustering_analysis_plot(
         cbar_ax_node = fig.add_subplot(gs_legend_colorax[1])
 
         class_labels = [
-            r"RoCoF$<-1$",
+            r"RoCoF$<-1\,\mathrm{Hz/s}$",
             "stable",
-            r"RoCoF$>1$",
+            r"RoCoF$>1\,\mathrm{Hz/s}$",
         ]
         legend_handles = []
         for i, color in enumerate(colors_classes):
@@ -941,9 +941,9 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
         cbar_ax_node = fig.add_subplot(gs_legend_colorax[1])
 
         class_labels = [
-            r"RoCoF$<-1$",
+            r"RoCoF$<-1\,\mathrm{Hz/s}$",
             "stable",
-            r"RoCoF$>1$",
+            r"RoCoF$>1\,\mathrm{Hz/s}$",
         ]
         legend_handles = []
         for i, color in enumerate(colors_classes):
@@ -1022,8 +1022,8 @@ def create_single_cluster_plot_from_data(fpath_plot_data: str,
     legend_above: bool = False,
     ticklabel_fontsize: float = 6.,
     cbar_height_in: float = 0.08,
-    map_height_in: float = 0.788,
-    panel_height_in: float = 1.5,
+    map_height_in: float = 0.814,
+    panel_height_in: float = 1.55,
     figsize: tuple = (5., 4.6),
     plot_dir: str = path_to_figures_sclopf,
     save_prefix: str | None = None
@@ -1033,13 +1033,19 @@ def create_single_cluster_plot_from_data(fpath_plot_data: str,
     The centroid map with the meaning of the node colors and the corridor
     colorbar below it, without the lost-load histogram of the grid figure.
 
-    Sized for the bottom row of the graphical abstract, which is 2 in high. The
-    map is pinned to an exact height in inches rather than left to the figure
+    Sized for the bottom row of the graphical abstract, which is 1.55 in high.
+    The map is pinned to an exact height in inches rather than left to the figure
     layout, because the inertia placement map next to it has to draw the same
     grid at the same size, and two panels of different figure size never manage
     that by accident. Everything below the map -- the class legend, the corridor
-    colorbar and its labels -- is what is left of the 2 in, which is why the
+    colorbar and its labels -- is what is left of the 1.55 in, which is why the
     type here is 7 pt rather than the 14 pt of the project style.
+
+    Map and panel height were scaled together by 1.55/1.5 when the row grew from
+    1.5 to 1.55 in, so the split between the map and the strip below it is the
+    one the panel was tuned at. The type was left where it was: it sits at the
+    readability floor already, and 3 % more of it would not show but would put
+    the legend out of step with the risk panel it shares the row with.
 
     Args:
         fpath_plot_data (str): Path to the aggregated plot data ('.pklz').
