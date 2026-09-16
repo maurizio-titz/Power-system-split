@@ -1001,10 +1001,347 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
     if save_prefix is not None:
         save_name = save_prefix + "_" + save_name
     
-    save_figure(fig, 
-                save_name, 
+    save_figure(fig,
+                save_name,
                 plot_dir)
     logger.info(f"Plot saved to: {os.path.join(plot_dir, f'{save_name}.pdf')}")
+
+    return fig
+
+
+def create_single_cluster_plot_from_data(fpath_plot_data: str,
+    cluster_id: int = 1,
+    sort_by: str = "frequency",
+    show_cluster_label: bool = False,
+    colors_classes: list[str] = ["blue", "lightgray", "red"],
+    edge_log_scale: bool = True,
+    use_only_lines: bool = False,
+    node_diameter_deg: float = 0.8,
+    fontsize: float = 6.75,
+    legend_fontsize: float = 6.,
+    legend_above: bool = False,
+    ticklabel_fontsize: float = 6.,
+    cbar_height_in: float = 0.08,
+    map_height_in: float = 0.788,
+    panel_height_in: float = 1.5,
+    figsize: tuple = (5., 4.6),
+    plot_dir: str = path_to_figures_sclopf,
+    save_prefix: str | None = None
+    ):
+    """The map of a single cluster of 'create_clustering_analysis_plot_from_data'.
+
+    The centroid map with the meaning of the node colors and the corridor
+    colorbar below it, without the lost-load histogram of the grid figure.
+
+    Sized for the bottom row of the graphical abstract, which is 2 in high. The
+    map is pinned to an exact height in inches rather than left to the figure
+    layout, because the inertia placement map next to it has to draw the same
+    grid at the same size, and two panels of different figure size never manage
+    that by accident. Everything below the map -- the class legend, the corridor
+    colorbar and its labels -- is what is left of the 2 in, which is why the
+    type here is 7 pt rather than the 14 pt of the project style.
+
+    Args:
+        fpath_plot_data (str): Path to the aggregated plot data ('.pklz').
+        cluster_id (int): Cluster to plot, counted as it is labelled in the grid
+            figure: 1 is the first cluster of the 'sort_by' order, i.e. the most
+            frequent one for 'frequency'.
+        sort_by (str): Order the clusters are ranked by, 'frequency' (number of
+            splits) or 'accumulative_lost_load'.
+        show_cluster_label (bool): Whether to stamp the cluster id together with
+            its lost load share R and its frequency beta onto the map, as the
+            grid figure does. Off by default because the graphical abstract has
+            no place to explain the two symbols.
+        colors_classes (list[str]): Node class colors, as in the grid figure.
+        edge_log_scale (bool): Whether corridor failure probabilities are drawn
+            on a log color scale.
+        use_only_lines (bool): Plot only the lines, without the node markers.
+        node_diameter_deg (float): Diameter of the pie nodes in degrees. Given
+            in degrees rather than in points because that is the unit the map
+            panels of the graphical abstract are matched in -- the same value
+            goes to 'plot_entire_network_n_split_components', which converts it
+            to a scatter size for its plain markers.
+        fontsize (float): Point size of the colorbar label.
+        legend_fontsize (float): Point size of the class legend, which has to
+            fit the width of the map and so runs smaller than 'fontsize'.
+        legend_above (bool): Whether the class legend goes above the map
+            rather than between it and the colorbar.
+        cbar_height_in (float): Thickness of the corridor colorbar in inches.
+        ticklabel_fontsize (float): Point size of the colorbar tick labels.
+        map_height_in (float): Height of the map itself in inches, not of the
+            panel. The inertia placement map is given the same value, which is
+            what makes the two networks come out identical.
+        panel_height_in (float): Height the whole panel has to fit into, legend
+            and colorbar included. The canvas is made exactly this high and the
+            map hung from its top, so a panel that overruns is visible as
+            content running off the bottom rather than silently rescaling.
+        figsize (tuple): Figure size in inches. Only the width is used; the
+            height comes from 'panel_height_in'.
+        plot_dir (str): Directory the figure is saved to.
+        save_prefix (str, optional): Prefix put in front of the file name.
+
+    Returns:
+        matplotlib.figure.Figure: The figure.
+    """
+
+    agg_hash_str = os.path.basename(fpath_plot_data).replace(".pklz", "")
+
+    with gzip.open(fpath_plot_data) as fh_in:
+        plot_data = pickle.load(fh_in)
+
+    nx_graph: nx.Graph = plot_data["graph"]
+    pos_graph: dict = plot_data["graph_pos"]
+    node_centroids: dict = plot_data["node_centroids"]
+    edge_centroids: dict = plot_data["edge_centroids"]
+    centroids_df: pd.DataFrame = plot_data["centroids_df"]
+
+    if sort_by == "frequency":
+        centroids_df = centroids_df.sort_values(by="n_samples", ascending=False)
+    elif sort_by == "accumulative_lost_load":
+        centroids_df = centroids_df.sort_values(by="weighted_lost_load", ascending=False)
+    else:
+        raise ValueError(f"Sort method {sort_by} not implemented.")
+
+    if not 1 <= cluster_id <= len(centroids_df):
+        raise ValueError(f"cluster_id {cluster_id} out of range, the clustering "
+                         f"has {len(centroids_df)} clusters and counting starts at 1.")
+
+    centroid_row = centroids_df.iloc[cluster_id - 1]
+    label = centroids_df.index[cluster_id - 1]
+
+    ## Setup colormaps
+    # Color scale parameters
+    node_cmap, edge_cmap = setup_colormaps()
+    vmax = 1.0
+    vmin = 0.001
+    if edge_log_scale:
+        vmin_edge = 1e-3
+        vmax_edge = 1.0
+    else:
+        vmin_edge = 0.0
+        vmax_edge = 1.0
+
+    centroid_r = node_centroids[label]
+    failed_edges_prob = edge_centroids[label]
+
+    # Provisional: the map limits are only known once the centroid is drawn.
+    # Every axes gets a placeholder rectangle and is repositioned at the end.
+    fig = plt.figure(figsize=figsize)
+
+    # Map
+    ax_map = fig.add_axes([0., 0., 1., 1.])
+
+    plot_centroid_with_failures(
+        nx_graph,
+        pos_graph,
+        node_cmap,
+        edge_cmap,
+        vmax,
+        vmin,
+        vmin_edge,
+        vmax_edge,
+        centroid_r,
+        failed_edges_prob,
+        ax_map,
+        colors_classes=colors_classes,
+        radius=node_diameter_deg / 2.,
+        edge_log_scale=edge_log_scale,
+        use_only_lines=use_only_lines
+    )
+
+    ax_map.axis('off')
+    ax_map.set_aspect('equal')
+
+    if show_cluster_label:
+        cluster_label = (
+            f"{cluster_id}"
+            rf"\\"
+            rf"$R={round(centroid_row.lost_load_share*100, ndigits=1)}\%$"
+            rf"\\"
+            rf"$\beta={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100, ndigits=1)}\%$"
+        )
+
+        ax_map.set_title(
+            cluster_label,
+            y=0.8,
+            x=-0,
+            fontsize=fontsize,
+            loc="left",
+            horizontalalignment="left",
+        )
+
+    # Node colors and corridor colorbar, stacked below the map because the
+    # single-column width leaves no room for them side by side. The generous
+    # hspace keeps the class legend, which is higher than its axes, clear of the
+    # colorbar label above the bar.
+    ## What the node colors mean
+    ax_node_legend = fig.add_axes([0., 0., 1., .1])
+    if centroid_r.ndim == 1:
+        sm_node = plt.cm.ScalarMappable(
+            cmap=node_cmap, norm=mplcolors.LogNorm(vmin=vmin, vmax=vmax)
+        )
+        cb_node = fig.colorbar(sm_node, cax=ax_node_legend, orientation="horizontal")
+        cb_node.ax.tick_params(
+            labelsize=ticklabel_fontsize, width=0.5, which="both"
+        )
+        cb_node.ax.set_xlabel(
+            node_cbar_label, fontsize=fontsize, rotation=0
+        )
+        cb_node.ax.xaxis.set_label_position("top")
+    else:
+        # Quantity and unit in the legend title, so each label carries only its
+        # threshold: "RoCoF" three times did not fit. Capitalisation as in the
+        # main document.
+        class_labels = [
+            r"$<-1$",
+            "stable",
+            r"$>1$",
+        ]
+        legend_handles = []
+        for i, color in enumerate(colors_classes):
+            # use a rectangular patch for the legend handle
+            handle = mpl.patches.Rectangle(
+                (0, 0),
+                width=1.0,
+                height=0.6,
+                facecolor=color,
+                edgecolor="black",
+                label=class_labels[i] if i < len(class_labels) else f"Class {i}",
+            )
+            legend_handles.append(handle)
+
+        # Kept within the width of the map above it.
+        ax_node_legend.legend(
+            handles=legend_handles,
+            loc="center",
+            fontsize=legend_fontsize,
+            title="Node Classes: RoCoF [Hz/s]",
+            title_fontsize=legend_fontsize,
+            ncol=len(colors_classes),
+            handlelength=0.9,
+            handletextpad=0.2,
+            # A little wider than 'handletextpad', so the entries still read
+            # as three groups.
+            columnspacing=0.28,
+            # Frame close to the entries.
+            borderpad=0.15,
+            borderaxespad=0.,
+        )
+        ax_node_legend.axis("off")
+
+    ## Edge colorbar
+    cbar_ax_edge = fig.add_axes([0., 0., 1., .1])
+    if edge_log_scale:
+        sm_edge = plt.cm.ScalarMappable(
+            cmap=edge_cmap, norm=mplcolors.LogNorm(vmin=vmin_edge, vmax=vmax_edge)
+        )
+    else:
+        sm_edge = plt.cm.ScalarMappable(
+            cmap=edge_cmap, norm=mplcolors.Normalize(vmin=vmin_edge, vmax=vmax_edge)
+        )
+    cb_edge = fig.colorbar(sm_edge, cax=cbar_ax_edge, orientation="horizontal")
+    cb_edge.ax.tick_params(labelsize=ticklabel_fontsize, width=0.5, which="both")
+    cb_edge.ax.set_xlabel(
+        "corridor failure probability", fontsize=fontsize, rotation=0
+    )
+    cb_edge.ax.xaxis.set_label_position("top")
+
+    # === LAYOUT ===
+    # Placed in inches from the top of the canvas, so the map comes out at
+    # exactly 'map_height_in'. The canvas is only as wide as the map needs,
+    # which is why the width of 'figsize' does not survive.
+    map_width_in = map_width_for_height(ax_map, map_height_in)
+    side_pad_in = 0.02
+    fig.set_size_inches(map_width_in + 2 * side_pad_in, panel_height_in)
+
+    # Room a piece of text needs, its distance to the next element included.
+    ticklabel_room_in = ticklabel_fontsize / 72. + 0.03
+    # Carries the clearance on both sides of the colorbar name.
+    label_room_in = fontsize / 72. + 0.09
+
+    # Measured, not estimated: the title and frame make the legend taller than
+    # its text. Its height does not depend on the axes, so one draw is enough.
+    fig.canvas.draw()
+    node_legend = ax_node_legend.get_legend()
+    if node_legend is None:
+        legend_height_in = cbar_height_in + label_room_in + ticklabel_room_in
+    else:
+        legend_height_in = node_legend.get_window_extent().transformed(
+            fig.dpi_scale_trans.inverted()).height
+
+    # Stacked from the top. The colorbar is always last: its ticks sit below it.
+    top_in = side_pad_in
+    if legend_above:
+        set_axes_size_in_inches(ax_node_legend, map_width_in, legend_height_in,
+                                side_pad_in, top_in)
+        top_in += legend_height_in + 0.03
+
+    set_axes_size_in_inches(ax_map, map_width_in, map_height_in,
+                            side_pad_in, top_in)
+    top_in += map_height_in + 0.03
+
+    if not legend_above:
+        set_axes_size_in_inches(ax_node_legend, map_width_in, legend_height_in,
+                                side_pad_in, top_in)
+        top_in += legend_height_in
+
+    # The gap above the bar has to hold the line of text that is its name.
+    top_in += label_room_in
+    set_axes_size_in_inches(cbar_ax_edge, map_width_in, cbar_height_in,
+                            side_pad_in, top_in)
+
+    # The outermost tick labels are centred on the ends of the bar, so they used
+    # to hang past it and the bar had to be drawn narrower than the map to keep
+    # the panel down to the map's width. Turning the two of them inwards instead
+    # costs nothing and lets the bar span the map: the leftmost label starts at
+    # the left end of the bar, the rightmost one ends at its right end.
+    # Tick labels stay centred on their ticks, so the outermost two hang past
+    # the bar; the bar gives way and is shortened by that overhang.
+    fig.canvas.draw()
+    fig_width_in = fig.get_size_inches()[0]
+    bar_box = cbar_ax_edge.get_position()
+    labels_box = cbar_ax_edge.get_tightbbox().transformed(
+        fig.dpi_scale_trans.inverted())
+    overhang_in = max(bar_box.x0 * fig_width_in - labels_box.x0,
+                      labels_box.x1 - bar_box.x1 * fig_width_in,
+                      0.)
+    if overhang_in > 1e-3:
+        set_axes_size_in_inches(cbar_ax_edge,
+                                map_width_in - 2 * overhang_in, cbar_height_in,
+                                side_pad_in + overhang_in, top_in)
+
+    # Measured, not added up: text runs a little past the room reserved for it.
+    fig.canvas.draw()
+    content_height_in = fig.get_tightbbox().height
+    if content_height_in > panel_height_in:
+        logger.warning(
+            f"Cluster panel comes out {content_height_in:.3f} in high but was "
+            f"given {panel_height_in:.3f} in; reduce 'map_height_in' by "
+            f"{content_height_in - panel_height_in:.3f} in."
+        )
+
+    # Anything below the map that outgrows it widens the panel and breaks the
+    # pairing with the inertia map.
+    content_width_in = fig.get_tightbbox().width
+    if content_width_in > map_width_in + 1e-3:
+        logger.warning(
+            f"Cluster panel comes out {content_width_in:.3f} in wide against a "
+            f"map of {map_width_in:.3f} in; reduce 'legend_fontsize' or the "
+            f"legend spacing."
+        )
+
+    # Save the plot. svg, like the other graphical abstract parts -- they get
+    # assembled in inkscape. Saved directly instead of through 'save_figure',
+    # which would add a configuration suffix to the file name.
+    save_name = f"graphical_abstract_cluster{cluster_id}_{agg_hash_str}"
+
+    if save_prefix is not None:
+        save_name = save_prefix + "_" + save_name
+
+    save_path = os.path.join(plot_dir, f"{save_name}.svg")
+    # pad_inches=0: 'tight' otherwise adds 0.1 in on every side.
+    fig.savefig(save_path, bbox_inches='tight', pad_inches=0., transparent=True)
+    logger.info(f"Plot saved to: {save_path}")
 
     return fig
 
