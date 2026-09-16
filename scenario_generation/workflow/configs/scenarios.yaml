@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors
+#
+# SPDX-License-Identifier: CC0-1.0
+
+# One entry per name listed in configs/config.yaml's run.name.
+# Each block is deep-merged onto the base config, overriding co2_budget.upper
+# and lower. lower is set to upper minus a 1e-6 epsilon (rather than exactly
+# equal) because pypsa-eur's co2_budget_for_horizon() rejects lower >= upper;
+# the epsilon is far below any meaningful emissions granularity, so this pins
+# emissions to upper for all practical purposes without touching the
+# pypsa-eur submodule.
+
+co2-0.6:
+  co2_budget:
+    upper: 0.6
+
+co2-0.5:
+  co2_budget:
+    upper: 0.5
+
+co2-0.4:
+  co2_budget:
+    upper: 0.4
+
+co2-0.3:
+  co2_budget:
+    upper: 0.3
+
+co2-0.2:
+  co2_budget:
+    upper: 0.2
+
+co2-0.1:
+  co2_budget:
+    upper: 0.1
+
+co2-0.05:
+  co2_budget:
+    upper: 0.05
+
+co2-0.0:
+  co2_budget:
+    upper: 0.0

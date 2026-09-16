@@ -5,7 +5,11 @@ import numpy as np
 
 n = pypsa.Network(snakemake.input.pre)
 
-n_subnetworks = int(2920 / snakemake.config["groupsize"])
+group_size = snakemake.config["groupsize"]
+temp_resolution = int("".join(filter(str.isdigit, snakemake.config["clustering"]["temporal"]["averaging"])))
+# matches the Snakefile's own N_ITER (= this - 1): must be ceil, not floor/int(), or
+# the last (partial) window is silently skipped and left at its pre-SCLOPF values.
+n_subnetworks = int(np.ceil(8760 / temp_resolution / group_size))
 
 for i in range(0, n_subnetworks):
 

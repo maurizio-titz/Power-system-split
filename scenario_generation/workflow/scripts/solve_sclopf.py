@@ -5,7 +5,7 @@ import logging
 from importlib.metadata import version
 
 from pyomo.util.infeasible import log_infeasible_constraints 
-from linopy.common import print_single_constraint
+from linopy.common import format_single_constraint
 
 #############
 
@@ -117,14 +117,25 @@ if __name__ == "__main__":
         "Removing global constraint for CO2 emissions and adding a local constraint "
         f"for the selected window of {group_size} snapshots."
     )
-    # replace the upper CO2 limit from LOPF by equality
-    # constraint for rolling window. But it doesn't work for some reason...
-    n.remove("GlobalConstraint", "CO2Limit")
+    # replace the upper CO2 limit from LOPF by an equality constraint for the
+    # rolling window.
+    # pypsa-eur names this constraint "CO2Limit-<upper|lower>", not "CO2Limit" anymore
+    co2_limit_constraints = n.global_constraints.index[
+        n.global_constraints.index.str.startswith("CO2Limit")
+    ]
+    n.remove("GlobalConstraint", co2_limit_constraints)
     n.add(
         "GlobalConstraint",
         "CO2Limit_upper",
         carrier_attribute="co2_emissions",
         sense="<=",
+        constant=emissions_lopf_i,
+    )
+    n.add(
+        "GlobalConstraint",
+        "CO2Limit_lower",
+        carrier_attribute="co2_emissions",
+        sense=">=",
         constant=emissions_lopf_i,
     )
     # if network_sclopf:
@@ -152,11 +163,15 @@ if __name__ == "__main__":
         # m.print_infeasibilities()
         print("")
         labels = m.compute_infeasibilities()
-        res = [print_single_constraint(m, label) for label in labels]
+        res = [format_single_constraint(m, label) for label in labels]
         print("\n---------------------------------------- \nInfeasible Constraints:\n---------------------------------------- \n")
         logger.info("\n".join(res))
-            
-            
+        raise RuntimeError(
+            f"SCLOPF for window {i} did not solve to optimality (status={status}, "
+            f"condition={condition}). See the infeasible constraints logged above."
+        )
+
+
     to_remove = [k for k in n.lines_t.keys() if "mu_contingency" in k]
     for k in to_remove:
         n.lines_t.pop(k)
