@@ -451,27 +451,33 @@ def create_inertia_by_country_all_co2_plot(
 
     fig, ax = plt.subplots(figsize=(10, 4))
     x_positions = np.arange(len(inertia_by_country_df.index))
-    for col in inertia_by_country_df.columns:
-        ax.plot(
-            x_positions,
+    n_bars = len(inertia_by_country_df.columns)
+    group_width = 0.8
+    bar_width = group_width / n_bars
+    for i, col in enumerate(inertia_by_country_df.columns):
+        offset = (i - (n_bars - 1) / 2) * bar_width
+        ax.bar(
+            x_positions + offset,
             inertia_by_country_df[col].values,
+            width=bar_width,
             label=f"{int(col)}\\%",
             color=get_co2_color(col / 100),  # Normalize col to [0, 1] for colormap
-            linewidth=2,
-            alpha=0.8,
+            edgecolor="black",
+            linewidth=0.5,
         )
 
-    ref_pct = int(round(get_actual_co2_level(co2_lvl_ref, percent=True)))
-    ax.set_title(
-        f"Synthetic inertia to reduce number of GSS \nto reference scenario ({ref_pct}\\%)",
-        fontsize=TITLE_FONTSIZE,
-    )
+    # solid separators between the country groups
+    for x in x_positions[:-1] + 0.5:
+        ax.axvline(x, color="black", linewidth=0.8)
+    ax.set_xlim(x_positions[0] - 0.5, x_positions[-1] + 0.5)
+
     ax.set_xlabel("Country", fontsize=AXIS_LABEL_FONTSIZE)
-    ax.set_ylabel("Total placed synthetic inertia [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax.set_ylabel("Total placed additional inertia [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
     ax.tick_params(axis="both", which="major", labelsize=TICK_LABEL_FONTSIZE)
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, axis="y", alpha=0.3)
+    ax.set_axisbelow(True)
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(inertia_by_country_df.index, rotation=45, ha="right")
+    ax.set_xticklabels(inertia_by_country_df.index, rotation=0, ha="center")
     ax.legend(
         title="CO$_2$ level [\\% of 1990]",
         ncol=3,
