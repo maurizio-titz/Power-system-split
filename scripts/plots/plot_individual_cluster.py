@@ -335,613 +335,614 @@ def plot_largest_component_two_panel(
     plot_style.save_figure(fig, f_name, save_dir)
 
 
-for cluster_number in [11, 12]:
-    # sort_by = "n_samples"
-    sort_by = "weighted_lost_load"
+if __name__ == "__main__":
+    for cluster_number in [11, 12]:
+        # sort_by = "n_samples"
+        sort_by = "weighted_lost_load"
 
-    save_dir = os.path.join(
-        config.path_to_figures_sclopf, 
-        f"analysis_cluster_{cluster_number}"
-    )
+        save_dir = os.path.join(
+            config.path_to_figures_sclopf, 
+            f"analysis_cluster_{cluster_number}"
+        )
    
-    fpath = path_to_sclopf_results + \
-        "/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/agg_params_01bf408e.pklz"
-    with gzip.open(fpath, "rb") as f:
-        res = pickle.load(f)
+        fpath = path_to_sclopf_results + \
+            "/clustering/rocof_blackout_Co2L0.6_0.5_0.4_0.3_0.2_0.1_0.05_0.0_n600_lls0.1/clustering_results/agg_params_01bf408e.pklz"
+        with gzip.open(fpath, "rb") as f:
+            res = pickle.load(f)
 
-    with gzip.open(fpath.replace(".pklz", "_centroid_res.pklz"), "rb") as f:
-        cluster_res = pickle.load(f)
+        with gzip.open(fpath.replace(".pklz", "_centroid_res.pklz"), "rb") as f:
+            cluster_res = pickle.load(f)
 
-    # load clustering results
-    n_nodes = 600
-    co2l_list = list(get_co2_levels(n_nodes))
+        # load clustering results
+        n_nodes = 600
+        co2l_list = list(get_co2_levels(n_nodes))
 
-    n_jobs_distance = 32
-    n_jobs_clustering = 2
-    distance_metric_kwargs = {
-        "name": "composite",
-        "metrics": [
-            {
-                "name": "hamming",
-                "n_jobs": n_jobs_distance,
-            },
-            {
-                "name": "cosine_distance",
-                "preprocessing": {
-                    "method": "boundary_field",
-                    "target": "classes",  # Transform classes
-                    "alpha": 0.4,
-                    "steps": 3,
+        n_jobs_distance = 32
+        n_jobs_clustering = 2
+        distance_metric_kwargs = {
+            "name": "composite",
+            "metrics": [
+                {
+                    "name": "hamming",
+                    "n_jobs": n_jobs_distance,
                 },
-                "n_jobs": n_jobs_distance,
+                {
+                    "name": "cosine_distance",
+                    "preprocessing": {
+                        "method": "boundary_field",
+                        "target": "classes",  # Transform classes
+                        "alpha": 0.4,
+                        "steps": 3,
+                    },
+                    "n_jobs": n_jobs_distance,
+                },
+            ],
+            "combiner": geometric_mean,
+            "cache_components": True,
+        }
+
+        n_clusters_list = np.arange(32, 1025, step=32).tolist()
+        clustering_params = {
+            "agg": {
+                "n_iter": 1e4,
+                "n_jobs": n_jobs_clustering,
+                "HPs": {
+                    "n_clusters": n_clusters_list,
+                    "linkage": [
+                        "average",
+                        "complete",
+                        # "single",
+                    ],  # "single" is not used as it leads to bad results
+                    "metric": ["precomputed"],
+                },
+                "calc_silhouette": True,
             },
-        ],
-        "combiner": geometric_mean,
-        "cache_components": True,
-    }
-
-    n_clusters_list = np.arange(32, 1025, step=32).tolist()
-    clustering_params = {
-        "agg": {
-            "n_iter": 1e4,
-            "n_jobs": n_jobs_clustering,
-            "HPs": {
-                "n_clusters": n_clusters_list,
-                "linkage": [
-                    "average",
-                    "complete",
-                    # "single",
-                ],  # "single" is not used as it leads to bad results
-                "metric": ["precomputed"],
-            },
-            "calc_silhouette": True,
-        },
-    }
-    # Initialize clustering object
-    cl = Clustering(
-        n_nodes,
-        co2l_list,
-        indicator_type="rocof",
-        transformation="blackout",
-        blackout_size_threshold=0.1,
-        distance_metric_kwargs=distance_metric_kwargs,
-        clustering_params=clustering_params,
-        distance_matrix_dtype=np.float16,
-    )
-    
-    cluster_idx = (
-        cluster_res["centroids_df"]
-        .sort_values(by=sort_by, ascending=False)
-        .iloc[cluster_number - 1, :]
-        .name
-    )
-    centroid = cluster_res["centroids"][cluster_idx]
-    edge_centroids = cluster_res["edge_centroids"][cluster_idx]
-    failed_edges_prob = edge_centroids.copy()
-    # plot centroid
-    plot_cluster = False
-    edge_log_scale = False
-    if edge_log_scale:
-        vmin_edge = 1e-3
-        vmax_edge = 1.0
-    else:
-        vmin_edge = 0.0
-        vmax_edge = 1.0
-    vmin_edge_orig = vmin_edge
-    vmax_edge_orig = vmax_edge
-    import matplotlib as mpl
-    from utils.clustering_visualisation import truncate_colormap
-
-    edge_cmap = plt.get_cmap("inferno_r")
-    edge_cmap = truncate_colormap(edge_cmap, 0.1, 0.95, 1000)
-    edge_cmap.set_under("gainsboro", 1.0)
-    if plot_cluster:
-        plot_order = np.argsort(centroid[:, 2])  # Sort by the value of the third class
-        colors_classes = ["blue", "lightgray", "red"]
-        f, ax = plt.subplots(figsize=(8, 8))
-        nx_graph = data_handling.load_networkx_graph(snet_index='0', 
-                                                     co2lvl=0.0)
-        pos = nx.get_node_attributes(nx_graph, "pos")
-        nodes = np.array(list(nx_graph.nodes()))
-        for i_node in plot_order:
-            node = nodes[i_node]
-            ax.pie(
-                centroid[i_node, :],
-                colors=colors_classes,
-                radius=0.2,
-                center=(pos[node][0], pos[node][1]),
-            )
-            pos_arr = np.array(list(pos.values()))
-            ax.set_xlim(pos_arr[:, 0].min() - 1, pos_arr[:, 0].max() + 1)
-            ax.set_ylim(pos_arr[:, 1].min() - 1, pos_arr[:, 1].max() + 1)
-        if edge_log_scale:
-            failed_edges_prob = np.array(
-                [np.log10(x) if x > 1e-12 else -np.inf for x in failed_edges_prob]
-            )
-            vmin_edge = np.log10(vmin_edge)
-            vmax_edge = np.log10(vmax_edge)
-
-        edges = nx.draw_networkx_edges(
-            nx_graph,
-            pos=pos,
-            ax=ax,
-            # edge_color="black",
-            width=6,
-            edge_cmap=edge_cmap,
-            edge_color=failed_edges_prob,
-            edge_vmin=vmin_edge,
-            edge_vmax=vmax_edge,
+        }
+        # Initialize clustering object
+        cl = Clustering(
+            n_nodes,
+            co2l_list,
+            indicator_type="rocof",
+            transformation="blackout",
+            blackout_size_threshold=0.1,
+            distance_metric_kwargs=distance_metric_kwargs,
+            clustering_params=clustering_params,
+            distance_matrix_dtype=np.float16,
         )
-        edges.set_zorder(0)
-        import matplotlib.colors as mplcolors
-
+    
+        cluster_idx = (
+            cluster_res["centroids_df"]
+            .sort_values(by=sort_by, ascending=False)
+            .iloc[cluster_number - 1, :]
+            .name
+        )
+        centroid = cluster_res["centroids"][cluster_idx]
+        edge_centroids = cluster_res["edge_centroids"][cluster_idx]
+        failed_edges_prob = edge_centroids.copy()
+        # plot centroid
+        plot_cluster = False
+        edge_log_scale = False
         if edge_log_scale:
-            sm_edge = plt.cm.ScalarMappable(
-                cmap=edge_cmap,
-                norm=mplcolors.LogNorm(vmin=vmin_edge_orig, vmax=vmax_edge_orig),
-            )
+            vmin_edge = 1e-3
+            vmax_edge = 1.0
         else:
-            sm_edge = plt.cm.ScalarMappable(
-                cmap=edge_cmap,
-                norm=mplcolors.Normalize(vmin=vmin_edge_orig, vmax=vmax_edge_orig),
+            vmin_edge = 0.0
+            vmax_edge = 1.0
+        vmin_edge_orig = vmin_edge
+        vmax_edge_orig = vmax_edge
+        import matplotlib as mpl
+        from utils.clustering_visualisation import truncate_colormap
+
+        edge_cmap = plt.get_cmap("inferno_r")
+        edge_cmap = truncate_colormap(edge_cmap, 0.1, 0.95, 1000)
+        edge_cmap.set_under("gainsboro", 1.0)
+        if plot_cluster:
+            plot_order = np.argsort(centroid[:, 2])  # Sort by the value of the third class
+            colors_classes = ["blue", "lightgray", "red"]
+            f, ax = plt.subplots(figsize=(8, 8))
+            nx_graph = data_handling.load_networkx_graph(snet_index='0', 
+                                                         co2lvl=0.0)
+            pos = nx.get_node_attributes(nx_graph, "pos")
+            nodes = np.array(list(nx_graph.nodes()))
+            for i_node in plot_order:
+                node = nodes[i_node]
+                ax.pie(
+                    centroid[i_node, :],
+                    colors=colors_classes,
+                    radius=0.2,
+                    center=(pos[node][0], pos[node][1]),
+                )
+                pos_arr = np.array(list(pos.values()))
+                ax.set_xlim(pos_arr[:, 0].min() - 1, pos_arr[:, 0].max() + 1)
+                ax.set_ylim(pos_arr[:, 1].min() - 1, pos_arr[:, 1].max() + 1)
+            if edge_log_scale:
+                failed_edges_prob = np.array(
+                    [np.log10(x) if x > 1e-12 else -np.inf for x in failed_edges_prob]
+                )
+                vmin_edge = np.log10(vmin_edge)
+                vmax_edge = np.log10(vmax_edge)
+
+            edges = nx.draw_networkx_edges(
+                nx_graph,
+                pos=pos,
+                ax=ax,
+                # edge_color="black",
+                width=6,
+                edge_cmap=edge_cmap,
+                edge_color=failed_edges_prob,
+                edge_vmin=vmin_edge,
+                edge_vmax=vmax_edge,
             )
-        cb_edge = f.colorbar(sm_edge, ax=ax)
-        # plt.colorbar(sm_edges, ax=ax, label="Edge failure probability")
+            edges.set_zorder(0)
+            import matplotlib.colors as mplcolors
 
-    # the third class of the centroid holds the weighted share of the cluster's splits
-    # in which the node ended up in an island with a RoCoF above ROCOF_THRESHOLD
-    node_idxs_red = np.where(centroid[:, 2] > OVER_FREQUENCY_SHARE)
-    nx_graph = data_handling.load_networkx_graph(snet_index='0',
-                                                 co2lvl=0.0)
-    nodes_red = np.array(nx_graph.nodes)[node_idxs_red]
-    logger.info(
-        f"cluster {cluster_number}: {len(nodes_red)} of {centroid.shape[0]} nodes of the "
-        f"AC subnetwork have a RoCoF > {ROCOF_THRESHOLD:g} Hz/s in more than "
-        f"{OVER_FREQUENCY_SHARE:.0%} of the cluster's splits "
-        f"({', '.join(nodes_red)}; shares "
-        f"{np.round(centroid[node_idxs_red, 2], 3).ravel().tolist()})"
-    )
-    cluster_mask = cluster_res["group_masks"][cluster_idx]
-    split_properties = pd.read_hdf(
-        f"{cl.data_dir}/data_filtered.h5",
-        key="split_props",
-    )
-    props_clust = split_properties.loc[cluster_mask]
+            if edge_log_scale:
+                sm_edge = plt.cm.ScalarMappable(
+                    cmap=edge_cmap,
+                    norm=mplcolors.LogNorm(vmin=vmin_edge_orig, vmax=vmax_edge_orig),
+                )
+            else:
+                sm_edge = plt.cm.ScalarMappable(
+                    cmap=edge_cmap,
+                    norm=mplcolors.Normalize(vmin=vmin_edge_orig, vmax=vmax_edge_orig),
+                )
+            cb_edge = f.colorbar(sm_edge, ax=ax)
+            # plt.colorbar(sm_edges, ax=ax, label="Edge failure probability")
 
-    # restrict to single co2 level for analysis
-    co2l = 0.0
-    fpath_component_in_all = config.path_to_vis_results_sclopf + f"/component_properties_all_n{n_nodes}.h5"
-    component_df = pd.read_hdf(fpath_component_in_all, key="df")
-    component_df = component_df[component_df.co2l == co2l]
-    component_df.reset_index(inplace=True, drop=True)
-    
-    props_clust_lvl = props_clust[props_clust.index.get_level_values("co2l") == co2l]
-    idx_clust_lvl = props_clust_lvl.index
-    component_df = component_df.set_index(["co2l", "time_stamp", "split_number"])
-    component_df_cluster = component_df.loc[idx_clust_lvl]
-    component_df_cluster.reset_index(inplace=True, drop=False)
-
-    # Keep only the row with largest load_share for each index group
-    idx = component_df_cluster.groupby(by=["co2l", "time_stamp", "split_number"])[
-        "load_share"
-    ].idxmax()
-    largest_component_df = component_df_cluster.loc[idx]
-
-    fig, axs = plt.subplots(2, 2, figsize=(12, 10))
-
-    largest_component_df.load_share.hist(
-        bins=30,
-        log=True,
-        ax=axs[0, 0],
-        weights=np.ones(len(largest_component_df)) / len(largest_component_df),
-    )
-    (largest_component_df.power_imbalance / 1000).hist(
-        bins=30,
-        log=True,
-        ax=axs[0, 1],
-        weights=np.ones(len(largest_component_df)) / len(largest_component_df),
-    )
-    (largest_component_df.rot_energy / 1000).hist(
-        bins=30,
-        log=True,
-        ax=axs[1, 0],
-        weights=np.ones(len(largest_component_df)) / len(largest_component_df),
-    )
-    largest_component_df.rocof.hist(
-        bins=30,
-        log=True,
-        ax=axs[1, 1],
-        weights=np.ones(len(largest_component_df)) / len(largest_component_df),
-    )
-    axs[0, 0].set_title("Load Share Distribution")
-    axs[0, 1].set_title("Power Imbalance Distribution [GW]")
-    axs[1, 0].set_title("Rotational Energy Distribution [GWs]")
-    axs[1, 1].set_title("RoCoF Distribution [Hz/s]")
-    for ax in axs.ravel():
-        ax.set_ylabel("Relative Frequency")
-
-    co2l = 0.0
-    n = data_handling.load_pypsa_network(co2lvl=co2l, n_nodes=600)
-    snapshots = (
-        props_clust.xs(co2l, level="co2l")
-        .index.get_level_values("time_stamp")
-        .unique()
-        .values
-    )
-    logger.info(
-        f"cluster {cluster_number}: {len(snapshots)} snapshots at co2l={co2l}"
-    )
-
-    all_snapshots = pd.to_datetime(n.loads_t["p"].index)
-    snapshot_to_idx = {snap: idx for idx, snap in enumerate(all_snapshots)}
-    snaps_clust = (
-        props_clust_lvl.index.get_level_values("time_stamp")
-        .value_counts()
-        .sort_index()
-        .index
-    )
-    idxs_snaps_clust = [snapshot_to_idx[snap] for snap in snaps_clust]
-    snap_counts_clust = (
-        props_clust_lvl.index.get_level_values("time_stamp")
-        .value_counts()
-        .sort_index()
-        .values
-    )
-
-    rot_energy_series = (
-        component_df[component_df.split_number_snapshot == 1]
-        .groupby(
-            component_df[
-                component_df.split_number_snapshot == 1
-            ].index.get_level_values("time_stamp")
-        )
-        .rot_energy.sum()
-        / 1000
-    )
-
-    from operator import itemgetter
-
-    largest_component_sub = largest_component_df
-    inertia_time = (
-        np.load(
-            config.path_to_pre_outage_sclopf
-            + f"/inertia_time_series_all_co2ls_{n_nodes}.npy"
-        )
-        / 1000
-    )[-1, :]
-    largest_component_sub["time_stamp"] = pd.to_datetime(
-        largest_component_sub["time_stamp"]
-    )
-    time_stamps = largest_component_sub["time_stamp"].tolist()
-    total_inertia_sub = np.array(inertia_time)[
-        np.array(itemgetter(*time_stamps)(snapshot_to_idx))
-    ]
-    inertia_share_largest_component = (
-        largest_component_sub.rot_energy / (total_inertia_sub + 1e-8) / 1000
-    )
-
-    plot_largest_component_two_panel(
-        largest_component=largest_component_sub,
-        inertia_share=inertia_share_largest_component,
-        co2l=co2l,
-        save_dir=save_dir,
-    )
-
-    # analyse overfrequency nodes
-
-    # the generators are picked by their bus attribute, not by a substring of the
-    # column name: a bus name such as "DE1 1" is a prefix of "DE1 19", so a substring
-    # match would pull in the generators of the other nodes as well
-    node_cols_gen = n.generators.index[n.generators.bus.isin(nodes_red)].tolist()
-    node_cols_store = n.storage_units.index[
-        n.storage_units.bus.isin(nodes_red)
-    ].tolist()
-    gen_nodes = n.generators_t["p"].loc[snapshots, node_cols_gen]
-    store_nodes = n.storage_units_t["p"].loc[snapshots, node_cols_store]
-    gen_by_carrier = (
-        gen_nodes.groupby(gen_nodes.columns.str.split().str[-1], axis=1)
-        .sum()
-        .astype(int)
-    )
-    # remove columns with less than 1% average contribution
-    # gen_by_carrier = gen_by_carrier.loc[:,gen_by_carrier.max(axis=0) > gen_by_carrier.sum(axis=1).mean() * 0.01]
-    load = (
-        n.loads_t["p"]
-        .loc[snapshots, n.loads.index[n.loads.bus.isin(nodes_red)]]
-        .sum(axis=1)
-    )
-    storage_by_carrier = (
-        store_nodes.groupby(n.storage_units.loc[store_nodes.columns].carrier, axis=1)
-        .sum()
-        .astype(int)
-    )
-    # storage_by_carrier = storage_by_carrier.loc[:,storage_by_carrier.abs().max(axis=0) > storage_by_carrier.sum(axis=1).mean() * 0.05]
-    # storage_by_carrier
-    # net power leaving the nodes through HVDC links; links without a time series carry
-    # no power and are filled with zero
-    links_red = n.links[n.links.bus0.isin(nodes_red) | n.links.bus1.isin(nodes_red)]
-    p0_red = n.links_t["p0"].reindex(columns=links_red.index, fill_value=0.0).loc[
-        snapshots
-    ]
-    p1_red = n.links_t["p1"].reindex(columns=links_red.index, fill_value=0.0).loc[
-        snapshots
-    ]
-    hvdc_export = (
-        p0_red.loc[:, links_red.bus0.isin(nodes_red)].sum(axis=1)
-        + p1_red.loc[:, links_red.bus1.isin(nodes_red)].sum(axis=1)
-    )
-    if links_red.empty:
-        logger.info(f"cluster {cluster_number}: no HVDC links connect to these nodes")
-    else:
+        # the third class of the centroid holds the weighted share of the cluster's splits
+        # in which the node ended up in an island with a RoCoF above ROCOF_THRESHOLD
+        node_idxs_red = np.where(centroid[:, 2] > OVER_FREQUENCY_SHARE)
+        nx_graph = data_handling.load_networkx_graph(snet_index='0',
+                                                     co2lvl=0.0)
+        nodes_red = np.array(nx_graph.nodes)[node_idxs_red]
         logger.info(
-            f"cluster {cluster_number}: {len(links_red)} HVDC links connect to these "
-            f"nodes ({', '.join(links_red.index)}), max net export "
-            f"{hvdc_export.abs().max() / 1000:.2f} GW"
+            f"cluster {cluster_number}: {len(nodes_red)} of {centroid.shape[0]} nodes of the "
+            f"AC subnetwork have a RoCoF > {ROCOF_THRESHOLD:g} Hz/s in more than "
+            f"{OVER_FREQUENCY_SHARE:.0%} of the cluster's splits "
+            f"({', '.join(nodes_red)}; shares "
+            f"{np.round(centroid[node_idxs_red, 2], 3).ravel().tolist()})"
         )
-
-    # storage_units_t.p is discharge-positive and hvdc_export is the power leaving the
-    # nodes, following subgraph_evaluation.calc_power_imbalance_subgraph
-    power_imbalance = (
-        gen_by_carrier.sum(axis=1)
-        + storage_by_carrier.sum(axis=1)
-        - load
-        - hvdc_export
-    )
-
-    inertia_time_cluster = inertia_time[np.isin(all_snapshots, snapshots)]
-
-    rocofs = (
-        50 * power_imbalance / 1000 / ((inertia_time_cluster + 1e-8) * 2)
-    )  # /1000 because power imbalance and inertia in GW
-
-    relative_contribution = gen_by_carrier.div(gen_by_carrier.sum(axis=1), axis=0)
-    relative_contribution.describe()
-
-    # since solar contributes more than 95% on average we will not plot by carrier but only total generation and storage
-
-    # plot histograms of generation and storage power
-    bins = np.arange(0, gen_by_carrier.sum(axis=1).max() / 1000 * 1.2, step=0.5)
-
-    fig, ax = plt.subplots()
-    for col in gen_by_carrier.columns:
-        sign_vals = gen_by_carrier[col].values[gen_by_carrier[col].values >= 500]
-        if len(sign_vals) == 0:
-            continue
-        ax.hist(
-            gen_by_carrier[col].values / 1000,
-            alpha=0.5,
-            bins=bins,
-            label=col,
-            weights=np.ones(len(gen_by_carrier[col])) / len(gen_by_carrier[col]),
+        cluster_mask = cluster_res["group_masks"][cluster_idx]
+        split_properties = pd.read_hdf(
+            f"{cl.data_dir}/data_filtered.h5",
+            key="split_props",
         )
-    plt.yscale("log")
-    ax.legend()
-    ax.set_xlabel("Generation [GW]")
-    ax.set_ylabel("Relative Frequency")
-    plt.title("Generation by Carrier")
-    f_name = f"generation_by_carrier_hist_co2l{co2l}"
-    plot_style.save_figure(fig, f_name, save_dir)
+        props_clust = split_properties.loc[cluster_mask]
 
-    fig, axs = plt.subplots(1, 4, figsize=(15, 5))
-    # gen_store_vals = np.concatenate(
-    #     [gen_by_carrier.values.flatten(), storage_by_carrier.values.flatten()]
-    # ) / 1000
-    # shared_bins = np.histogram_bin_edges(gen_store_vals, bins=30)
-    # for col in gen_by_carrier.columns:
-    #     axs[0].hist(gen_by_carrier[col].values/1000, bins=shared_bins, alpha=0.5, label=col)
-    gen_total_vals = gen_by_carrier.sum(axis=1).values / 1000
-    axs[2].hist(
-        gen_total_vals,
-        alpha=0.7,
-        bins=30,
-        label="Generation",
-        weights=np.ones(len(gen_total_vals)) / len(gen_total_vals),
-    )
-    axs[2].set_ylabel("Relative Frequency")
-
-    # for col in storage_by_carrier.columns:
-    #     axs[2].hist(storage_by_carrier[col].values/1000, bins=shared_bins, alpha=0.5, label=col)
-    # axs[2].set_title("Generation")
-    # axs[2].legend()
-    # axs[2].set_ylim(1, axs[2].get_ylim()[1])
-    axs[2].set_xlabel("Generation [GW]")
-
-    load_vals = load.values / 1000
-    axs[0].hist(
-        load_vals,
-        bins=30,
-        alpha=0.7,
-        weights=np.ones(len(load_vals)) / len(load_vals),
-    )
-    # axs[0].set_title("Load")
-    # axs[0].set_xlabel("Load + Storage [GW]")
-    axs[0].set_xlabel("Load [GW]")
-    axs[0].set_ylabel("Relative Frequency")
-
-    storage_vals = storage_by_carrier.sum(axis=1).values / 1000
-    axs[1].hist(
-        storage_vals,
-        bins=30,
-        alpha=0.7,
-        weights=np.ones(len(storage_vals)) / len(storage_vals),
-    )
-    # axs[1].set_title("Load")
-    axs[1].set_xlabel("Storage [GW]")
-    axs[1].set_ylabel("Relative Frequency")
-
-    imbalance_vals = power_imbalance.values / 1000
-    axs[3].hist(
-        imbalance_vals,
-        bins=30,
-        alpha=0.7,
-        weights=np.ones(len(imbalance_vals)) / len(imbalance_vals),
-    )
-    # axs[3].set_title("Power imbalance")
-    axs[3].set_xlabel("Power imbalance [GW]")
-    axs[3].set_ylabel("Relative Frequency")
-
-    plt.tight_layout()
-    # axs[3].hist(inertia_time_cluster, bins=30, alpha=0.7, color="red")
-    # axs[3].set_title("Total Inertia")
-    # axs[3].set_xlabel("Inertia [s]")
-
-    # axs[4].hist(rocofs, bins=30, alpha=0.7, color="purple")
-    # axs[4].set_title("RoCoF distribution")
-    # axs[4].set_xlabel("RoCoF [Hz/s]")
-    f_name = f"gen_load_storage_imbalance_hist_co2l{co2l}"
-    plot_style.save_figure(fig, f_name, save_dir)
-    # 
-    # Plot histograms of snapshots - daily and yearly profiles
-    fig, axs = plt.subplots(1, 2, figsize=(6, 5), width_ratios=[0.5, 1])
-
-    # Convert snapshots to pandas datetime if needed
-    snapshots_dt = pd.to_datetime(snaps_clust)
-    possible_hours = list(pd.to_datetime(all_snapshots).hour.unique()) + [24]
-
-    # Daily profile - bar plot centered on ticks
-    hours = snapshots_dt.hour
-    hours_counts = hours.value_counts().sort_index()
-    hours_rel = hours_counts.values / hours_counts.values.sum()
-    axs[0].bar(
-        hours_counts.index + 1.5, hours_rel, width=3, edgecolor="black", alpha=0.7
-    )
-    axs[0].set_xlabel("Hour of Day")
-    axs[0].set_ylabel("Relative Frequency")
-    axs[0].set_title("Daily Profile")
-    axs[0].set_xticks(possible_hours)
-    # rotate x-axis labels
-    axs[0].set_xticklabels(possible_hours, rotation=90)
-    axs[0].set_xlim(0, 24)
-    axs[0].grid(axis="y", alpha=0.3)
-
-    # Yearly profile - histogram of day of year
-    day_of_year = snapshots_dt.dayofyear
-    axs[1].hist(
-        day_of_year,
-        bins=len(snapshots_dt.dayofyear.unique()),
-        range=(1, 366),
-        edgecolor="black",
-        alpha=0.7,
-        weights=np.ones(len(day_of_year)) / len(day_of_year),
-    )
-    # axs[1].set_xlabel('Day of Year')
-    axs[1].set_ylabel("Relative Frequency")
-    axs[1].set_title("Yearly Profile")
-    # Set month ticks
-    month_starts = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
-    month_labels = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-    ]
-    axs[1].set_xticks(month_starts)
-    # rotate x-axis labels
-    axs[1].set_xticklabels(month_labels, rotation=90)
-    axs[1].grid(axis="y", alpha=0.3)
-    axs[1].set_xlim(1, 366)
-
-    # add suptitle
-    plt.suptitle(f"Temporal Distribution of Blackouts", fontsize=16, y=0.93)
-
-    plt.tight_layout()
+        # restrict to single co2 level for analysis
+        co2l = 0.0
+        fpath_component_in_all = config.path_to_vis_results_sclopf + f"/component_properties_all_n{n_nodes}.h5"
+        component_df = pd.read_hdf(fpath_component_in_all, key="df")
+        component_df = component_df[component_df.co2l == co2l]
+        component_df.reset_index(inplace=True, drop=True)
     
-    f_name = f"blackout_daily_yearly_profile_co2l{co2l}"
-    plot_style.save_figure(plt.gcf(), f_name, save_dir)
+        props_clust_lvl = props_clust[props_clust.index.get_level_values("co2l") == co2l]
+        idx_clust_lvl = props_clust_lvl.index
+        component_df = component_df.set_index(["co2l", "time_stamp", "split_number"])
+        component_df_cluster = component_df.loc[idx_clust_lvl]
+        component_df_cluster.reset_index(inplace=True, drop=False)
 
-    # combined figure of the three plots above
-    plot_cluster_summary(
-        gen_by_carrier=gen_by_carrier,
-        storage_by_carrier=storage_by_carrier,
-        load=load,
-        power_imbalance=power_imbalance,
-        snaps_clust=snaps_clust,
-        all_snapshots=all_snapshots,
-        co2l=co2l,
-        save_dir=save_dir,
-        cluster_number=cluster_number,
-    )
+        # Keep only the row with largest load_share for each index group
+        idx = component_df_cluster.groupby(by=["co2l", "time_stamp", "split_number"])[
+            "load_share"
+        ].idxmax()
+        largest_component_df = component_df_cluster.loc[idx]
 
-    # get installed generation capacity in the nodes of the cluster
-    gen_capacity = (
-        n.generators.loc[n.generators.bus.isin(nodes_red)]
-        .groupby(n.generators.loc[n.generators.bus.isin(nodes_red)].carrier)
-        .p_nom.sum()
-        .astype(int)
-    )
-    gen_capacity = gen_capacity[
-        [carrier for carrier in gen_capacity.index if not "load" in carrier.lower()]
-    ]
-    gen_capacity = gen_capacity[gen_capacity > gen_capacity.max() * 0.01]
-    gen_capacity
+        fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+
+        largest_component_df.load_share.hist(
+            bins=30,
+            log=True,
+            ax=axs[0, 0],
+            weights=np.ones(len(largest_component_df)) / len(largest_component_df),
+        )
+        (largest_component_df.power_imbalance / 1000).hist(
+            bins=30,
+            log=True,
+            ax=axs[0, 1],
+            weights=np.ones(len(largest_component_df)) / len(largest_component_df),
+        )
+        (largest_component_df.rot_energy / 1000).hist(
+            bins=30,
+            log=True,
+            ax=axs[1, 0],
+            weights=np.ones(len(largest_component_df)) / len(largest_component_df),
+        )
+        largest_component_df.rocof.hist(
+            bins=30,
+            log=True,
+            ax=axs[1, 1],
+            weights=np.ones(len(largest_component_df)) / len(largest_component_df),
+        )
+        axs[0, 0].set_title("Load Share Distribution")
+        axs[0, 1].set_title("Power Imbalance Distribution [GW]")
+        axs[1, 0].set_title("Rotational Energy Distribution [GWs]")
+        axs[1, 1].set_title("RoCoF Distribution [Hz/s]")
+        for ax in axs.ravel():
+            ax.set_ylabel("Relative Frequency")
+
+        co2l = 0.0
+        n = data_handling.load_pypsa_network(co2lvl=co2l, n_nodes=600)
+        snapshots = (
+            props_clust.xs(co2l, level="co2l")
+            .index.get_level_values("time_stamp")
+            .unique()
+            .values
+        )
+        logger.info(
+            f"cluster {cluster_number}: {len(snapshots)} snapshots at co2l={co2l}"
+        )
+
+        all_snapshots = pd.to_datetime(n.loads_t["p"].index)
+        snapshot_to_idx = {snap: idx for idx, snap in enumerate(all_snapshots)}
+        snaps_clust = (
+            props_clust_lvl.index.get_level_values("time_stamp")
+            .value_counts()
+            .sort_index()
+            .index
+        )
+        idxs_snaps_clust = [snapshot_to_idx[snap] for snap in snaps_clust]
+        snap_counts_clust = (
+            props_clust_lvl.index.get_level_values("time_stamp")
+            .value_counts()
+            .sort_index()
+            .values
+        )
+
+        rot_energy_series = (
+            component_df[component_df.split_number_snapshot == 1]
+            .groupby(
+                component_df[
+                    component_df.split_number_snapshot == 1
+                ].index.get_level_values("time_stamp")
+            )
+            .rot_energy.sum()
+            / 1000
+        )
+
+        from operator import itemgetter
+
+        largest_component_sub = largest_component_df
+        inertia_time = (
+            np.load(
+                config.path_to_pre_outage_sclopf
+                + f"/inertia_time_series_all_co2ls_{n_nodes}.npy"
+            )
+            / 1000
+        )[-1, :]
+        largest_component_sub["time_stamp"] = pd.to_datetime(
+            largest_component_sub["time_stamp"]
+        )
+        time_stamps = largest_component_sub["time_stamp"].tolist()
+        total_inertia_sub = np.array(inertia_time)[
+            np.array(itemgetter(*time_stamps)(snapshot_to_idx))
+        ]
+        inertia_share_largest_component = (
+            largest_component_sub.rot_energy / (total_inertia_sub + 1e-8) / 1000
+        )
+
+        plot_largest_component_two_panel(
+            largest_component=largest_component_sub,
+            inertia_share=inertia_share_largest_component,
+            co2l=co2l,
+            save_dir=save_dir,
+        )
+
+        # analyse overfrequency nodes
+
+        # the generators are picked by their bus attribute, not by a substring of the
+        # column name: a bus name such as "DE1 1" is a prefix of "DE1 19", so a substring
+        # match would pull in the generators of the other nodes as well
+        node_cols_gen = n.generators.index[n.generators.bus.isin(nodes_red)].tolist()
+        node_cols_store = n.storage_units.index[
+            n.storage_units.bus.isin(nodes_red)
+        ].tolist()
+        gen_nodes = n.generators_t["p"].loc[snapshots, node_cols_gen]
+        store_nodes = n.storage_units_t["p"].loc[snapshots, node_cols_store]
+        gen_by_carrier = (
+            gen_nodes.groupby(gen_nodes.columns.str.split().str[-1], axis=1)
+            .sum()
+            .astype(int)
+        )
+        # remove columns with less than 1% average contribution
+        # gen_by_carrier = gen_by_carrier.loc[:,gen_by_carrier.max(axis=0) > gen_by_carrier.sum(axis=1).mean() * 0.01]
+        load = (
+            n.loads_t["p"]
+            .loc[snapshots, n.loads.index[n.loads.bus.isin(nodes_red)]]
+            .sum(axis=1)
+        )
+        storage_by_carrier = (
+            store_nodes.groupby(n.storage_units.loc[store_nodes.columns].carrier, axis=1)
+            .sum()
+            .astype(int)
+        )
+        # storage_by_carrier = storage_by_carrier.loc[:,storage_by_carrier.abs().max(axis=0) > storage_by_carrier.sum(axis=1).mean() * 0.05]
+        # storage_by_carrier
+        # net power leaving the nodes through HVDC links; links without a time series carry
+        # no power and are filled with zero
+        links_red = n.links[n.links.bus0.isin(nodes_red) | n.links.bus1.isin(nodes_red)]
+        p0_red = n.links_t["p0"].reindex(columns=links_red.index, fill_value=0.0).loc[
+            snapshots
+        ]
+        p1_red = n.links_t["p1"].reindex(columns=links_red.index, fill_value=0.0).loc[
+            snapshots
+        ]
+        hvdc_export = (
+            p0_red.loc[:, links_red.bus0.isin(nodes_red)].sum(axis=1)
+            + p1_red.loc[:, links_red.bus1.isin(nodes_red)].sum(axis=1)
+        )
+        if links_red.empty:
+            logger.info(f"cluster {cluster_number}: no HVDC links connect to these nodes")
+        else:
+            logger.info(
+                f"cluster {cluster_number}: {len(links_red)} HVDC links connect to these "
+                f"nodes ({', '.join(links_red.index)}), max net export "
+                f"{hvdc_export.abs().max() / 1000:.2f} GW"
+            )
+
+        # storage_units_t.p is discharge-positive and hvdc_export is the power leaving the
+        # nodes, following subgraph_evaluation.calc_power_imbalance_subgraph
+        power_imbalance = (
+            gen_by_carrier.sum(axis=1)
+            + storage_by_carrier.sum(axis=1)
+            - load
+            - hvdc_export
+        )
+
+        inertia_time_cluster = inertia_time[np.isin(all_snapshots, snapshots)]
+
+        rocofs = (
+            50 * power_imbalance / 1000 / ((inertia_time_cluster + 1e-8) * 2)
+        )  # /1000 because power imbalance and inertia in GW
+
+        relative_contribution = gen_by_carrier.div(gen_by_carrier.sum(axis=1), axis=0)
+        relative_contribution.describe()
+
+        # since solar contributes more than 95% on average we will not plot by carrier but only total generation and storage
+
+        # plot histograms of generation and storage power
+        bins = np.arange(0, gen_by_carrier.sum(axis=1).max() / 1000 * 1.2, step=0.5)
+
+        fig, ax = plt.subplots()
+        for col in gen_by_carrier.columns:
+            sign_vals = gen_by_carrier[col].values[gen_by_carrier[col].values >= 500]
+            if len(sign_vals) == 0:
+                continue
+            ax.hist(
+                gen_by_carrier[col].values / 1000,
+                alpha=0.5,
+                bins=bins,
+                label=col,
+                weights=np.ones(len(gen_by_carrier[col])) / len(gen_by_carrier[col]),
+            )
+        plt.yscale("log")
+        ax.legend()
+        ax.set_xlabel("Generation [GW]")
+        ax.set_ylabel("Relative Frequency")
+        plt.title("Generation by Carrier")
+        f_name = f"generation_by_carrier_hist_co2l{co2l}"
+        plot_style.save_figure(fig, f_name, save_dir)
+
+        fig, axs = plt.subplots(1, 4, figsize=(15, 5))
+        # gen_store_vals = np.concatenate(
+        #     [gen_by_carrier.values.flatten(), storage_by_carrier.values.flatten()]
+        # ) / 1000
+        # shared_bins = np.histogram_bin_edges(gen_store_vals, bins=30)
+        # for col in gen_by_carrier.columns:
+        #     axs[0].hist(gen_by_carrier[col].values/1000, bins=shared_bins, alpha=0.5, label=col)
+        gen_total_vals = gen_by_carrier.sum(axis=1).values / 1000
+        axs[2].hist(
+            gen_total_vals,
+            alpha=0.7,
+            bins=30,
+            label="Generation",
+            weights=np.ones(len(gen_total_vals)) / len(gen_total_vals),
+        )
+        axs[2].set_ylabel("Relative Frequency")
+
+        # for col in storage_by_carrier.columns:
+        #     axs[2].hist(storage_by_carrier[col].values/1000, bins=shared_bins, alpha=0.5, label=col)
+        # axs[2].set_title("Generation")
+        # axs[2].legend()
+        # axs[2].set_ylim(1, axs[2].get_ylim()[1])
+        axs[2].set_xlabel("Generation [GW]")
+
+        load_vals = load.values / 1000
+        axs[0].hist(
+            load_vals,
+            bins=30,
+            alpha=0.7,
+            weights=np.ones(len(load_vals)) / len(load_vals),
+        )
+        # axs[0].set_title("Load")
+        # axs[0].set_xlabel("Load + Storage [GW]")
+        axs[0].set_xlabel("Load [GW]")
+        axs[0].set_ylabel("Relative Frequency")
+
+        storage_vals = storage_by_carrier.sum(axis=1).values / 1000
+        axs[1].hist(
+            storage_vals,
+            bins=30,
+            alpha=0.7,
+            weights=np.ones(len(storage_vals)) / len(storage_vals),
+        )
+        # axs[1].set_title("Load")
+        axs[1].set_xlabel("Storage [GW]")
+        axs[1].set_ylabel("Relative Frequency")
+
+        imbalance_vals = power_imbalance.values / 1000
+        axs[3].hist(
+            imbalance_vals,
+            bins=30,
+            alpha=0.7,
+            weights=np.ones(len(imbalance_vals)) / len(imbalance_vals),
+        )
+        # axs[3].set_title("Power imbalance")
+        axs[3].set_xlabel("Power imbalance [GW]")
+        axs[3].set_ylabel("Relative Frequency")
+
+        plt.tight_layout()
+        # axs[3].hist(inertia_time_cluster, bins=30, alpha=0.7, color="red")
+        # axs[3].set_title("Total Inertia")
+        # axs[3].set_xlabel("Inertia [s]")
+
+        # axs[4].hist(rocofs, bins=30, alpha=0.7, color="purple")
+        # axs[4].set_title("RoCoF distribution")
+        # axs[4].set_xlabel("RoCoF [Hz/s]")
+        f_name = f"gen_load_storage_imbalance_hist_co2l{co2l}"
+        plot_style.save_figure(fig, f_name, save_dir)
+        # 
+        # Plot histograms of snapshots - daily and yearly profiles
+        fig, axs = plt.subplots(1, 2, figsize=(6, 5), width_ratios=[0.5, 1])
+
+        # Convert snapshots to pandas datetime if needed
+        snapshots_dt = pd.to_datetime(snaps_clust)
+        possible_hours = list(pd.to_datetime(all_snapshots).hour.unique()) + [24]
+
+        # Daily profile - bar plot centered on ticks
+        hours = snapshots_dt.hour
+        hours_counts = hours.value_counts().sort_index()
+        hours_rel = hours_counts.values / hours_counts.values.sum()
+        axs[0].bar(
+            hours_counts.index + 1.5, hours_rel, width=3, edgecolor="black", alpha=0.7
+        )
+        axs[0].set_xlabel("Hour of Day")
+        axs[0].set_ylabel("Relative Frequency")
+        axs[0].set_title("Daily Profile")
+        axs[0].set_xticks(possible_hours)
+        # rotate x-axis labels
+        axs[0].set_xticklabels(possible_hours, rotation=90)
+        axs[0].set_xlim(0, 24)
+        axs[0].grid(axis="y", alpha=0.3)
+
+        # Yearly profile - histogram of day of year
+        day_of_year = snapshots_dt.dayofyear
+        axs[1].hist(
+            day_of_year,
+            bins=len(snapshots_dt.dayofyear.unique()),
+            range=(1, 366),
+            edgecolor="black",
+            alpha=0.7,
+            weights=np.ones(len(day_of_year)) / len(day_of_year),
+        )
+        # axs[1].set_xlabel('Day of Year')
+        axs[1].set_ylabel("Relative Frequency")
+        axs[1].set_title("Yearly Profile")
+        # Set month ticks
+        month_starts = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+        month_labels = [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ]
+        axs[1].set_xticks(month_starts)
+        # rotate x-axis labels
+        axs[1].set_xticklabels(month_labels, rotation=90)
+        axs[1].grid(axis="y", alpha=0.3)
+        axs[1].set_xlim(1, 366)
+
+        # add suptitle
+        plt.suptitle(f"Temporal Distribution of Blackouts", fontsize=16, y=0.93)
+
+        plt.tight_layout()
+    
+        f_name = f"blackout_daily_yearly_profile_co2l{co2l}"
+        plot_style.save_figure(plt.gcf(), f_name, save_dir)
+
+        # combined figure of the three plots above
+        plot_cluster_summary(
+            gen_by_carrier=gen_by_carrier,
+            storage_by_carrier=storage_by_carrier,
+            load=load,
+            power_imbalance=power_imbalance,
+            snaps_clust=snaps_clust,
+            all_snapshots=all_snapshots,
+            co2l=co2l,
+            save_dir=save_dir,
+            cluster_number=cluster_number,
+        )
+
+        # get installed generation capacity in the nodes of the cluster
+        gen_capacity = (
+            n.generators.loc[n.generators.bus.isin(nodes_red)]
+            .groupby(n.generators.loc[n.generators.bus.isin(nodes_red)].carrier)
+            .p_nom.sum()
+            .astype(int)
+        )
+        gen_capacity = gen_capacity[
+            [carrier for carrier in gen_capacity.index if not "load" in carrier.lower()]
+        ]
+        gen_capacity = gen_capacity[gen_capacity > gen_capacity.max() * 0.01]
+        gen_capacity
 
 
-    # inertia contribution by snapshot (full network)
+        # inertia contribution by snapshot (full network)
     
 
-    participation_threshold = 0.05
-    load_inertia_constant = 0.4
+        participation_threshold = 0.05
+        load_inertia_constant = 0.4
 
-    inertia_by_snapshot_rows = []
-    snapshot_index = pd.to_datetime(snapshots)
+        inertia_by_snapshot_rows = []
+        snapshot_index = pd.to_datetime(snapshots)
 
-    for snap in snapshots:
-        current_generation = n.generators_t.p.loc[snap].mul(n.generators.sign).copy()
-        current_storage = n.storage_units_t.p.loc[snap]
-        current_load = n.loads_t.p.loc[snap]
+        for snap in snapshots:
+            current_generation = n.generators_t.p.loc[snap].mul(n.generators.sign).copy()
+            current_storage = n.storage_units_t.p.loc[snap]
+            current_load = n.loads_t.p.loc[snap]
 
-        inertia_by_type = subgraph_evaluation.get_inertia_by_type_subgraph(
-            None,
-            n.generators,
-            current_generation,
-            n.storage_units,
-            current_storage,
-            n.loads,
-            current_load,
-            participation_threshold=participation_threshold,
-            load_inertia_constant=load_inertia_constant,
+            inertia_by_type = subgraph_evaluation.get_inertia_by_type_subgraph(
+                None,
+                n.generators,
+                current_generation,
+                n.storage_units,
+                current_storage,
+                n.loads,
+                current_load,
+                participation_threshold=participation_threshold,
+                load_inertia_constant=load_inertia_constant,
+            )
+            inertia_by_snapshot_rows.append(inertia_by_type)
+
+        inertia_by_snapshot_df = pd.DataFrame(
+            inertia_by_snapshot_rows, index=snapshot_index
+        ).fillna(0.0)
+        inertia_by_snapshot_df["total"] = inertia_by_snapshot_df.sum(axis=1)
+        # 
+        inertia_by_snapshot_relative = inertia_by_snapshot_df.div(
+            inertia_by_snapshot_df.total, axis=0
         )
-        inertia_by_snapshot_rows.append(inertia_by_type)
-
-    inertia_by_snapshot_df = pd.DataFrame(
-        inertia_by_snapshot_rows, index=snapshot_index
-    ).fillna(0.0)
-    inertia_by_snapshot_df["total"] = inertia_by_snapshot_df.sum(axis=1)
-    # 
-    inertia_by_snapshot_relative = inertia_by_snapshot_df.div(
-        inertia_by_snapshot_df.total, axis=0
-    )
-    no_inertia_cols = inertia_by_snapshot_relative.columns[
-        inertia_by_snapshot_relative.sum(axis=0) == 0
-    ]
-    inertia_by_snapshot_relative = inertia_by_snapshot_relative.drop(
-        columns=no_inertia_cols
-    )
-    inertia_by_snapshot_relative.describe()
-    # 
-    inertia_rel_clust = inertia_by_snapshot_relative.loc[snapshots_dt]
-    inertia_rel_clust.describe()
-    # 
-    # (inertia_by_snapshot_relative.H2 * 100).hist()
-    # plt.title("Relative inertia contribution of H2 storage")
-    # plt.xlabel("Relative inertia contribution [\%]")
-    # plt.ylabel("Frequency")
-    # plot_style.save_figure(plt.gcf(), "h2_inertia_contribution_hist", save_dir)
-    # 
-    # (inertia_by_snapshot_relative.H2 * 100).hist()
-    # plt.title(f"Relative inertia contribution of H2 storage cluster {cluster_number}")
-    # plt.xlabel("Relative inertia contribution [\%]")
-    # plt.ylabel("Frequency")
-    # plot_style.save_figure(
-    #     plt.gcf(),
-    #     f"h2_inertia_contribution_hist_cluster{cluster_number}",
-    #     save_dir,
-    # )
+        no_inertia_cols = inertia_by_snapshot_relative.columns[
+            inertia_by_snapshot_relative.sum(axis=0) == 0
+        ]
+        inertia_by_snapshot_relative = inertia_by_snapshot_relative.drop(
+            columns=no_inertia_cols
+        )
+        inertia_by_snapshot_relative.describe()
+        # 
+        inertia_rel_clust = inertia_by_snapshot_relative.loc[snapshots_dt]
+        inertia_rel_clust.describe()
+        # 
+        # (inertia_by_snapshot_relative.H2 * 100).hist()
+        # plt.title("Relative inertia contribution of H2 storage")
+        # plt.xlabel("Relative inertia contribution [\%]")
+        # plt.ylabel("Frequency")
+        # plot_style.save_figure(plt.gcf(), "h2_inertia_contribution_hist", save_dir)
+        # 
+        # (inertia_by_snapshot_relative.H2 * 100).hist()
+        # plt.title(f"Relative inertia contribution of H2 storage cluster {cluster_number}")
+        # plt.xlabel("Relative inertia contribution [\%]")
+        # plt.ylabel("Frequency")
+        # plot_style.save_figure(
+        #     plt.gcf(),
+        #     f"h2_inertia_contribution_hist_cluster{cluster_number}",
+        #     save_dir,
+        # )
