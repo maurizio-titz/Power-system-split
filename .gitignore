@@ -14,3 +14,4 @@ results/
 *.pklz
 utils/config_local.py
 pyenv/*
+.snakemake/
