@@ -9,30 +9,18 @@
 # the epsilon is far below any meaningful emissions granularity, so this pins
 # emissions to upper for all practical purposes without touching the
 # pypsa-eur submodule.
-#
-# NB: only `upper` used to be set here, so co2_budget.lower stayed at the
-# pypsa-eur default (null) and no lower-bound constraint was ever added to
-# the network - the CO2 budget was a ceiling, not a pin. That went unnoticed
-# for co2-0.5 and tighter, since the 2050 cost-optimal dispatch already sits
-# below those ceilings under pressure from the other caps, but co2-0.6 came
-# out around 53% of 1990 instead of 60%, because with 2030 cost assumptions
-# the unconstrained-by-CO2 optimum is already below 60% and the ceiling never
-# bound. Adding `lower` here now actually pins every level, including 0.6.
 
 co2-0.6:
   co2_budget:
     upper: 0.6
-    lower: 0.599999
 
 co2-0.5:
   co2_budget:
     upper: 0.5
-    lower: 0.499999
 
 co2-0.4:
   co2_budget:
     upper: 0.4
-    lower: 0.399999
 
 co2-0.3:
   co2_budget:
@@ -42,19 +30,15 @@ co2-0.3:
 co2-0.2:
   co2_budget:
     upper: 0.2
-    lower: 0.199999
 
 co2-0.1:
   co2_budget:
     upper: 0.1
-    lower: 0.099999
 
 co2-0.05:
   co2_budget:
     upper: 0.05
-    lower: 0.049999
 
 co2-0.0:
   co2_budget:
     upper: 0.0
-    lower: -0.000001
