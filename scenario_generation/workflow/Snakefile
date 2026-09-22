@@ -11,10 +11,19 @@ sys.path.append(root_path)
 
 
 group_size = int(config["groupsize"])
-temp_resolution = int(config["clustering"]["temporal"]["resolution_elec"].split("H")[0])
+temp_resolution = int("".join(filter(str.isdigit, config["clustering"]["temporal"]["averaging"])))
 
 N_ITER = str(int(np.ceil(8760 / temp_resolution / group_size))-1)
-NCLUSTERS = str(config["scenario"]["clusters"][0])
+NCLUSTERS = str(config["clustering"]["cluster_network"]["n_clusters"])
+
+_horizons = config["planning_horizons"]
+HORIZON = str(_horizons[0] if isinstance(_horizons, list) else _horizons)
+
+
+def co2_run_name(opts):
+    """'Co2L0.6' (this workflow's {opts} wildcard) -> 'co2-0.6' (pypsa-eur run.name)"""
+    return "co2-" + opts.replace("Co2L", "")
+
 
 # export PYTHONPATH=str(base_repository_path):$PYTHONPATH
 
@@ -23,8 +32,7 @@ from utils.config import path_to_sclopf_data
 
 rule prepare_sclopf:
     input:
-        network = "submodules/pypsa-eur/" + "results/networks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}.nc",
-        lookup = "data/np_lookup.csv"
+        network = lambda w: "submodules/pypsa-eur/results/" + co2_run_name(w.opts) + f"/networks/solved_{HORIZON}.nc",
     output: path_to_sclopf_data + f"/prenetworks/elec_s_" + NCLUSTERS + "_ec_lv1.0_{opts}_prepared.nc"
     resources: mem=4000
     threads: 4
@@ -56,6 +64,10 @@ rule run_all:
             Co2L = config["Co2-scenarios"],
             i = [n for n in range(int(np.ceil(8760 / temp_resolution / group_size)))],
             onerror=lambda e: print(f"Warning: {e} failed, continuing..."),
+        ),
+        expand(
+            path_to_sclopf_data + "/sclopf-elec_s_" + NCLUSTERS + "_ec_lv1.0_Co2L{Co2L}.nc",
+            Co2L = config["Co2-scenarios"],
+            onerror=lambda e: print(f"Warning: {e} failed, continuing..."),
         )
-        
 

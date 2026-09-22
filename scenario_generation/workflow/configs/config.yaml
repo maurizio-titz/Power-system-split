@@ -12,10 +12,7 @@ tutorial: false
 costs:
   year: 2030
 
-# pinned to a fixed release instead of the "latest" default (config.default.yaml)
-# so re-running the workflow later doesn't silently pick up a newer technology-data
-# release with different cost assumptions; v0.15.0 is the newest available
-# (data/versions.csv, 2026-06-09)
+# pinned to a fixed release (latest as 15/09/26)
 data:
   costs:
     version: v0.15.0
@@ -70,23 +67,16 @@ lines:
 electricity:
   transmission_limit: v1.0 # was scenario.ll: [v1.0]
 
-  # default (osm): actively-maintained OSM-based grid data. scripts/prepare_sclopf.py's
-  # TYPE_WEIGHTS table accounts for its real-world non-standard voltages
-  # (225/236/254/275/420kV). entsoegridkit is deprecated upstream but still available
-  # as a fallback (uses only the standard 220/300/380kV classes, exact-match only):
-  # base_network: entsoegridkit
+  base_network: entsoegridkit
 
   extendable_carriers:
     Generator: [solar, solar-hsat, onwind, offwind-ac, offwind-dc, offwind-float]
     StorageUnit: [battery, H2]
     Store: [] # battery, H2
 
-  # DateOut is empty for most still-operating plants in powerplantmatching (no known
-  # retirement date), not just for those retiring before 2024; querying "DateOut >= 2024"
-  # alone drops ~90% of gas/oil/biomass capacity as if it no longer existed, capping
-  # achievable emissions far below any co2_budget level. DateOut.isnull() keeps plants
-  # with no recorded retirement date, matching the old reference runs' effective fleet size.
-  powerplants_filter: (DateOut >= 2024 or DateOut.isnull()) and not Fueltype.isin(['Nuclear', 'Hard Coal', 'Lignite'])
+  # Nuclear/Hard Coal/Lignite are kept in the fleet (not excluded) - conventional_carriers
+  # below allows them as non-extendable existing capacity.
+  powerplants_filter: DateOut >= 2024 or DateOut.isnull()
   custom_powerplants: DateIn <= 2024 and (DateOut >= 2024 or DateOut.isnull())
 
   conventional_carriers: [nuclear, oil, OCGT, CCGT, coal, lignite, geothermal, biomass]
