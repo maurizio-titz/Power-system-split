@@ -88,8 +88,14 @@ _COUNTRY_3_TO_2 = {
 # Backwards compatibility constants
 SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 LABEL_FONTSIZE = AXIS_LABEL_FONTSIZE
-TICK_LABELSIZE = TICK_LABEL_FONTSIZE
-AXIS_LABELSIZE = AXIS_LABEL_FONTSIZE
+
+# Fontsizes of the combined generation/storage figure (Fig. 1). Its canvas is
+# 24 in wide, so at the 174 mm print width everything is scaled by ~0.35 and the
+# standard sizes would print below the 6 pt Cell Press minimum. 18/20 pt print as
+# 6.4/7.1 pt. Not shared with the other figures, which have smaller canvases.
+TICK_LABELSIZE = 18
+AXIS_LABELSIZE = 20
+LEGEND_LABELSIZE = 18
 
 
 # Helper function for aggregating carriers
@@ -358,7 +364,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
         1, 2, subplot_spec=gs_storage[0], wspace=-0.23, hspace=0.1
     )
     gs_storage_lines = GridSpecFromSubplotSpec(
-        2, 1, subplot_spec=gs_storage[1], height_ratios=[1, 0.5], hspace=0.2
+        2, 1, subplot_spec=gs_storage[1], height_ratios=[1, 0.5], hspace=0.3
     )
 
     # Storage map axes
@@ -378,12 +384,19 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
         axs_maps_storage[0],
         ax_line_storage,
     ]
-    for idx, ax_loss_lvl in enumerate(panel_label_axis):
-        if idx < 3:
-            x_offset = -0.15
-        else:
-            x_offset = - 0.175
-        add_panel_label(ax_loss_lvl, idx, x_offset=x_offset)
+    # Offsets in axes fractions, tuned so that A, B and D line up on one x, C and
+    # E on another, A and C on one y, and D and E on another.
+    panel_label_offsets = [
+        (-0.150, 0.050),  # A
+        (-0.150, 0.050),  # B
+        (-0.214, 0.037),  # C
+        (-0.115, 0.050),  # D
+        (-0.213, 0.077),  # E
+    ]
+    for idx, (ax_loss_lvl, (x_offset, y_offset)) in enumerate(
+        zip(panel_label_axis, panel_label_offsets)
+    ):
+        add_panel_label(ax_loss_lvl, idx, x_offset=x_offset, y_offset=y_offset)
 
     # === GENERATION PLOT ===
     # Calculate generation by carrier and CO2 level
@@ -490,7 +503,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
             0 - 0.15,
             0.4,
             rf"CO$_2$={get_actual_co2_level(target_level, percent=True)}\% ",
-            fontsize=LABEL_FONTSIZE,
+            fontsize=AXIS_LABELSIZE,
             verticalalignment="center",
             # rotation=90,
             transform=axs_primary_gen[i][0].transAxes,
@@ -588,7 +601,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
     # Capitalize all legend labels
     l = [label.capitalize() for label in l]
     ax3_legend_gen.legend(
-        h, l, borderaxespad=0.3, fontsize=LEGEND_FONTSIZE, ncol=2, loc="center"
+        h, l, borderaxespad=0.3, fontsize=LEGEND_LABELSIZE, ncol=2, loc="center"
     )
     ax3_legend_gen.axis("off")
 
@@ -660,6 +673,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
                     for size in legend_circle_size
                 ],
                 patch_kw={"color": current_color},
+                legend_kw={"fontsize": LEGEND_LABELSIZE},
             )
 
             current_store_type_string = (
@@ -684,7 +698,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
         0 - 0.15,
         0.4,
         rf"CO$_2$={get_actual_co2_level(target_levels_storage[0], percent=True)}\% ",
-        fontsize=LABEL_FONTSIZE,
+        fontsize=AXIS_LABELSIZE,
         weight="bold",
         verticalalignment="center",
         transform=axs_maps_storage[0].transAxes,
@@ -781,13 +795,13 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
         )
         file_name = "combined_generation_storage_capacity"
 
-    ax_line_storage.set_xlabel(r"CO2 level [\% of 1990]", fontsize=AXIS_LABELSIZE)
+    ax_line_storage.set_xlabel(r"CO$_2$ level [\% of 1990]", fontsize=AXIS_LABELSIZE)
     ax_line_storage.legend()
 
     h, l = ax_line_storage.get_legend_handles_labels()
     ax_line_storage.get_legend().remove()
     ax_line_legend_storage.legend(
-        h, l, borderaxespad=0.3, fontsize=LEGEND_FONTSIZE, ncol=2, loc="center"
+        h, l, borderaxespad=0.3, fontsize=LEGEND_LABELSIZE, ncol=2, loc="center"
     )
     ax_line_legend_storage.axis("off")
 

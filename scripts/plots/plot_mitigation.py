@@ -872,13 +872,13 @@ def create_combined_mitigation_plot(
             c=color_reference_loss,
         )
         ax_line_loss.text(
-            num_lines_to_reach_ref_loss + right_xlim / 200 * 5,
+            num_lines_to_reach_ref_loss + right_xlim / 200 * 1,
             1.1,
             f"{num_lines_to_reach_ref_loss} lines",
             verticalalignment="bottom",
             horizontalalignment="left",
             zorder=np.inf,
-            fontsize=TICK_LABELSIZE,
+            fontsize=AXIS_LABELSIZE,
             c=color_reference_loss,
         )
 
@@ -890,13 +890,13 @@ def create_combined_mitigation_plot(
             c=color_reference_loss,
         )
         ax2_line_cost.text(
-            num_lines_to_reach_ref_loss - right_xlim / 200 * 2.5,
+            num_lines_to_reach_ref_loss + right_xlim / 200 * 1,
             cost_to_reach_ref_loss_lvl * rescale_factor / 1e9 + primary_lims[1] / 50,
-            f"{cost_to_reach_ref_loss_lvl/ 1e9:.2f} bn. €",
+            rf"{cost_to_reach_ref_loss_lvl/ 1e9:.2f} bn.\,€",
             verticalalignment="center",
             horizontalalignment="right",
             zorder=np.inf,
-            fontsize=TICK_LABELSIZE,
+            fontsize=AXIS_LABELSIZE,
             c=color_reference_loss,
         )
 
@@ -1219,7 +1219,7 @@ def blackout_size_histogram_after_mitigation(
     xlims: tuple[float, float] = (0, 100),
     ylog_scale: bool = True,
     calc_inertia_again: bool = False,
-    linewidth: float = 1.5,
+    linewidth: float = 1.8,
     alpha: float = .9,
     save_prefix: str | None = None):
     """Plot the size of blackouts after mitigation and compare it with before.
@@ -1230,15 +1230,15 @@ def blackout_size_histogram_after_mitigation(
             to be shown. Defaults to (0.0, .2).
         budget_invest_bn_tup (tuple[float, ...], optional): Tuple with different budgets in 
             bn euro that can be used for mitigation. Defaults to (2, .3).
-        n_bins (int, optional): Number of bins for the blackout sizes. Defaults to 101.
+        n_bins (int, optional): Number of bins for the blackout sizes. Defaults to 51.
         xlims (tuple[float, float], optional): x-limits that is being plotted. 
             Defaults to (0, 100).
         ylog_scale (bool, optional): Is the y axis in log_scale? Defaults to True.
         calc_inertia_again (bool, optional): If 'True', the calculation 
             of the split properites dataframe for a given budget is repeated. 
             Defaults to False.
-        linewidth (float, optional): Line width to the plot. Defaults to 1.5.
-        alpha (float, optional): Color alpha of the lines. Defaults to .8.
+        linewidth (float, optional): Line width to the plot. Defaults to 1.8.
+        alpha (float, optional): Color alpha of the lines. Defaults to .9.
         save_prefix (str): If not None, this str is put before the filename.
     """
     
@@ -1254,12 +1254,12 @@ def blackout_size_histogram_after_mitigation(
 
     # Plot it
     setup_matplotlib_style()
-    color_ls = ['#1b9e77',
-                '#d95f02',
-                '#7570b3',
-                '#e7298a']
-    linestyle_ls = ["--", "-.", ":"]
-    
+    # Colors to make sure to be colorblind and print friendly
+    color_ls = ['#333333',  # no mitigation (reference)
+                '#0072B2',
+                '#E69F00',
+                '#009E73']
+
     if len(budget_invest_bn_tup) > 3:
         raise ValueError("Only a maximum of 3 different budget values is reasonable!")
     
@@ -1300,14 +1300,13 @@ def blackout_size_histogram_after_mitigation(
         if max(xlims) == 100:
             return data_handling.clip_to_bin_range(vals, bins)
         return np.asarray(vals)
-    
+
     ## Orignal Plots
     all_counts = list()
     pbar = tqdm(enumerate(co2_lvls_picked_ls), 
                             total=len(co2_lvls_picked_ls))
     for idx, co2l_r in pbar:
         pbar.set_description(f"Co2={co2l_r:.2f}")
-        pbar.update()
         co2_mask = split_props.co2l == co2l_r
         split_props_co2 = split_props[co2_mask]
         vals = _clip_vals(split_props_co2.lost_load_share_blackout.values * 100.)
@@ -1322,7 +1321,7 @@ def blackout_size_histogram_after_mitigation(
                             zorder=-2,
                             linewidth=linewidth,
                             color=color_ls[0])
-        ax_ls_inertia[idx].hist(vals, bins=bins, 
+        ax_ls_inertia[idx].hist(vals, bins=bins,
                             weights=split_props_co2.total_weighting,
                             alpha=alpha, 
                             histtype="step",
@@ -1331,7 +1330,7 @@ def blackout_size_histogram_after_mitigation(
                             zorder=-2,
                             linewidth=linewidth,
                             color=color_ls[0])
-        
+
         # Line mitigation
         fname_line_mitigation = os.path.join(path_to_line_extension_mitigation_sclopf, 
                                              f"heuristic_costMin_GSS_mitigation_annualized_Co2L{co2l_r}_n{n_nodes}_380kVonly_blackoutthres0.8.pkl")
@@ -1364,7 +1363,6 @@ def blackout_size_histogram_after_mitigation(
                                 histtype="step",
                                 log=ylog_scale,
                                 zorder=0,
-                                linestyle=linestyle_ls[idx_budget],
                                 label=f"{budget_invest_bn_r}",
                                 linewidth=linewidth,
                                 color=color_ls[1+idx_budget])
@@ -1503,7 +1501,6 @@ def blackout_size_histogram_after_mitigation(
                                     histtype="step",
                                     log=ylog_scale,
                                     zorder=0,
-                                    linestyle=linestyle_ls[idx_budget_i],
                                     label=f"{budget_inertia:.2f}",
                                     linewidth=linewidth,
                                     color=color_ls[1+idx_budget_i])
@@ -1548,19 +1545,26 @@ def blackout_size_histogram_after_mitigation(
     y_pos = xlabel_fig_pos.y0 - 0.0  # 5% below xlabel
     
     labels_fig_legend = [f"{0:.2f}"] + [f"{xx:.2f}" for xx in budget_invest_bn_tup]
-    
-    leg = fig.legend(labels_fig_legend,
+
+    # Build the handles from the same lists that drive the curves
+    handles_fig_legend = [
+        mpl.patches.Patch(facecolor="none", edgecolor=color_ls[0],
+                          linewidth=2.5, alpha=alpha)
+    ] + [
+        mpl.patches.Patch(facecolor="none", edgecolor=color_ls[1+idx_budget],
+                          linewidth=2.5, alpha=alpha)
+        for idx_budget in range(len(budget_invest_bn_tup))
+    ]
+
+    fig.legend(handles_fig_legend,
+               labels_fig_legend,
                loc="upper center",
                ncols=3,
                title="Mitigation Budget [bn €]",
                bbox_to_anchor=(0.5, y_pos ),
                fontsize=LEGEND_FONTSIZE,
                )
-    
-    for handle in leg.legend_handles:
-        if hasattr(handle, 'set_linewidth'):
-            handle.set_linewidth(2.5)
-    
+
     ax_ls_inertia[0].text(.5, 1.25, "Additional Inertia",
                           transform=ax_ls_inertia[0].transAxes,
                           ha="center", fontsize=TITLE_FONTSIZE)

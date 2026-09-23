@@ -174,7 +174,7 @@ def plot_inertia_loss_mitigation_curve_new(
             lines1 + lines2,
             labels1 + labels2,
             loc="upper center",
-            fontsize=12,
+            fontsize=LEGEND_FONTSIZE,
         )
 
     return x_val_half_ref_loss
@@ -636,17 +636,17 @@ def plot_map_inertia_placement_new(
         verticalalignment="bottom",
         horizontalalignment="left",
         zorder=np.inf,
-        fontsize=TICK_LABEL_FONTSIZE,
+        fontsize=AXIS_LABEL_FONTSIZE,
         c=color,
     )
     ax2.text(
         inertia_in_map_plot * unit_factor + right_xlim / 200 * 5,
         cost_map_plot / cost_rescale_factor * 0.98,
-        f"{cost_map_plot:.2f} bn. €",
+        rf"{cost_map_plot:.2f} bn.\,€",
         verticalalignment="center",
         horizontalalignment="left",
         zorder=np.inf,
-        fontsize=TICK_LABEL_FONTSIZE,
+        fontsize=AXIS_LABEL_FONTSIZE,
         c=color,
     )
 
