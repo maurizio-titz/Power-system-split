@@ -11,6 +11,7 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 
 import pandas as pd
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
@@ -27,14 +28,56 @@ from utils.config import (
 from utils import data_handling, normalize_split_risk
 from utils.plot_style import (
     setup_matplotlib_style,
-    AXIS_LABEL_FONTSIZE,
-    TICK_LABEL_FONTSIZE,
-    PANEL_LABEL_FONTSIZE,
     add_panel_label,
     save_figure,
 )
 
+# Sizes of the combined flow/split-statistics figure (Fig. 2), as printed at the
+# 6.5 in page width. They are the sizes of the layout designed at 12 x 9 in, all
+# multiplied by 0.5518 (6.5 in / 11.78 in tight-bbox width), so the figure is an
+# exact scaled copy of that layout.
+FIG2_SIZE = (6.621, 4.966)
+AXIS_LABELSIZE = 8.829
+TICK_LABELSIZE = 7.725
+PANEL_LABELSIZE = 13.243
+LEGEND_LABELSIZE = 9.932
+LEGEND_LARGE_LABELSIZE = 11.036
+HIST_LINE_WIDTH = 1.655
+MARKER_SIZE = 2.759
+FIG2_RC = {
+    "font.size": 7.725,
+    "axes.titlesize": 9.932,
+    "axes.labelsize": 8.829,
+    "xtick.labelsize": 7.725,
+    "ytick.labelsize": 7.725,
+    "legend.fontsize": 7.725,
+    "figure.titlesize": 11.036,
+    "lines.linewidth": 1.104,
+    "lines.markersize": 4.414,
+    "lines.markeredgewidth": 0.5518,
+    "patch.linewidth": 0.5518,
+    "hatch.linewidth": 0.5518,
+    "axes.linewidth": 0.4414,
+    "axes.labelpad": 2.207,
+    "axes.titlepad": 3.311,
+    "grid.linewidth": 0.4414,
+    "xtick.major.size": 1.931,
+    "xtick.minor.size": 1.104,
+    "xtick.major.width": 0.4414,
+    "xtick.minor.width": 0.3311,
+    "xtick.major.pad": 1.931,
+    "xtick.minor.pad": 1.876,
+    "ytick.major.size": 1.931,
+    "ytick.minor.size": 1.104,
+    "ytick.major.width": 0.4414,
+    "ytick.minor.width": 0.3311,
+    "ytick.major.pad": 1.931,
+    "ytick.minor.pad": 1.876,
+    "savefig.pad_inches": 0.05518,
+}
 
+
+@mpl.rc_context()
 def create_combined_flow_and_split_statistics_plot(
     mean_distance: bool = False,
     load_normalization: bool = False,
@@ -109,7 +152,8 @@ def create_combined_flow_and_split_statistics_plot(
         component_props_filtered = component_props[component_props.load_share > 0.1]
 
     # Setup matplotlib styling
-    setup_matplotlib_style()
+    setup_matplotlib_style(arimo=True)
+    plt.rcParams.update(FIG2_RC)
 
     # Figure layout: two stacked rows (top: flow/inertia, bottom: split stats)
     
@@ -119,10 +163,10 @@ def create_combined_flow_and_split_statistics_plot(
             raise NotImplementedError("Not implemented for not 'show_blackout_stats'" + 
                                       " and 'equal_panels'")
         fig, [[ax_flow, ax_inertia, ax_empty],
-              [ax1_imbalance, ax2_inertia, ax3_num_splits]] = plt.subplots(2, 3, figsize=(12, 9))
+              [ax1_imbalance, ax2_inertia, ax3_num_splits]] = plt.subplots(2, 3, figsize=FIG2_SIZE)
         height_ratios_main = [1, 1]
     else:
-        fig = plt.figure(figsize=(12, 9))
+        fig = plt.figure(figsize=FIG2_SIZE)
         height_ratios_main = [1, 1.05]
         
     gs_outer = GridSpec(2, 1, figure=fig, hspace=0.3, 
@@ -174,21 +218,21 @@ def create_combined_flow_and_split_statistics_plot(
             density_masked,
             bins,
             label=r"{}\%".format(get_actual_co2_level(co2l, percent=True)),
-            linewidth=3,
+            linewidth=HIST_LINE_WIDTH,
             color=cmap(np.where(co2ls == co2l)[0][0] / (len(co2ls) - 1)),
             alpha=0.8,
         )
 
-    ax_flow.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+    ax_flow.tick_params(axis="both", which="both", labelsize=TICK_LABELSIZE)
     if mean_distance:
         ax_flow.set_xlabel(
-            r"Mean transmission distance [km]", fontsize=AXIS_LABEL_FONTSIZE
+            r"Mean transmission distance [km]", fontsize=AXIS_LABELSIZE
         )
     else:
         ax_flow.set_xlabel(
-            r"Total power flow distance [TW$\cdot$km]", fontsize=AXIS_LABEL_FONTSIZE
+            r"Total power flow distance [TW$\cdot$km]", fontsize=AXIS_LABELSIZE
         )
-    ax_flow.set_ylabel(r"Frequency", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_flow.set_ylabel(r"Frequency", fontsize=AXIS_LABELSIZE)
     ax_flow.grid(True)
 
     bins = np.linspace(0, inertia_time.max(), 40)
@@ -206,17 +250,17 @@ def create_combined_flow_and_split_statistics_plot(
         ax_inertia.stairs(
             density_masked,
             bins,
-            linewidth=3,
+            linewidth=HIST_LINE_WIDTH,
             color=cmap(np.where(co2ls == co2l)[0][0] / (len(co2ls) - 1)),
             alpha=0.8,
         )
 
-    ax_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
-    ax_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
+    ax_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABELSIZE)
+    ax_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABELSIZE)
     ax_inertia.grid(True)
 
-    add_panel_label(ax_flow, 0, y_offset=0.08)
-    add_panel_label(ax_inertia, 1, y_offset=0.08)
+    add_panel_label(ax_flow, 0, y_offset=0.08, fontsize=PANEL_LABELSIZE)
+    add_panel_label(ax_inertia, 1, y_offset=0.08, fontsize=PANEL_LABELSIZE)
 
     # --- Bottom row: Split Statistics ---
     if not use_equal_panels:
@@ -287,7 +331,7 @@ def create_combined_flow_and_split_statistics_plot(
                 alpha=0.8,
                 color=color,
                 marker=markers[i % len(markers)],
-                markersize=5,)
+                markersize=MARKER_SIZE,)
             else:
                 plt.plot(
                     get_actual_co2_level(co2ls[::-1], percent=True),
@@ -296,14 +340,14 @@ def create_combined_flow_and_split_statistics_plot(
                     alpha=0.8,
                     color=color,
                     marker=markers[i % len(markers)],
-                    markersize=5,
+                    markersize=MARKER_SIZE,
                 )
 
         ax3_num_splits.set_xlabel(
-            r"CO$_2$ level [\% of 1990]", fontsize=AXIS_LABEL_FONTSIZE
+            r"CO$_2$ level [\% of 1990]", fontsize=AXIS_LABELSIZE
         )
         ax3_num_splits.set_ylabel(
-            "Number of System Splits", fontsize=AXIS_LABEL_FONTSIZE
+            "Number of System Splits", fontsize=AXIS_LABELSIZE
         )
         x_ticks_major = [0, 20, 40, 60]
         x_ticks_minor = [10, 30, 50]
@@ -311,7 +355,7 @@ def create_combined_flow_and_split_statistics_plot(
         ax3_num_splits.set_xticks(x_ticks_minor, minor=True)
         ax3_num_splits.grid(False)
         ax3_num_splits.tick_params(
-            axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE
+            axis="both", which="both", labelsize=TICK_LABELSIZE
         )
         ax3_num_splits.set_yscale("log")
         ax3_num_splits.invert_xaxis()
@@ -333,10 +377,10 @@ def create_combined_flow_and_split_statistics_plot(
                 counts_ymin / contingency_norm, counts_ymax / contingency_norm
             )
             ax3_num_splits_secondary.set_ylabel(
-                "Fraction of total contingencies", fontsize=AXIS_LABEL_FONTSIZE
+                "Fraction of total contingencies", fontsize=AXIS_LABELSIZE
             )
             ax3_num_splits_secondary.tick_params(
-                axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE
+                axis="both", which="both", labelsize=TICK_LABELSIZE
             )
 
         h, l = ax3_num_splits.get_legend_handles_labels()
@@ -396,7 +440,7 @@ def create_combined_flow_and_split_statistics_plot(
             bins=bins,
             histtype="step",
             label=rf"{get_actual_co2_level(co2l, n_nodes=n_nodes, percent=True)} \%",
-            linewidth=3,
+            linewidth=HIST_LINE_WIDTH,
             color=cmap(np.where(co2ls == co2l)[0][0] / (len(co2ls) - 1)),
             alpha=0.8,
             density=False,
@@ -406,12 +450,12 @@ def create_combined_flow_and_split_statistics_plot(
     if load_normalization:
         ax2_inertia.set_xlabel(
             "Norm. rotational energy [s]", 
-            fontsize=AXIS_LABEL_FONTSIZE
+            fontsize=AXIS_LABELSIZE
         )
     else:
-        ax2_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABEL_FONTSIZE)
-    ax2_inertia.set_ylabel("Number of split components", fontsize=AXIS_LABEL_FONTSIZE)
-    ax2_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABEL_FONTSIZE)
+        ax2_inertia.set_xlabel("Rotational energy [GWs]", fontsize=AXIS_LABELSIZE)
+    ax2_inertia.set_ylabel("Number of split components", fontsize=AXIS_LABELSIZE)
+    ax2_inertia.tick_params(axis="both", which="both", labelsize=TICK_LABELSIZE)
 
     # Panel a: power imbalance histograms
     if not use_equal_panels:
@@ -433,7 +477,7 @@ def create_combined_flow_and_split_statistics_plot(
             ],
             bins=bins,
             histtype="step",
-            linewidth=3,
+            linewidth=HIST_LINE_WIDTH,
             label=rf"{get_actual_co2_level(co2l, n_nodes=n_nodes, percent=True)} \%",
             color=cmap(np.where(co2ls == co2l)[0][0] / (len(co2ls) - 1)),
             alpha=0.8,
@@ -441,10 +485,10 @@ def create_combined_flow_and_split_statistics_plot(
         )
 
     ax1_imbalance.set_yscale("log")
-    ax1_imbalance.set_ylabel("Number of split components", fontsize=AXIS_LABEL_FONTSIZE)
+    ax1_imbalance.set_ylabel("Number of split components", fontsize=AXIS_LABELSIZE)
     if load_normalization:
         ax1_imbalance.set_xlabel(
-            "Norm. power imbalance [1]", fontsize=AXIS_LABEL_FONTSIZE
+            "Norm. power imbalance [1]", fontsize=AXIS_LABELSIZE
         )
         ax1_imbalance.set_xticks(
             np.arange(
@@ -455,10 +499,10 @@ def create_combined_flow_and_split_statistics_plot(
         )
     else:
         ax1_imbalance.set_xlabel("Power imbalance [GW]", 
-                                 fontsize=AXIS_LABEL_FONTSIZE)
+                                 fontsize=AXIS_LABELSIZE)
 
     ax1_imbalance.tick_params(axis="both", which="both", 
-                              labelsize=TICK_LABEL_FONTSIZE)
+                              labelsize=TICK_LABELSIZE)
 
     
     h, l = ax2_inertia.get_legend_handles_labels()
@@ -483,8 +527,8 @@ def create_combined_flow_and_split_statistics_plot(
         axes_to_label.append(ax3_num_splits)
 
     for idx, ax_loss_lvl in enumerate(axes_to_label, start=2):
-        add_panel_label(ax_loss_lvl, idx, y_offset=0.1, 
-                        x_offset=-.125)
+        add_panel_label(ax_loss_lvl, idx, y_offset=0.1,
+                        x_offset=-.125, fontsize=PANEL_LABELSIZE)
 
     plt.tight_layout()
     
@@ -498,7 +542,7 @@ def create_combined_flow_and_split_statistics_plot(
                    title="CO$_2$ level \n[\\% of 1990]",
                    loc="upper left",
                    bbox_to_anchor=(1, 1.05),
-                   fontsize=18, title_fontsize=20)
+                   fontsize=LEGEND_LABELSIZE, title_fontsize=LEGEND_LARGE_LABELSIZE)
         leg_title = leg_co2.get_title()
         leg_title.set_horizontalalignment('center')
         
@@ -506,8 +550,11 @@ def create_combined_flow_and_split_statistics_plot(
         h, l = ax3_num_splits.get_legend_handles_labels()
         leg_sp = ax3_num_splits.legend(h, l, title="Share of load\n not served",
                 loc="lower right",
-                bbox_to_anchor=(1.05, 1.),
-                fontsize=20, title_fontsize=18)
+                bbox_to_anchor=(1.18, 1.),
+                markerscale=2,
+                fontsize=LEGEND_LARGE_LABELSIZE, title_fontsize=LEGEND_LABELSIZE)
+        for legend_line in leg_sp.get_lines():
+            legend_line.set_linewidth(HIST_LINE_WIDTH)
         title_sp = leg_sp.get_title()
         title_sp.set_horizontalalignment('center')
         

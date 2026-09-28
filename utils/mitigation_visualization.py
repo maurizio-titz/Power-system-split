@@ -80,6 +80,10 @@ def plot_inertia_loss_mitigation_curve_new(
     color=None,
     annualized_cost_per_GWs_max=None,
     cost_rescale_factor=0.06,
+    tick_labelsize=TICK_LABEL_FONTSIZE,
+    legend_fontsize=LEGEND_FONTSIZE,
+    legend_handlelength=None,
+    legend_handletextpad=None,
 ):
     # unit = "MWs"
 
@@ -153,7 +157,7 @@ def plot_inertia_loss_mitigation_curve_new(
         ax_loss_twin.set_ylabel("Annualized cost [billion €]")
         ax_loss_twin.grid(False)
 
-        ax_loss_twin.tick_params(axis="y", which="major", labelsize=TICK_LABEL_FONTSIZE)
+        ax_loss_twin.tick_params(axis="y", which="major", labelsize=tick_labelsize)
 
         ticks_primary = ax_loss.get_yticks()
         ax_loss_twin.set_yticks(ticks_primary)[:-1]
@@ -174,7 +178,9 @@ def plot_inertia_loss_mitigation_curve_new(
             lines1 + lines2,
             labels1 + labels2,
             loc="upper center",
-            fontsize=LEGEND_FONTSIZE,
+            fontsize=legend_fontsize,
+            handlelength=legend_handlelength,
+            handletextpad=legend_handletextpad,
         )
 
     return x_val_half_ref_loss
@@ -526,8 +532,20 @@ def plot_map_inertia_placement_new(
     use_sclopf=True,
     line_color=None,
     annualized_cost_per_GWs_max=None,
+    line_width=2,
+    text_fontsize=AXIS_LABEL_FONTSIZE,
+    legend_fontsize=18,
+    curve_tick_labelsize=TICK_LABEL_FONTSIZE,
+    curve_legend_fontsize=LEGEND_FONTSIZE,
+    curve_legend_handlelength=None,
+    curve_legend_handletextpad=None,
 ):
-    """Plot the results of the inertia placement"""
+    """Plot the results of the inertia placement
+
+    'line_width' (reference lines), 'text_fontsize' (their annotations),
+    'legend_fontsize' (node size legend of the map) and the 'curve_*' sizes of the
+    mitigation curve are in points.
+    """
 
     if unit == "GWs":
         unit_factor = 1e-3
@@ -593,6 +611,10 @@ def plot_map_inertia_placement_new(
             color=line_color,
             annualized_cost_per_GWs_max=annualized_cost_per_GWs_max,
             cost_rescale_factor=cost_rescale_factor,
+            tick_labelsize=curve_tick_labelsize,
+            legend_fontsize=curve_legend_fontsize,
+            legend_handlelength=curve_legend_handlelength,
+            legend_handletextpad=curve_legend_handletextpad,
         )
     ax2.grid(True)
     ax2.set_ylim(bottom=0)
@@ -610,7 +632,7 @@ def plot_map_inertia_placement_new(
             ],
             linestyle="--",
             c=color,
-            lw=2,
+            lw=line_width,
         )
     else:
         ax2.plot(
@@ -618,14 +640,14 @@ def plot_map_inertia_placement_new(
             [ax2.get_ylim()[0], ref_loss_factor],
             linestyle="--",
             c=color,
-            lw=2,
+            lw=line_width,
         )
     ax2.plot(
         [0, inertia_in_map_plot * unit_factor],
         [ref_loss_factor, ref_loss_factor],
         linestyle="--",
         c=color,
-        lw=2,
+        lw=line_width,
     )
     right_xlim = ax2.get_xlim()[1]
     top_ylim = ax2.get_ylim()[1]
@@ -636,7 +658,7 @@ def plot_map_inertia_placement_new(
         verticalalignment="bottom",
         horizontalalignment="left",
         zorder=np.inf,
-        fontsize=AXIS_LABEL_FONTSIZE,
+        fontsize=text_fontsize,
         c=color,
     )
     ax2.text(
@@ -646,7 +668,7 @@ def plot_map_inertia_placement_new(
         verticalalignment="center",
         horizontalalignment="left",
         zorder=np.inf,
-        fontsize=AXIS_LABEL_FONTSIZE,
+        fontsize=text_fontsize,
         c=color,
     )
 
@@ -668,7 +690,7 @@ def plot_map_inertia_placement_new(
         loc="upper left",
         # bbox_to_anchor=(0.7, 0.975),
         frameon=False,
-        fontsize=18,
+        fontsize=legend_fontsize,
     )
 
     ax.axis("off")

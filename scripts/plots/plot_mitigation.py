@@ -67,6 +67,57 @@ AXIS_LABELSIZE = AXIS_LABEL_FONTSIZE
 TICK_LABELSIZE = TICK_LABEL_FONTSIZE
 SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 
+# Sizes of the combined mitigation figure (Fig. 5, 'create_combined_mitigation_plot'),
+# as printed at the 6.5 in page width. They are the sizes of the layout designed
+# at 16 x 9 in, all multiplied by 0.4678 (6.5 in / 13.90 in tight-bbox width), so
+# the figure is an exact scaled copy of that layout.
+FIG5_SIZE = (7.484, 4.210)
+FIG5_SIZE_ONE_ROW = (7.484, 2.105)
+FIG5_TITLE_LABELSIZE = 9.355
+FIG5_AXIS_LABELSIZE = 7.484
+FIG5_TICK_LABELSIZE = 6.549
+FIG5_LEGEND_LABELSIZE = 6.549
+FIG5_PANEL_LABELSIZE = 11.227
+FIG5_MAP_LEGEND_LABELSIZE = 8.420  # Node size legend of the inertia map
+FIG5_LINE_WIDTH = 0.9355
+FIG5_MARKER_SIZE = 1.871
+FIG5_MAP_EDGE_WIDTH = 0.4678  # Grid-extension map; reinforced lines are 3x
+FIG5_INERTIA_MAP_EDGE_WIDTH = 0.09355
+FIG5_INERTIA_MAX_NODE_SIZE = 21.88  # pt^2
+FIG5_LOSS_LEGEND_HANDLELENGTH = 1.0  # Legends of A and D, in font sizes (default 2)
+FIG5_LOSS_LEGEND_HANDLETEXTPAD = 0.4  # Same legends (default 0.8)
+FIG5_RC = {
+    "font.size": 6.549,
+    "axes.titlesize": 8.420,
+    "axes.labelsize": 7.484,
+    "xtick.labelsize": 6.549,
+    "ytick.labelsize": 6.549,
+    "legend.fontsize": 6.549,
+    "figure.titlesize": 9.355,
+    "lines.linewidth": 0.9355,
+    "lines.markersize": 3.742,
+    "lines.markeredgewidth": 0.4678,
+    "patch.linewidth": 0.4678,
+    "hatch.linewidth": 0.4678,
+    "axes.linewidth": 0.3742,
+    "axes.labelpad": 1.871,
+    "axes.titlepad": 5.0,  # Above the scaled 2.807, for the CO2 subscripts
+    "grid.linewidth": 0.3742,
+    "xtick.major.size": 1.637,
+    "xtick.minor.size": 0.9355,
+    "xtick.major.width": 0.3742,
+    "xtick.minor.width": 0.2807,
+    "xtick.major.pad": 1.637,
+    "xtick.minor.pad": 1.590,
+    "ytick.major.size": 1.637,
+    "ytick.minor.size": 0.9355,
+    "ytick.major.width": 0.3742,
+    "ytick.minor.width": 0.2807,
+    "ytick.major.pad": 1.637,
+    "ytick.minor.pad": 1.590,
+    "savefig.pad_inches": 0.04678,
+}
+
 # Plot data path
 if not os.path.exists(path_to_plot_data):
     os.makedirs(path_to_plot_data, exist_ok=True)
@@ -364,6 +415,7 @@ def create_gridExt_mitigation_filename(
     return f_name
 
 
+@mpl.rc_context()
 def create_combined_mitigation_plot(
     use_annualized_costs=True,
     co2_lvl_map=0.1,
@@ -418,7 +470,8 @@ def create_combined_mitigation_plot(
         )
 
     # Setup matplotlib with consistent styling
-    setup_matplotlib_style()
+    setup_matplotlib_style(arimo=True)
+    plt.rcParams.update(FIG5_RC)
 
     # === INERTIA MITIGATION DATA PREPARATION ===
     if plot_rows in ["both", "inertia"]:
@@ -575,11 +628,11 @@ def create_combined_mitigation_plot(
     # === CREATE COMBINED FIGURE ===
     # Determine figure size and layout based on plot_rows
     if plot_rows == "both":
-        figsize = (16, 9)
+        figsize = FIG5_SIZE
         n_rows = 2
         height_ratios = [1, 1]
     else:
-        figsize = (16, 4.5)
+        figsize = FIG5_SIZE_ONE_ROW
         n_rows = 1
         height_ratios = [1]
 
@@ -654,7 +707,7 @@ def create_combined_mitigation_plot(
                 np.array(list(inertia_at_ref_loss_by_lvl.values())) * unit_factor,
                 label=label,
                 color=color_reference_loss,
-                linewidth=2,
+                linewidth=FIG5_LINE_WIDTH,
             )
             ax_inertia_all.plot(
                 np.array(
@@ -681,14 +734,14 @@ def create_combined_mitigation_plot(
                 va="bottom",
                 rotation=0,
                 zorder=np.inf,
-                fontsize=TICK_LABELSIZE,
+                fontsize=FIG5_TICK_LABELSIZE,
             )
 
             if plot_intertia_cost:
                 # add secondary axis for cost of inertia
                 ax_inertia_all_cost = ax_inertia_all.twinx()
                 ax_inertia_all_cost.set_ylabel(
-                    f"Annualized cost [billion €]", fontsize=AXIS_LABELSIZE
+                    f"Annualized cost [billion €]", fontsize=FIG5_AXIS_LABELSIZE
                 )
                 # scale inertia to cost
                 rescale_factor = annualized_cost_per_GWs_max / 1e6
@@ -700,17 +753,17 @@ def create_combined_mitigation_plot(
                 ax_inertia_all_cost.tick_params(
                     axis="y",
                     which="major",
-                    labelsize=TICK_LABELSIZE,
+                    labelsize=FIG5_TICK_LABELSIZE,
                 )
                 ax_inertia_all_cost.set_ylim(ax_inertia_all.get_ylim())
                 ax_inertia_all_cost.grid(False)
 
         ax_inertia_all.set_ylim(top=median_inertia_ref * 1.1)
         ax_inertia_all.invert_xaxis()
-        ax_inertia_all.set_ylabel(f"Inertia placed [{unit}]", fontsize=AXIS_LABELSIZE)
-        ax_inertia_all.set_xlabel("CO$_2$ level [\\% of 1990]", fontsize=AXIS_LABELSIZE)
-        ax_inertia_all.set_title("Additional inertia needed", fontsize=TITLE_FONTSIZE)
-        ax_inertia_all.tick_params(axis="both", which="major", labelsize=TICK_LABELSIZE)
+        ax_inertia_all.set_ylabel(f"Inertia placed [{unit}]", fontsize=FIG5_AXIS_LABELSIZE)
+        ax_inertia_all.set_xlabel("CO$_2$ level [\\% of 1990]", fontsize=FIG5_AXIS_LABELSIZE)
+        ax_inertia_all.set_title("Additional inertia needed", fontsize=FIG5_TITLE_LABELSIZE)
+        ax_inertia_all.tick_params(axis="both", which="major", labelsize=FIG5_TICK_LABELSIZE)
         ax_inertia_all.grid(True, alpha=0.3)
 
         # Inertia: Map and loss reduction
@@ -729,8 +782,15 @@ def create_combined_mitigation_plot(
                 axes=(ax_inertia_map, ax_inertia_loss),
                 nn=600,
                 max_iter=10000,
-                max_node_size=100,
-                edge_width=0.2,
+                max_node_size=FIG5_INERTIA_MAX_NODE_SIZE,
+                edge_width=FIG5_INERTIA_MAP_EDGE_WIDTH,
+                line_width=FIG5_LINE_WIDTH,
+                text_fontsize=FIG5_AXIS_LABELSIZE,
+                legend_fontsize=FIG5_MAP_LEGEND_LABELSIZE,
+                curve_tick_labelsize=FIG5_TICK_LABELSIZE,
+                curve_legend_fontsize=FIG5_LEGEND_LABELSIZE,
+                curve_legend_handlelength=FIG5_LOSS_LEGEND_HANDLELENGTH,
+                curve_legend_handletextpad=FIG5_LOSS_LEGEND_HANDLETEXTPAD,
                 delta_Erot=delta_Erot_by_lvl[co2_lvl_map],
                 resolve_strategy="random",
                 show_step_number=False,
@@ -749,14 +809,14 @@ def create_combined_mitigation_plot(
         title = f"Additional inertia mitigation \n CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\\%"
         ax_inertia_loss.set_title(
             title,
-            fontsize=TITLE_FONTSIZE,
+            fontsize=FIG5_TITLE_LABELSIZE,
         )
         ax_inertia_loss.tick_params(
-            axis="both", which="major", labelsize=TICK_LABELSIZE
+            axis="both", which="major", labelsize=FIG5_TICK_LABELSIZE
         )
-        ax_inertia_loss.set_xlabel("Inertia placed [GWs]", fontsize=AXIS_LABELSIZE)
+        ax_inertia_loss.set_xlabel("Inertia placed [GWs]", fontsize=FIG5_AXIS_LABELSIZE)
 
-        ax_inertia_loss.set_ylabel(loss_axis_label, fontsize=AXIS_LABELSIZE)
+        ax_inertia_loss.set_ylabel(loss_axis_label, fontsize=FIG5_AXIS_LABELSIZE)
         ax_inertia_loss.grid(True, alpha=0.3)
 
         ax_inertia_map.set_aspect("equal")
@@ -765,7 +825,7 @@ def create_combined_mitigation_plot(
             rf"Additional inertia to reach ${target_symbol}_{{{int(round(co2_ref_percent))}\%}}$"
             + "\n"
             + rf"CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\%",
-            fontsize=TITLE_FONTSIZE,
+            fontsize=FIG5_TITLE_LABELSIZE,
         )
 
     # === PLOT LINE EXTENSION MITIGATION ===
@@ -805,7 +865,7 @@ def create_combined_mitigation_plot(
             np.arange(len(post_mitigation_value)),
             np.array(post_mitigation_value) / target_value,
             color=color_loss_curve,
-            linewidth=2,
+            linewidth=FIG5_LINE_WIDTH,
             label="Loss reduction",
         )
 
@@ -815,7 +875,9 @@ def create_combined_mitigation_plot(
 
         # Add secondary y-axis for cost
         if use_annualized_costs:
-            rescale_factor = 1 / 0.025
+            # With the loss axis of panel A, cost ticks run in 0.08 bn. EUR steps
+            # (as in A) and the cost curve stays in view
+            rescale_factor = 1 / 0.04
         else:
             rescale_factor = 1 / 1
         cost_rescaled = np.cumsum(cost) * rescale_factor / 1e9
@@ -827,19 +889,30 @@ def create_combined_mitigation_plot(
             color="black",
             # color=color_loss_curve,
             linestyle="dotted",
-            linewidth=2,
+            linewidth=FIG5_LINE_WIDTH,
             label="Annualized cost" if use_annualized_costs else "Cost",
         )
         if use_annualized_costs:
             cost_label = "Annualized cost [billion €]"
         else:
             cost_label = "Cost [billion €]"
-        ax2_line_cost.set_ylabel(cost_label, fontsize=AXIS_LABELSIZE)
+        ax2_line_cost.set_ylabel(cost_label, fontsize=FIG5_AXIS_LABELSIZE)
         # ax2_line_cost.set_ylim((0, 1.1 * sum(cost[:right_xlim]) / 1e9))
-        ax2_line_cost.tick_params(axis="y", which="major", labelsize=TICK_LABELSIZE)
+        ax2_line_cost.tick_params(axis="y", which="major", labelsize=FIG5_TICK_LABELSIZE)
 
-        ax_line_loss.set_xlim(0, right_xlim)
-        ax_line_loss.set_ylim(bottom=0)
+        # Two lines of room beyond, for the annotations right of the dashed line
+        x_right = right_xlim + 2
+        ax_line_loss.set_xlim(0, x_right)
+        # Both axes share limits and tick positions (the cost axis only relabels
+        # them). The loss axis is the one of panel A; the upper limit is raised
+        # only if the cost curve in view would not fit.
+        cost_max_in_view = cost_rescaled[: int(x_right) + 1].max()
+        if plot_rows == "both":
+            ax_line_loss.set_ylim(ax_inertia_loss.get_ylim())
+        else:
+            ax_line_loss.set_ylim(bottom=0)
+        if 1.05 * cost_max_in_view > ax_line_loss.get_ylim()[1]:
+            ax_line_loss.set_ylim(top=1.05 * cost_max_in_view)
         ax_line_loss.xaxis.set_major_locator(MaxNLocator(integer=True))
         ticks_primary = ax_line_loss.get_yticks()
         ax2_line_cost.set_yticks(ticks_primary)[:-1]
@@ -848,14 +921,7 @@ def create_combined_mitigation_plot(
             ticks_labels_secondary = ticks_labels_secondary.astype(int)
         ax2_line_cost.set_yticklabels(ticks_labels_secondary)
 
-        # Adjust y-limits if cost exceeds primary y-axis limits
         primary_lims = ax_line_loss.get_ylim()
-        if cost_rescaled[num_lines_to_reach_ref_loss + 1] > primary_lims[1]:
-            primary_lims = (
-                primary_lims[0],
-                cost_rescaled[num_lines_to_reach_ref_loss] * 1.1,
-            )
-            ax_line_loss.set_ylim(primary_lims)
         ax2_line_cost.set_ylim(primary_lims)
 
         # Add reference line for line number
@@ -872,13 +938,13 @@ def create_combined_mitigation_plot(
             c=color_reference_loss,
         )
         ax_line_loss.text(
-            num_lines_to_reach_ref_loss + right_xlim / 200 * 1,
+            num_lines_to_reach_ref_loss + 0.2,
             1.1,
             f"{num_lines_to_reach_ref_loss} lines",
             verticalalignment="bottom",
             horizontalalignment="left",
             zorder=np.inf,
-            fontsize=AXIS_LABELSIZE,
+            fontsize=FIG5_AXIS_LABELSIZE,
             c=color_reference_loss,
         )
 
@@ -889,24 +955,25 @@ def create_combined_mitigation_plot(
             "--",
             c=color_reference_loss,
         )
+        # Right of the dashed line, its top level with where it meets the cost curve
         ax2_line_cost.text(
-            num_lines_to_reach_ref_loss + right_xlim / 200 * 1,
-            cost_to_reach_ref_loss_lvl * rescale_factor / 1e9 + primary_lims[1] / 50,
+            num_lines_to_reach_ref_loss + 0.2,
+            cost_to_reach_ref_loss_lvl * rescale_factor / 1e9,
             rf"{cost_to_reach_ref_loss_lvl/ 1e9:.2f} bn.\,€",
-            verticalalignment="center",
-            horizontalalignment="right",
+            verticalalignment="top",
+            horizontalalignment="left",
             zorder=np.inf,
-            fontsize=AXIS_LABELSIZE,
+            fontsize=FIG5_AXIS_LABELSIZE,
             c=color_reference_loss,
         )
 
-        ax_line_loss.tick_params(axis="both", which="major", labelsize=TICK_LABELSIZE)
-        ax_line_loss.set_xlabel("Number of reinforced lines", fontsize=AXIS_LABELSIZE)
-        ax_line_loss.set_ylabel(loss_axis_label, fontsize=AXIS_LABELSIZE)
+        ax_line_loss.tick_params(axis="both", which="major", labelsize=FIG5_TICK_LABELSIZE)
+        ax_line_loss.set_xlabel("Number of reinforced lines", fontsize=FIG5_AXIS_LABELSIZE)
+        ax_line_loss.set_ylabel(loss_axis_label, fontsize=FIG5_AXIS_LABELSIZE)
         title = f"Grid extension mitigation \n CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\\%"
         ax_line_loss.set_title(
             title,
-            fontsize=TITLE_FONTSIZE,
+            fontsize=FIG5_TITLE_LABELSIZE,
         )
         ax_line_loss.grid(True, alpha=0.3)
 
@@ -917,7 +984,9 @@ def create_combined_mitigation_plot(
             lines1 + lines2,
             labels1 + labels2,
             loc="upper left",
-            fontsize=LEGEND_FONTSIZE,
+            fontsize=FIG5_LEGEND_LABELSIZE,
+            handlelength=FIG5_LOSS_LEGEND_HANDLELENGTH,
+            handletextpad=FIG5_LOSS_LEGEND_HANDLETEXTPAD,
         )
 
         # Line extension: Map
@@ -940,7 +1009,7 @@ def create_combined_mitigation_plot(
             mitigated_loss[:num_lines_to_reach_ref_loss] / target_value
         )
 
-        width = 2 * (mitigated_loss_selected > 0).astype(int) + 1
+        width = FIG5_MAP_EDGE_WIDTH * (2 * (mitigated_loss_selected > 0).astype(int) + 1)
         cmap = copy.copy(plt.cm.get_cmap("plasma_r"))
         cmap.set_under("gainsboro", 1.0)
 
@@ -954,7 +1023,7 @@ def create_combined_mitigation_plot(
             pos=pos,
             ax=ax_line_map,
             edge_color="gainsboro",
-            width=1,
+            width=FIG5_MAP_EDGE_WIDTH,
         )
 
         edges_list = list(nx_graph.edges())
@@ -989,8 +1058,8 @@ def create_combined_mitigation_plot(
             shrink=0.5,
             orientation="horizontal",
         )
-        cbar_line.ax.tick_params(labelsize=TICK_LABELSIZE)
-        cbar_line.ax.set_xlabel(y_label_line, fontsize=AXIS_LABELSIZE)
+        cbar_line.ax.tick_params(labelsize=FIG5_TICK_LABELSIZE)
+        cbar_line.ax.set_xlabel(y_label_line, fontsize=FIG5_AXIS_LABELSIZE)
 
         ax_line_map.axis("off")
         ax_line_map.set_aspect("equal")
@@ -999,7 +1068,7 @@ def create_combined_mitigation_plot(
             rf"Grid extension to reach ${target_symbol}_{{{int(round(co2_ref_percent))}\%}}$"
             + "\n"
             + rf"CO$_2$ level={get_actual_co2_level(co2_lvl_map, percent=True)}\%",
-            fontsize=TITLE_FONTSIZE,
+            fontsize=FIG5_TITLE_LABELSIZE,
         )
 
         # Line extension: All CO2 levels plot
@@ -1019,7 +1088,7 @@ def create_combined_mitigation_plot(
                 lines_df.lines_needed,
                 label="Num. lines",
                 color=color_reference_loss,
-                linewidth=2,
+                linewidth=FIG5_LINE_WIDTH,
             )
             ax_line_all.invert_xaxis()
             ax_line_all.set_ylim(bottom=0)
@@ -1040,30 +1109,30 @@ def create_combined_mitigation_plot(
                 label="Annualized cost" if use_annualized_costs else "Cost",
                 linestyle="dotted",
                 color=color_reference_loss,
-                linewidth=2,
+                linewidth=FIG5_LINE_WIDTH,
                 marker="o",
-                markersize=4,
+                markersize=FIG5_MARKER_SIZE,
             )
 
             ax_line_all.set_xlabel(
-                "CO$_2$ level [\\% of 1990]", fontsize=AXIS_LABELSIZE
+                "CO$_2$ level [\\% of 1990]", fontsize=FIG5_AXIS_LABELSIZE
             )
             ax_line_all.set_ylabel(
-                "Number of reinforced lines", fontsize=AXIS_LABELSIZE
+                "Number of reinforced lines", fontsize=FIG5_AXIS_LABELSIZE
             )
             if use_annualized_costs:
                 cost_all_label = "Annualized cost [billion €]"
             else:
                 cost_all_label = "Cost [billion €]"
-            ax_line_all_sec.set_ylabel(cost_all_label, fontsize=AXIS_LABELSIZE)
+            ax_line_all_sec.set_ylabel(cost_all_label, fontsize=FIG5_AXIS_LABELSIZE)
             ax_line_all.invert_xaxis()
             ax_line_all_sec.invert_xaxis()
-            ax_line_all.set_title("Grid extension needed", fontsize=TITLE_FONTSIZE)
+            ax_line_all.set_title("Grid extension needed", fontsize=FIG5_TITLE_LABELSIZE)
             ax_line_all.tick_params(
-                axis="both", which="major", labelsize=TICK_LABELSIZE
+                axis="both", which="major", labelsize=FIG5_TICK_LABELSIZE
             )
             ax_line_all_sec.tick_params(
-                axis="y", which="major", labelsize=TICK_LABELSIZE
+                axis="y", which="major", labelsize=FIG5_TICK_LABELSIZE
             )
             ax_line_all.grid(True, alpha=0.3)
 
@@ -1088,7 +1157,7 @@ def create_combined_mitigation_plot(
                 lines1 + lines2,
                 labels1 + labels2,
                 loc="upper left",
-                fontsize=LEGEND_FONTSIZE,
+                fontsize=FIG5_LEGEND_LABELSIZE,
             )
 
     # === ADD SUBPLOT LABELS ===
@@ -1124,8 +1193,9 @@ def create_combined_mitigation_plot(
         axes_rows = [axes_all]
 
     label_index = 0
-    default_y_offset = 0.13
-    x_offset_ls = [-0.1, 0.05, -0.15]
+    # Above the top of the y-axis labels of A and D, and clear of the titles
+    default_y_offset = 0.2
+    x_offset_ls = [-0.1, 0.025, -0.2]
     for row_axes in axes_rows:
         row_positions = [ax.get_position() for ax in row_axes]
         row_max_y = max(pos.y1 for pos in row_positions)
@@ -1136,7 +1206,7 @@ def create_combined_mitigation_plot(
             pos = ax.get_position()
             y_offset = (y_target - pos.y1) / pos.height
             add_panel_label(ax, label_index, x_offset=x_offset_ls[idx_col], 
-                            y_offset=y_offset)
+                            y_offset=y_offset, fontsize=FIG5_PANEL_LABELSIZE)
             label_index += 1
 
     # === APPLY CONSISTENT STYLING TO ALL AXES ===
@@ -1158,7 +1228,7 @@ def create_combined_mitigation_plot(
 
         for ax in map_axes:
             if ax.get_title():
-                ax.set_title(ax.get_title(), fontsize=TITLE_FONTSIZE)
+                ax.set_title(ax.get_title(), fontsize=FIG5_TITLE_LABELSIZE)
 
     plt.tight_layout()
 

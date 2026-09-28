@@ -23,9 +23,12 @@ from loguru import logger
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.colors as mplcolors
+import matplotlib.transforms as mtransforms
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 import cartopy.crs as ccrs
+from cartopy.mpl.feature_artist import FeatureArtist
 
 sys.path.append("./")
 
@@ -89,13 +92,62 @@ _COUNTRY_3_TO_2 = {
 SUBLABEL_FONTSIZE = PANEL_LABEL_FONTSIZE
 LABEL_FONTSIZE = AXIS_LABEL_FONTSIZE
 
-# Fontsizes of the combined generation/storage figure (Fig. 1). Its canvas is
-# 24 in wide, so at the 174 mm print width everything is scaled by ~0.35 and the
-# standard sizes would print below the 6 pt Cell Press minimum. 18/20 pt print as
-# 6.4/7.1 pt. Not shared with the other figures, which have smaller canvases.
-TICK_LABELSIZE = 18
-AXIS_LABELSIZE = 20
-LEGEND_LABELSIZE = 18
+# Sizes of the combined generation/storage figure (Fig. 1), as printed at the
+# 6.5 in page width. They are the sizes of the layout designed at 24 x 18 in,
+# all multiplied by 0.3373 (6.5 in / 19.27 in tight-bbox width), so the figure is
+# an exact scaled copy of that layout. Not shared with the other figures.
+FIG1_SIZE = (8.095, 6.071)
+TICK_LABELSIZE = 6.071
+AXIS_LABELSIZE = 6.746
+LEGEND_LABELSIZE = 6.071
+MAP_TITLE_LABELSIZE = 6.746
+PANEL_LABELSIZE = 8.095
+MARKER_AREA = 11.38  # Panel C scatter, in pt^2
+FIG1_MAP_LINE_WIDTH = 0.1687  # Transmission lines and links
+FIG1_GEOMAP_LINE_WIDTH = 0.1012  # Coastlines and borders, pypsa draws them at 0.3
+FIG1_RC = {
+    "font.size": 4.722,
+    "axes.titlesize": 6.071,
+    "axes.labelsize": 5.397,
+    "xtick.labelsize": 4.722,
+    "ytick.labelsize": 4.722,
+    "legend.fontsize": 4.722,
+    "figure.titlesize": 6.746,
+    "lines.linewidth": 0.6746,
+    "lines.markersize": 2.698,
+    "lines.markeredgewidth": 0.3373,
+    "patch.linewidth": 0.3373,
+    "hatch.linewidth": 0.3373,
+    "axes.linewidth": 0.2698,
+    "axes.labelpad": 1.349,
+    "axes.titlepad": 2.024,
+    "grid.linewidth": 0.2698,
+    "xtick.major.size": 1.181,
+    "xtick.minor.size": 0.6746,
+    "xtick.major.width": 0.2698,
+    "xtick.minor.width": 0.2024,
+    "xtick.major.pad": 1.181,
+    "xtick.minor.pad": 1.147,
+    "ytick.major.size": 1.181,
+    "ytick.minor.size": 0.6746,
+    "ytick.major.width": 0.2698,
+    "ytick.minor.width": 0.2024,
+    "ytick.major.pad": 1.181,
+    "ytick.minor.pad": 1.147,
+    "savefig.pad_inches": 0.03373,
+}
+
+
+# n.branch_components is a set, so without a fixed order the links end up above
+# or below the lines depending on the run's string hashing.
+BRANCH_DRAW_ORDER = ["Line", "Transformer", "Link"]
+
+
+def _set_geomap_line_width(ax, width):
+    """Set the width of the coastlines and borders that pypsa draws at 0.3 pt."""
+    for artist in ax.collections:
+        if isinstance(artist, FeatureArtist):
+            artist.set_linewidth(width)
 
 
 # Helper function for aggregating carriers
@@ -288,6 +340,7 @@ def create_generation_by_country_stacked_bar_plot(n_nodes: int = 600,
     plt.show()
 
 
+@mpl.rc_context()
 def create_combined_generation_storage_plot(plot_battery_power: bool = False,
                                             n_nodes: int = 600,
                                             save_prefix: str | None = None):
@@ -317,15 +370,15 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
     }
 
     # Setup matplotlib styling
-    setup_matplotlib_style()
+    setup_matplotlib_style(arimo=True)
+    plt.rcParams.update(FIG1_RC)
 
-    # Map styling constants (use from plot_style)
-    LINE_WIDTH = MAP_LINE_WIDTH
-    LINK_WIDTH = MAP_LINK_WIDTH
+    LINE_WIDTH = FIG1_MAP_LINE_WIDTH
+    LINK_WIDTH = FIG1_MAP_LINE_WIDTH
 
     # Create combined figure with generation on top, storage below
     f = plt.figure(
-        figsize=(24, 18)
+        figsize=FIG1_SIZE
     )  # Optimized height for combined plot with equal map sections
 
     # Main grid: generation on top, storage below
@@ -396,7 +449,8 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
     for idx, (ax_loss_lvl, (x_offset, y_offset)) in enumerate(
         zip(panel_label_axis, panel_label_offsets)
     ):
-        add_panel_label(ax_loss_lvl, idx, x_offset=x_offset, y_offset=y_offset)
+        add_panel_label(ax_loss_lvl, idx, x_offset=x_offset, y_offset=y_offset,
+                        fontsize=PANEL_LABELSIZE)
 
     # === GENERATION PLOT ===
     # Calculate generation by carrier and CO2 level
@@ -447,6 +501,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
         "solar": "solar",
     }
 
+    co2_labels_gen = []
     for i, target_level in enumerate(target_levels):
         n = networks[target_level]
         for ii, month in enumerate(months):
@@ -476,8 +531,10 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
                 link_colors="black",
                 link_widths=LINK_WIDTH,
                 line_widths=LINE_WIDTH,
+                branch_components=BRANCH_DRAW_ORDER,
                 ax=axs_primary_gen[i][ii],
             )
+            _set_geomap_line_width(axs_primary_gen[i][ii], FIG1_GEOMAP_LINE_WIDTH)
 
             # Set consistent map limits and aspect ratio
             axs_primary_gen[i][ii].set_xlim(MAP_XLIM)
@@ -486,7 +543,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
 
             if i == 0:
                 axs_primary_gen[i][ii].set_title(
-                    current_snapshots.month_name()[0], fontsize=TITLE_FONTSIZE
+                    current_snapshots.month_name()[0], fontsize=MAP_TITLE_LABELSIZE
                 )
 
             # axs_primary_gen[i][ii].text(
@@ -499,15 +556,15 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
             #     transform=axs_primary_gen[i][ii].transAxes,
             # )
 
-        axs_primary_gen[i][0].text(
+        co2_labels_gen.append(axs_primary_gen[i][0].text(
             0 - 0.15,
             0.4,
-            rf"CO$_2$={get_actual_co2_level(target_level, percent=True)}\% ",
+            rf"CO$_2$\,=\,{get_actual_co2_level(target_level, percent=True)}\%",
             fontsize=AXIS_LABELSIZE,
             verticalalignment="center",
             # rotation=90,
             transform=axs_primary_gen[i][0].transAxes,
-        )
+        ))
 
     # Panel c - Generation vs CO2 level
     marker = itertools.cycle((",", "x", ".", "o", "*"))
@@ -568,7 +625,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
             ((data.values)[index] * 1e-6)[plot_inds],
             color=colors_gens.loc[ind],
             label=ind,
-            s=100,
+            s=MARKER_AREA,
             marker=next(marker),
         )
 
@@ -646,11 +703,14 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
                 / max_capacity_rounded
                 * max_node_size,
                 line_colors="black",
+                link_colors="black",
                 bus_colors=current_color,
                 link_widths=LINK_WIDTH,
                 line_widths=LINE_WIDTH,
+                branch_components=BRANCH_DRAW_ORDER,
                 ax=axs_maps_storage[ii],
             )
+            _set_geomap_line_width(axs_maps_storage[ii], FIG1_GEOMAP_LINE_WIDTH)
 
             # Set consistent map limits and aspect ratio (same as generation maps)
             axs_maps_storage[ii].set_xlim(MAP_XLIM)
@@ -673,14 +733,15 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
                     for size in legend_circle_size
                 ],
                 patch_kw={"color": current_color},
-                legend_kw={"fontsize": LEGEND_LABELSIZE},
+                legend_kw={"fontsize": LEGEND_LABELSIZE, "handlelength": 1.3,
+                           "handletextpad": 0.5},
             )
 
             current_store_type_string = (
                 current_store_type[0].upper() + current_store_type[1:]
             ).replace("H2", "Hydrogen")
             axs_maps_storage[ii].set_title(
-                current_store_type_string, fontsize=TITLE_FONTSIZE
+                current_store_type_string, fontsize=MAP_TITLE_LABELSIZE
             )
 
     # # Add storage labels
@@ -694,10 +755,10 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
     #     transform=axs_maps_storage[0].transAxes,
     # )
 
-    axs_maps_storage[0].text(
+    co2_label_storage = axs_maps_storage[0].text(
         0 - 0.15,
         0.4,
-        rf"CO$_2$={get_actual_co2_level(target_levels_storage[0], percent=True)}\% ",
+        rf"CO$_2$\,=\,{get_actual_co2_level(target_levels_storage[0], percent=True)}\%",
         fontsize=AXIS_LABELSIZE,
         weight="bold",
         verticalalignment="center",
@@ -744,6 +805,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
         inplace=True,
     )
     colors = ["blue", "skyblue", h2_color, battery_color]
+    markers = ["s", "s", "o", "o"]
 
     ax_line_storage.plot(
         get_actual_co2_level(capacity_by_type_by_lvl.columns, percent=True),
@@ -766,6 +828,7 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
                 * unit_factor
             )[:, feat_count],
             color=colors[feat_count],
+            marker=markers[feat_count],
         )
 
     if plot_battery_power:
@@ -800,10 +863,27 @@ def create_combined_generation_storage_plot(plot_battery_power: bool = False,
 
     h, l = ax_line_storage.get_legend_handles_labels()
     ax_line_storage.get_legend().remove()
+    h = [
+        Line2D([], [], color=line.get_color(), marker=marker)
+        for line, marker in zip(h, markers)
+    ]
     ax_line_legend_storage.legend(
-        h, l, borderaxespad=0.3, fontsize=LEGEND_LABELSIZE, ncol=2, loc="center"
+        h, l, borderaxespad=0.3, fontsize=LEGEND_LABELSIZE, ncol=2, loc="center",
+        handlelength=1.5,
     )
     ax_line_legend_storage.axis("off")
+
+    # All CO2 labels start with the same "CO2 =", so equal left edges line up
+    # the equal signs. The storage label is the reference; the maps only get
+    # their final (equal-aspect) position at draw time, hence the draw.
+    f.canvas.draw()
+    x_label = f.transFigure.inverted().transform(
+        co2_label_storage.get_transform().transform(co2_label_storage.get_position())
+    )[0]
+    for co2_label in co2_labels_gen:
+        co2_label.set_transform(mtransforms.blended_transform_factory(
+            f.transFigure, co2_label.axes.transAxes))
+        co2_label.set_x(x_label)
 
     if save_prefix is not None:
         file_name = save_prefix + "_" + file_name

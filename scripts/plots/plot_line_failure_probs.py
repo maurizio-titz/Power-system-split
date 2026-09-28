@@ -60,6 +60,63 @@ from utils.plot_style import (
     save_figure,
 )
 
+# Sizes of the total line failure figure (Fig. 4, 'create_total_line_failure_plot'),
+# as printed at the 6.5 in page width. They are the sizes of the layout designed
+# at 16 x 8 in, all multiplied by 0.4782 (6.5 in / 13.59 in tight-bbox width), so
+# the figure is an exact scaled copy of that layout.
+FIG4_SIZE = (7.627, 3.814)  # Slightly below 0.4782 x (16, 8) for the larger colorbar text
+FIG4_SIZE_ONE_ROW = (7.651, 1.913)
+FIG4_SIZE_INDIVIDUAL_COLORBARS = (11.477, 2.391)
+FIG4_AXIS_LABELSIZE = 7.651
+FIG4_TICK_LABELSIZE = 6.695
+FIG4_SUBTITLE_LABELSIZE = 8.607
+FIG4_PANEL_LABELSIZE = 11.477
+FIG4_COLORBAR_LABELSIZE = 7.651  # Raised to the axis label size
+FIG4_COLORBAR_TICKSIZE = 6.695  # Raised to the tick label size
+FIG4_COLORBAR_TICK_WIDTH = 0.4782
+FIG4_COLORBAR_TITLE_PAD = 7.173
+# Gap between the colorbar's tick labels and its offset text ('x10^-3'); matplotlib
+# fixes it at 3 pt in Axis.OFFSETTEXTPAD instead of reading it from rcParams.
+FIG4_OFFSET_TEXT_PAD = 1.435
+FIG4_HIST_LINE_WIDTH = 1.435
+FIG4_EDGE_WIDTH_MIN = 0.2391  # Corridor widths run from MIN to MIN + RANGE
+FIG4_EDGE_WIDTH_RANGE = 2.152
+FIG4_EDGE_WIDTH_FIXED = 1.674  # Without 'scale_width'
+FIG4_BLACKOUT_AXIS_LABELSIZE = 11.477  # 'in_second_row="blackout_sizes"' only
+FIG4_BLACKOUT_TICK_LABELSIZE = 9.564
+FIG4_BLACKOUT_LEGEND_LABELSIZE = 8.607
+FIG4_RC = {
+    "font.size": 6.695,
+    "axes.titlesize": 8.607,
+    "axes.labelsize": 7.651,
+    "xtick.labelsize": 6.695,
+    "ytick.labelsize": 6.695,
+    "legend.fontsize": 6.695,
+    "figure.titlesize": 9.564,
+    "lines.linewidth": 0.9564,
+    "lines.markersize": 3.826,
+    "lines.markeredgewidth": 0.4782,
+    "patch.linewidth": 0.4782,
+    "hatch.linewidth": 0.4782,
+    "axes.linewidth": 0.3826,
+    "axes.labelpad": 1.913,
+    "axes.titlepad": 2.869,
+    "grid.linewidth": 0.3826,
+    "xtick.major.size": 1.674,
+    "xtick.minor.size": 0.9564,
+    "xtick.major.width": 0.3826,
+    "xtick.minor.width": 0.2869,
+    "xtick.major.pad": 1.674,
+    "xtick.minor.pad": 1.626,
+    "ytick.major.size": 1.674,
+    "ytick.minor.size": 0.9564,
+    "ytick.major.width": 0.3826,
+    "ytick.minor.width": 0.2869,
+    "ytick.major.pad": 1.674,
+    "ytick.minor.pad": 1.626,
+    "savefig.pad_inches": 0.04782,
+}
+
 
 
 
@@ -495,6 +552,7 @@ def create_secondary_line_failure_plot():
     plt.show()
 
 
+@mpl.rc_context()
 def create_total_line_failure_plot(
     unified_colorbar: bool = True,
     cmap: str ="crameri:Batlow_r",
@@ -574,11 +632,15 @@ def create_total_line_failure_plot(
         )
     )
 
+    # Styling first: axes take spine and tick sizes from rcParams on creation.
+    setup_matplotlib_style(arimo=True)
+    plt.rcParams.update(FIG4_RC)
+
     # Setup figure layout based on colorbar option
     if in_second_row is None:
         if unified_colorbar:
             # Single colorbar on the right
-            f = plt.figure(figsize=(16, 4))
+            f = plt.figure(figsize=FIG4_SIZE_ONE_ROW)
             gs_main = GridSpec(
                 1,
                 2,
@@ -599,7 +661,7 @@ def create_total_line_failure_plot(
             
         else:
             # Individual colorbars for each subplot
-            f = plt.figure(figsize=(24, 5))
+            f = plt.figure(figsize=FIG4_SIZE_INDIVIDUAL_COLORBARS)
             gs_main = GridSpec(
                 1,
                 3,
@@ -624,7 +686,7 @@ def create_total_line_failure_plot(
     else:
         if unified_colorbar:
             # Single colorbar on the right
-            f = plt.figure(figsize=(16, 8))
+            f = plt.figure(figsize=FIG4_SIZE)
             gs_main = GridSpec(
                 2,
                 2,
@@ -657,8 +719,6 @@ def create_total_line_failure_plot(
             
     
 
-    # Setup matplotlib styling
-    setup_matplotlib_style()
 
     # Calculate global vmin and vmax if using unified colorbar
     if unified_colorbar:
@@ -717,7 +777,7 @@ def create_total_line_failure_plot(
                 # Sqrt scaling
                 widths = np.array(c_H_s)
                 # Normalize to a reasonable range (e.g., 0.5 to 5)
-                widths = 0.5 + 4.5 * np.sqrt(
+                widths = FIG4_EDGE_WIDTH_MIN + FIG4_EDGE_WIDTH_RANGE * np.sqrt(
                     (widths - widths.min()) / (widths.max() - widths.min())
                     if widths.max() > widths.min()
                     else widths * 0
@@ -727,14 +787,14 @@ def create_total_line_failure_plot(
                 # Linear scaling
                 widths = np.array(c_H_s)
                 # Normalize to a reasonable range (e.g., 0.5 to 5)
-                widths = 0.5 + 4.5 * (
+                widths = FIG4_EDGE_WIDTH_MIN + FIG4_EDGE_WIDTH_RANGE * (
                     (widths - widths.min()) / (widths.max() - widths.min())
                     if widths.max() > widths.min()
                     else widths * 0
                 )
             edge_widths = widths
         else:
-            edge_widths = 3.5
+            edge_widths = FIG4_EDGE_WIDTH_FIXED
 
         edges = nx.draw_networkx_edges(
             nx_graph,
@@ -758,24 +818,27 @@ def create_total_line_failure_plot(
             )
             cb = plt.colorbar(sm, cax=axs_colorbars_secondary[count])
             setup_colormap_scientific_notation(cb)
+            cb.ax.tick_params(labelsize=FIG4_COLORBAR_TICKSIZE,
+                              width=FIG4_COLORBAR_TICK_WIDTH, which="both")
+            cb.ax.yaxis.OFFSETTEXTPAD = FIG4_OFFSET_TEXT_PAD
             
             # Add title to all colorbars
             axs_colorbars_secondary[count].set_title(
                 r"$\langle p_{\ell}\rangle$",
-                fontsize=COLORBAR_LABEL_FONTSIZE,
+                fontsize=FIG4_COLORBAR_LABELSIZE,
                 weight="bold",
                 verticalalignment="center",
-                pad=15,
+                pad=FIG4_COLORBAR_TITLE_PAD,
             )
 
         # Add subplot titles and labels
         actual_co2_level = get_actual_co2_level(co2l, n_nodes, percent=True)
         axs_secondary[count].set_title(
             r"CO$_2 =$ " + r"{}\%".format(int(actual_co2_level)),
-            fontsize=SUBTITLE_FONTSIZE,
+            fontsize=FIG4_SUBTITLE_LABELSIZE,
             y=0.93,
         )
-        add_panel_label(axs_secondary[count], count, x_offset=0.1, y_offset=-0.015)
+        add_panel_label(axs_secondary[count], count, x_offset=0.1, y_offset=-0.015, fontsize=FIG4_PANEL_LABELSIZE)
         
         # Plot second row if requested
         if in_second_row is not None:
@@ -815,7 +878,7 @@ def create_total_line_failure_plot(
                 axs_bottom.hist(all_line_loadings, bins=line_loading_bins,
                                 histtype='step', density=True,
                                 color=color_r,
-                                linewidth=3., label=f"{(actual_co2_level * 100)}\\%")
+                                linewidth=FIG4_HIST_LINE_WIDTH, label=f"{(actual_co2_level * 100)}\\%")
                 
                 
             elif in_second_row == "blackout_sizes":
@@ -859,7 +922,7 @@ def create_total_line_failure_plot(
                 axs_bottom_line_loading.hist(all_line_loadings, bins=line_loading_bins,
                                              histtype='step', density=False,
                                              color=color_r,
-                                             linewidth=3., label=f"{(actual_co2_level)}\\%")
+                                             linewidth=FIG4_HIST_LINE_WIDTH, label=f"{(actual_co2_level)}\\%")
                 
                 
                 # Blackout Sizes in right column
@@ -871,7 +934,7 @@ def create_total_line_failure_plot(
                                                xscale_log=True, use_total_lost_load=True,
                                                color=color_r,n_bins=n_bins_blackout_sizes,
                                                label_str=f"{(actual_co2_level)}\\%",
-                                               linewidth=3)
+                                               linewidth=FIG4_HIST_LINE_WIDTH)
 
             else:
                 raise ValueError("'in_second_row' has to be 'blackout_sizes', 'line_loading' or 'both'")
@@ -888,11 +951,14 @@ def create_total_line_failure_plot(
         )
         cb = plt.colorbar(sm, cax=ax_colorbar_unified)
         setup_colormap_scientific_notation(cb)
+        cb.ax.tick_params(labelsize=FIG4_COLORBAR_TICKSIZE,
+                          width=FIG4_COLORBAR_TICK_WIDTH, which="both")
+        cb.ax.yaxis.OFFSETTEXTPAD = FIG4_OFFSET_TEXT_PAD
         ax_colorbar_unified.set_title(
             r"$\boldsymbol{\langle p_{\ell}\rangle}$",
-            fontsize=COLORBAR_LABEL_FONTSIZE,
+            fontsize=FIG4_COLORBAR_LABELSIZE,
             verticalalignment="center",
-            pad=15,
+            pad=FIG4_COLORBAR_TITLE_PAD,
         )
 
     if in_second_row == "line_loading":
@@ -905,19 +971,20 @@ def create_total_line_failure_plot(
 
         axs_bottom.set_ylabel("$P(\\ell_{\\text{load}})$")
             
-        add_panel_label(axs_bottom, 3)
+        add_panel_label(axs_bottom, 3, fontsize=FIG4_PANEL_LABELSIZE)
         
     elif in_second_row == "blackout_sizes":
         axs_bottom.set_xlim(left=5)
         
-        axs_bottom.set_ylabel("Count", size=24)
-        axs_bottom.set_xlabel("Load not served [MW]", size=24)
+        axs_bottom.set_ylabel("Count", size=FIG4_BLACKOUT_AXIS_LABELSIZE)
+        axs_bottom.set_xlabel("Load not served [MW]", size=FIG4_BLACKOUT_AXIS_LABELSIZE)
         
         axs_bottom.legend(loc="upper left", 
                           title="CO$_2$ level [\\% of 1990]",
-                          fontsize=18, title_fontsize=18)
+                          fontsize=FIG4_BLACKOUT_LEGEND_LABELSIZE,
+                          title_fontsize=FIG4_BLACKOUT_LEGEND_LABELSIZE)
         
-        axs_bottom.tick_params(axis="both", labelsize=20)
+        axs_bottom.tick_params(axis="both", labelsize=FIG4_BLACKOUT_TICK_LABELSIZE)
         
         
     elif in_second_row == "both":
@@ -928,26 +995,26 @@ def create_total_line_failure_plot(
         axs_bottom_line_loading.legend(loc="lower left", title="CO$_2$ level [\\% of 1990]")
         
         axs_bottom_line_loading.set_xlabel("Line Loading", 
-                                           size=AXIS_LABEL_FONTSIZE)
-        axs_bottom_line_loading.set_ylabel("Count", size=AXIS_LABEL_FONTSIZE)
+                                           size=FIG4_AXIS_LABELSIZE)
+        axs_bottom_line_loading.set_ylabel("Count", size=FIG4_AXIS_LABELSIZE)
         
-        axs_bottom_line_loading.tick_params(axis="both", labelsize=TICK_LABEL_FONTSIZE)
+        axs_bottom_line_loading.tick_params(axis="both", labelsize=FIG4_TICK_LABELSIZE)
 
-        add_panel_label(axs_bottom_line_loading, 3)
+        add_panel_label(axs_bottom_line_loading, 3, fontsize=FIG4_PANEL_LABELSIZE)
         
         # Blackout sizes
         axs_bottom_blackout.set_xlim(left=5)
         
-        axs_bottom_blackout.set_ylabel("Count", size=AXIS_LABEL_FONTSIZE)
-        axs_bottom_blackout.set_xlabel("Load not served [MW]", size=AXIS_LABEL_FONTSIZE)
+        axs_bottom_blackout.set_ylabel("Count", size=FIG4_AXIS_LABELSIZE)
+        axs_bottom_blackout.set_xlabel("Load not served [MW]", size=FIG4_AXIS_LABELSIZE)
         
         """axs_bottom_blackout.legend(loc="upper left", 
                           title="CO$_2$ level [\\% of 1990]",
                           fontsize=18, title_fontsize=16)"""
         
-        axs_bottom_blackout.tick_params(axis="both", labelsize=TICK_LABEL_FONTSIZE)
+        axs_bottom_blackout.tick_params(axis="both", labelsize=FIG4_TICK_LABELSIZE)
         
-        add_panel_label(axs_bottom_blackout, 4)
+        add_panel_label(axs_bottom_blackout, 4, fontsize=FIG4_PANEL_LABELSIZE)
         
     
     cmap_name = cmap if isinstance(cmap, str) else cmap.name

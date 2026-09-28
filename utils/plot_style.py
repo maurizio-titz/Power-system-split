@@ -190,8 +190,14 @@ def get_panel_label(index, bold=True, lowercase=False):
 
 
 # === MATPLOTLIB SETUP FUNCTIONS ===
-def setup_matplotlib_style():
-    """Configure matplotlib with consistent settings."""
+def setup_matplotlib_style(arimo=False):
+    """Configure matplotlib with consistent settings.
+
+    Args:
+        arimo (bool, optional): If True, set all text in Arimo (metric-compatible
+            with Arial), including digits and Latin letters in math mode. Used for
+            the main manuscript figures. Defaults to False (Computer Modern).
+    """
     # Use default style as base
     plt.style.use("default")
 
@@ -199,13 +205,15 @@ def setup_matplotlib_style():
     plt.rc("text", usetex=True)
     # siunitx renders units upright (not italic); per-mode=symbol gives "Hz/s" rather
     # than "Hz s^{-1}". Use \unit{\hertz\per\second} etc. in labels.
-    plt.rc(
-        "text.latex",
-        preamble=(
-            r"\usepackage{amsmath}\usepackage{bm}"
-            r"\usepackage{siunitx}\sisetup{per-mode=symbol}"
-        ),
+    preamble = (
+        r"\usepackage{amsmath}\usepackage{bm}"
+        r"\usepackage{siunitx}\sisetup{per-mode=symbol}"
     )
+    if arimo:
+        # mathastext takes the math digits and letters from the text font loaded
+        # before it.
+        preamble += r"\usepackage[sfdefault]{arimo}\usepackage[italic]{mathastext}"
+    plt.rc("text.latex", preamble=preamble)
 
     # Set default font sizes
     plt.rc("font", size=TICK_LABEL_FONTSIZE)

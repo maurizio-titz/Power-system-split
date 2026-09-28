@@ -65,7 +65,8 @@ def plot_manuscript_figures(
                                             "plot_data_agg_params_01bf408e.pklz")
     create_clustering_analysis_plot_from_data(fpath_cluster_plot_data, 
                                                 sort_by="frequency",
-                                                save_prefix="fig3")
+                                                save_prefix="fig3",
+                                                for_manuscript=True)
     
     
     # Fig. 4: Conditional probability of transmission lines participating in casc. failures

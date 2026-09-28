@@ -51,6 +51,69 @@ from utils.plot_style import *
 # Import plot styling
 setup_matplotlib_style()
 
+# Sizes of 'create_clustering_analysis_plot_from_data'. The supplementary variants
+# use the standard sizes on a canvas of 'fig_scaling' in per panel. Fig. 3 of the
+# manuscript ('for_manuscript=True') is printed at the 6.5 in page width: the same
+# layout with all sizes multiplied by 0.4837 (6.5 in / 13.44 in tight-bbox width),
+# so the figure is an exact scaled copy of it.
+CLUSTER_PLOT_SIZES = {
+    "label": LABEL_FONTSIZE,
+    "legend": LEGEND_FONTSIZE,
+    "colorbar_label": COLORBAR_LABEL_FONTSIZE,
+    "colorbar_tick": COLORBAR_TICK_FONTSIZE,
+    "colorbar_tick_width": 1.0,
+    "edge_width": 1.0,
+    # The multi-line cluster label is a LaTeX paragraph; without '\parindent=0pt'
+    # its first line (the cluster number) is indented by the article class's 15 pt.
+    # '\par' ends the paragraph while the setting is still in effect.
+    "label_paragraph": (r"\parindent=0pt ", r"\par"),
+    "legend_row_drop_in": 0.0,
+}
+FIG3_SIZE = (7.736, 7.542)  # Slightly below 0.4837 x (16, 15.6) for the colorbar ticks
+FIG3_SIZES = {
+    "label": 7.740,
+    "legend": 7.740,
+    "colorbar_label": 7.740,
+    "colorbar_tick": 6.05,  # Raised from the scaled 5.805 to the 6 pt minimum
+    "colorbar_tick_width": 0.4837,
+    "edge_width": 0.4837,
+    # Line spacing of the cluster label; otherwise the article class's fixed 12 pt.
+    "label_paragraph": (r"\parindent=0pt\baselineskip=8.5pt ", r"\par"),
+    # Extra gap between the last row's axis labels and the legend row
+    "legend_row_drop_in": 0.06,
+}
+FIG3_RC = {
+    "font.size": 6.772,
+    "axes.titlesize": 8.707,
+    "axes.labelsize": 7.740,
+    "xtick.labelsize": 6.772,
+    "ytick.labelsize": 6.772,
+    "legend.fontsize": 6.772,
+    "figure.titlesize": 9.675,
+    "lines.linewidth": 0.9675,
+    "lines.markersize": 3.870,
+    "lines.markeredgewidth": 0.4837,
+    "patch.linewidth": 0.4837,
+    "hatch.linewidth": 0.4837,
+    "axes.linewidth": 0.3870,
+    "axes.labelpad": 1.935,
+    "axes.titlepad": 2.902,
+    "grid.linewidth": 0.3870,
+    "xtick.major.size": 1.693,
+    "xtick.minor.size": 0.9675,
+    "xtick.major.width": 0.3870,
+    "xtick.minor.width": 0.2902,
+    "xtick.major.pad": 1.693,
+    "xtick.minor.pad": 1.645,
+    "ytick.major.size": 1.693,
+    "ytick.minor.size": 0.9675,
+    "ytick.major.width": 0.3870,
+    "ytick.minor.width": 0.2902,
+    "ytick.major.pad": 1.693,
+    "ytick.minor.pad": 1.645,
+    "savefig.pad_inches": 0.04837,
+}
+
 # Plot data path
 if not os.path.exists(path_to_plot_data):
     os.makedirs(path_to_plot_data, exist_ok=True)
@@ -731,7 +794,8 @@ def compute_centroids_from_clusters(
     )
 
 
-def create_clustering_analysis_plot_from_data(fpath_plot_data: str, 
+@mpl.rc_context()
+def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
     n_subplots: int = 12,
     n_cols: int = 4,
     colors_classes: list[str] = ["blue", "lightgray", "red"],
@@ -740,10 +804,21 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
     sort_by: str="accumulative_lost_load",
     use_only_lines: bool = False,
     fig_scaling: float = 4.,
-    save_prefix: str | None = None
+    save_prefix: str | None = None,
+    for_manuscript: bool = False,
     ):
-    """Use the functions from 'create_clustering_analysis_plot'"""
-    
+    """Use the functions from 'create_clustering_analysis_plot'
+
+    If 'for_manuscript' is True, the figure is drawn in Arimo at the print size of
+    Fig. 3 (FIG3_SIZE, FIG3_SIZES, FIG3_RC) and 'fig_scaling' is ignored.
+    """
+    if for_manuscript:
+        setup_matplotlib_style(arimo=True)
+        plt.rcParams.update(FIG3_RC)
+        sizes = FIG3_SIZES
+    else:
+        sizes = CLUSTER_PLOT_SIZES
+
     agg_hash_str = os.path.basename(fpath_plot_data).replace(".pklz", "")
     
     with gzip.open(fpath_plot_data) as fh_in:
@@ -778,14 +853,17 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
         vmax_edge = 1.0
     
     
-    fig = plt.figure(figsize=(n_cols * fig_scaling, n_rows * fig_scaling * 1.3))
-    
+    if for_manuscript:
+        fig = plt.figure(figsize=FIG3_SIZE)
+    else:
+        fig = plt.figure(figsize=(n_cols * fig_scaling, n_rows * fig_scaling * 1.3))
+
     gs = GridSpec(2, 1, figure=fig, hspace=.15,
                   height_ratios=[.05, n_rows][::-1])
-    
+
     gs_clusters = GridSpecFromSubplotSpec(n_rows, 1, subplot_spec=gs[0, 0],
                                           hspace=.2)
-    
+
     if sort_by == "frequency":
         centroids_df = centroids_df.sort_values(by="n_samples", ascending=False)
     elif sort_by == "accumulative_lost_load":
@@ -803,33 +881,33 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
         
         gs_row = GridSpecFromSubplotSpec(2, 1,
                                          subplot_spec=gs_clusters[row, 0],
-                                         hspace=-0.05,
+                                         hspace=0.05,
                                          height_ratios=[3, 1],
                                          wspace=-0.01)
-        
-        gs_row_map = GridSpecFromSubplotSpec(1, n_cols, 
+
+        gs_row_map = GridSpecFromSubplotSpec(1, n_cols,
                                              subplot_spec=gs_row[0,0],
                                              wspace=0.0)
         gs_row_hist = GridSpecFromSubplotSpec(1, n_cols,
                                               subplot_spec=gs_row[1, 0],
                                               wspace=0.18, hspace=.5)
-        
+
         for column in range(n_cols):
             if plot_count >= n_subplots:
                 break
-            
+
             label, centroid_row = next(df_iter, (None, None))
             if centroid_row is None or label is None:
                 break
-            
+
             plot_count += 1
-            
+
             centroid_r = node_centroids[label]
             failed_edges_prob = edge_centroids[label]
-            
+
             # Create map subplot
             ax_map = fig.add_subplot(gs_row_map[0, column])
-            
+
             plot_centroid_with_failures(
                 nx_graph,
                 pos_graph,
@@ -844,27 +922,32 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
                 ax_map,
                 colors_classes=colors_classes,
                 radius=0.4,
+                edge_width=sizes["edge_width"],
                 edge_log_scale=edge_log_scale,
                 use_only_lines=use_only_lines
             )
-            
+
             ax_map.axis('off')
             ax_map.set_aspect('equal')
+            # The equal aspect leaves spare height in the cell; keep it above the
+            # map, so that the map sits right on top of its histogram.
+            ax_map.set_anchor("S")
             
             # Add cluster information
             cluster_label = (
-                f"{plot_count}"
+                rf"\textbf{{{plot_count}}}"
                 rf"\\"
                 rf"$R={round(centroid_row.lost_load_share*100, ndigits=1)}\%$"
                 rf"\\"
                 rf"$\beta={round(centroid_row.n_samples/centroids_df.n_samples.sum()*100, ndigits=1)}\%$"
             )
-            
+
+            paragraph_start, paragraph_end = sizes["label_paragraph"]
             ax_map.set_title(
-                cluster_label,
-                y=0.8,
+                paragraph_start + cluster_label + paragraph_end,
+                y=0.9,
                 x=-0,
-                fontsize=LABEL_FONTSIZE,
+                fontsize=sizes["label"],
                 loc="left",
                 horizontalalignment="left",
             )
@@ -890,20 +973,32 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
             if column != 0:
                 ax_hist.set_ylabel("")
                 ax_hist.set_yticklabels([])
+            elif for_manuscript:
+                # Every second decade only, the axis is short at print size.
+                ax_hist.set_yticks(
+                    [10**-i for i in range(4, 9)],
+                    labels=[rf"$\mathdefault{{10^{{-{i}}}}}$" if i % 2 == 0 else ""
+                            for i in range(4, 9)],
+                )
 
             h, l = ax_hist.get_legend_handles_labels()
             ax_hist.legend().set_visible(False)
-            
-    
-    # Add legend and colorbars       
+
+            if column == 0:
+                hist_left_x0 = ax_hist.get_position().x0
+            if column == n_cols - 1:
+                hist_right_x1 = ax_hist.get_position().x1
+
+
+    # Add legend and colorbars
     if centroid_r.ndim == 1:
         gs_legend_colorax = GridSpecFromSubplotSpec(
-            1, 3, subplot_spec=gs[1, 0], width_ratios=[1, 0.5, 0.5]
+            1, 3, subplot_spec=gs[1, 0], width_ratios=[1, 0.5, 0.65]
         )
     else:
         gs_legend_colorax = GridSpecFromSubplotSpec(
-            1, 3, subplot_spec=gs[1, 0], width_ratios=[1, 1, 0.5]
-        )               
+            1, 3, subplot_spec=gs[1, 0], width_ratios=[1, 1, 0.65]
+        )
 
     ax_hist_legend = fig.add_subplot(gs_legend_colorax[0])
     ax_hist_legend.axis("off")
@@ -912,11 +1007,17 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
             label if label.endswith("\%") else r"{}".format(label.replace("%", "\%"))
             for label in l
         ]
+        # Left edge of the legend box on the left spine of the first column.
         ax_hist_legend.legend(
             h,
             l,
-            loc="center",
-            fontsize=LEGEND_FONTSIZE,
+            loc="center left",
+            bbox_to_anchor=(hist_left_x0, 0.5),
+            bbox_transform=mpl.transforms.blended_transform_factory(
+                fig.transFigure, ax_hist_legend.transAxes),
+            borderaxespad=0.,
+            fontsize=sizes["legend"],
+            title_fontsize=sizes["legend"],
             ncols=3,
             title=r"CO$_2$ level [\% of 1990]",
             handletextpad=0.2,
@@ -931,10 +1032,10 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
         )
         cb_node = fig.colorbar(sm_node, cax=cbar_ax_node, orientation="horizontal")
         cb_node.ax.tick_params(
-            labelsize=COLORBAR_TICK_FONTSIZE, width=1.0, which="both"
+            labelsize=sizes["colorbar_tick"], width=sizes["colorbar_tick_width"], which="both"
         )
         cb_node.ax.set_xlabel(
-            node_cbar_label, fontsize=COLORBAR_LABEL_FONTSIZE, rotation=0
+            node_cbar_label, fontsize=sizes["colorbar_label"], rotation=0
         )
         cb_node.ax.xaxis.set_label_position("top")
     else:
@@ -958,13 +1059,16 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
             )
             legend_handles.append(handle)
 
-        # Create the legend
+        # Create the legend, centred between the outer spines of the histograms
         cbar_ax_node.legend(
             handles=legend_handles,
             loc="center",
-            fontsize=COLORBAR_LABEL_FONTSIZE,
-            title="Node Classes",
-            title_fontsize=COLORBAR_LABEL_FONTSIZE,
+            bbox_to_anchor=(0.5 * (hist_left_x0 + hist_right_x1), 0.5),
+            bbox_transform=mpl.transforms.blended_transform_factory(
+                fig.transFigure, cbar_ax_node.transAxes),
+            fontsize=sizes["colorbar_label"],
+            title="Node classes",
+            title_fontsize=sizes["colorbar_label"],
             ncol=len(colors_classes),
             handletextpad=0.2,
             columnspacing=0.7,
@@ -982,11 +1086,18 @@ def create_clustering_analysis_plot_from_data(fpath_plot_data: str,
             cmap=edge_cmap, norm=mplcolors.Normalize(vmin=vmin_edge, vmax=vmax_edge)
         )
     cb_edge = fig.colorbar(sm_edge, cax=cbar_ax_edge, orientation="horizontal")
-    cb_edge.ax.tick_params(labelsize=COLORBAR_TICK_FONTSIZE, width=1.0, which="both")
+    cb_edge.ax.tick_params(labelsize=sizes["colorbar_tick"], width=sizes["colorbar_tick_width"], which="both")
     cb_edge.ax.set_xlabel(
-        "corridor failure probability", fontsize=COLORBAR_LABEL_FONTSIZE, rotation=0
+        "Corridor failure probability", fontsize=sizes["colorbar_label"], rotation=0
     )
     cb_edge.ax.xaxis.set_label_position("top")
+
+    # Move the legend row down; the tight bbox grows by the same amount
+    legend_row_drop = sizes["legend_row_drop_in"] / fig.get_size_inches()[1]
+    for ax_legend_row in (ax_hist_legend, cbar_ax_node, cbar_ax_edge):
+        pos = ax_legend_row.get_position()
+        ax_legend_row.set_position(
+            [pos.x0, pos.y0 - legend_row_drop, pos.width, pos.height])
 
     # Save the plot
     save_name = f"from_data_clustering_analysis_{n_cols}cols_{n_subplots}"
