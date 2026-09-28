@@ -1,6 +1,6 @@
 [project]
 name = "power-system-split"
-version = "0.1.1"
+version = "0.1.2"
 description = "Determine the likelihood and severity of system splits."
 readme = "README.md"
 license = "MIT"
@@ -27,6 +27,8 @@ dependencies = [
     "pyparsing==3.1.1",
     "pypsa==0.35.0",
     "scikit_learn==1.4.1.post1",
+    "scipy>=1.11",
+    "tqdm>=4.66",
     "typing-extensions>=4.10"
 ]
 
