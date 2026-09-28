@@ -15,25 +15,25 @@ solving:
     GURO_PAR_BARDENSETHRESH: 200
     DualReductions: 0 # to get definite error message?
 
-overdim_extendables: 1.01 #1.001 # overdimension extendable generators factor (only generators & storages, no lines)
+overdim_extendables: 1.01
+
+# if true (default, matches original behavior), fix_capacities() in prepare_sclopf.py
+# turns every previously-extendable generator/storage/store non-extendable at its
+# (overdimensioned) optimal value, so SC-LOPF is pure fixed-capacity redispatch.
+# Set false for the weather-year sensitivity variant to let solar/onwind/battery/H2
+# etc. still grow beyond the brownfield (2013-optimized) fleet under the new
+# weather year's profiles, instead of being frozen at the 2013 capacity mix.
+freeze_extendable_capacities: false
+
 force_storage: 'all' # if 'all', state of charge is set from LOPF, if 'boundaries', SoC is set at the first and last snapshot of every window, 'upper limit' costraits to a certai discharge / charge behaviour.
 load_shedding: True # includes load shedding / redispatch
 artificial_load: True # includes load shedding / redispatch
 
 
-# unfortunately, the linopy implementation of sclopf
-# didn't work for pypsa v0.28.0 (or earlier) if multiple SubNetworks are present.
-# (linopy is A LOT faster when passing the model to the solver)
-# v0.28 of PyPSA also contains a different model formulation, but the linopy fix is
-# available only after v0.28.0 (which is currently not released)
-network_sclopf: False # if False, jumps to faster formulation using linopy
-
 # size of the rolling horizon window (# snapshots)
 groupsize: 60 #2920
 
-Co2-scenarios: ['0.0','0.05', '0.1','0.2', '0.3','0.4', '0.5', '0.6']
+Co2-scenarios: ['0.6'] #['0.0','0.05', '0.1','0.2', '0.3','0.4', '0.5', '0.6']
 
 # additional weather years for the weather-sensitivity SC-LOPF variant
-# (rule run_all_weather): 2013 is the original weather already baked into
-# the old base LOPF networks, so this lists years to test in ADDITION to it
 weather_years: [2012]

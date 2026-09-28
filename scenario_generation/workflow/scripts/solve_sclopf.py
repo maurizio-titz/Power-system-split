@@ -1,3 +1,4 @@
+import os
 import pypsa
 import numpy as np
 import pandas as pd
@@ -64,13 +65,35 @@ def test_contingency(network, line_outages):
 
 
 if __name__ == "__main__":
+    if "snakemake" not in globals():
+        # run this file directly (e.g. `python3 scripts/solve_sclopf.py`) to
+        # iterate on solve/constraint logic for one window without going
+        # through the full Snakemake DAG - only needs config.sclopf.yaml (this
+        # rule doesn't read config.yaml), the wildcards below, and the
+        # `prepared`/`previous` inputs to already exist on disk.
+        import sys
+
+        sys.path.insert(0, os.path.abspath("submodules/pypsa-eur"))
+        from scripts._helpers import mock_snakemake
+
+        snakemake = mock_snakemake(
+            "solve_sclopf_weather",
+            configfiles=["configs/config.sclopf.yaml"],
+            submodule_dir="submodules/pypsa-eur",  # root_dir here is already workflow/
+            opts="Co2L0.6",
+            weather_year="2012",
+            i="0",
+        )
+
+    from scripts._helpers import configure_logging
+
+    configure_logging(snakemake)
 
     i = int(snakemake.wildcards.i)
 
     solver = snakemake.config["solving"]
     group_size = snakemake.config["groupsize"]
     load_shedding = snakemake.config["load_shedding"]
-    network_sclopf = snakemake.config["network_sclopf"]
     
     ####
     ####
@@ -138,13 +161,6 @@ if __name__ == "__main__":
         sense=">=",
         constant=emissions_lopf_i,
     )
-    # if network_sclopf:
-    #     pypsa_version = version('pypsa')
-    #     assert pypsa_version <= '0.28.0', "network_sclopf is only supported for pypsa v0.28.0 or earlier."
-    #     logger.info("Using network_sclopf")
-    #     from pypsa.contingency import network_sclopf
-    #     network_sclopf(n, snapshots=snapshots, **kwargs)
-        
         
     # else:
     status, condition = n.optimize.optimize_security_constrained(
