@@ -42,14 +42,15 @@ planning_horizons:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   name:
-  - co2-0.6
-  - co2-0.5
-  - co2-0.4
-  - co2-0.3
-  - co2-0.2
-  - co2-0.1
-  - co2-0.05
-  - co2-0.0
+    # - co2-0.6-de
+    # - co2-0.6
+    # - co2-0.5
+    # - co2-0.4
+    # - co2-0.3
+    # - co2-0.2
+    - co2-0.1
+    # - co2-0.05
+    # - co2-0.0
   scenarios:
     enable: true
     file: ../../configs/scenarios.yaml
@@ -67,7 +68,7 @@ lines:
 electricity:
   transmission_limit: v1.0 # was scenario.ll: [v1.0]
 
-  base_network: entsoegridkit
+  base_network: osm
 
   extendable_carriers:
     Generator: [solar, solar-hsat, onwind, offwind-ac, offwind-dc, offwind-float]
@@ -92,7 +93,7 @@ clustering:
   simplify_network:
     to_substations: false
   cluster_network:
-    n_clusters: 50 # was scenario.clusters: [50]
+    n_clusters: 600 # was scenario.clusters: [50]
     algorithm: kmeans
   temporal:
     averaging: 3h # was clustering.temporal.resolution_elec: 3H

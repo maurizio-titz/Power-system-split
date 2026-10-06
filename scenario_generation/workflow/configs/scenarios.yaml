@@ -25,7 +25,6 @@ co2-0.4:
 co2-0.3:
   co2_budget:
     upper: 0.3
-    lower: 0.299999
 
 co2-0.2:
   co2_budget:
@@ -42,3 +41,49 @@ co2-0.05:
 co2-0.0:
   co2_budget:
     upper: 0.0
+
+# Germany at highest possible spatial resolution (one bus per
+# simplified-network substation), with bordering countries kept in the model
+# (so DE's offshore/border buses have real neighbors to form onshore Voronoi
+# regions against - countries: [DE] alone left some German offshore buses
+# with no onshore counterpart at all, since their Voronoi cell had no land
+# left to intersect once every non-DE bus was dropped; this broke
+# build_renewable_profiles.py's regions.loc[offshore_regions] lookup) but
+# clustered down to (near-)one node per country via focus_weights, so
+# resolution stays effectively DE-only while compute cost stays low.
+# Requested via its own output path (results/co2-0.6-de/networks/solved_2050.nc),
+# not via config.yaml's run.name sweep - see scenario_generation/README.md.
+co2-0.6-de:
+  co2_budget:
+    upper: 0.6
+  countries: [DE, AT, BE, CH, CZ, DK, FR, LU, NL, PL]
+  clustering:
+    # n_clusters and focus_weights are tuned together, not independent knobs.
+    # simplified.nc has 239 DE buses and 10 non-DE (country, sub_network)
+    # groups (AT/BE/CH/CZ/FR/LU/NL/PL + DK's 2 sub_networks - determine via
+    # `n.determine_network_topology(); n.buses.groupby(["country",
+    # "sub_network"]).size()` on resources/co2-0.6-de/networks/simplified.nc).
+    # n_clusters=239+10=249 is the total budget.
+    #
+    # Every non-DE group MUST get an explicit focus_weight of 1/249 (DK gets
+    # 2/249, split evenly across its 2 sub_networks) - leaving any of them to
+    # distribute_n_clusters_to_countries's country-weight-by-load fallback
+    # gives larger/higher-load countries (e.g. FR) more than their floor of
+    # 1, which silently steals clusters back from DE (observed: FR got 3,
+    # DE dropped to 237/239). Weights must sum to exactly 1.0 (239+10 over
+    # 249) so no residual is left for that load-based fallback to distribute.
+    # If DE's bus count changes, recompute n_clusters and every weight below
+    # from simplified.nc's actual per-group bus counts.
+    cluster_network:
+      n_clusters: 249
+    focus_weights:
+      DE: 0.9598393574297188
+      AT: 0.0040160642570281
+      BE: 0.0040160642570281
+      CH: 0.0040160642570281
+      CZ: 0.0040160642570281
+      DK: 0.0080321285140562
+      FR: 0.0040160642570281
+      LU: 0.0040160642570281
+      NL: 0.0040160642570281
+      PL: 0.0040160642570281

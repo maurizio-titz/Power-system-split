@@ -215,20 +215,51 @@ def split_outage_lines(n):
     return n
 
 
-def fix_capacities(n, overdim_extendables):
+def fix_capacities(n, overdim_extendables, freeze_extendable=True):
+    """Set p_nom/e_nom of previously-extendable components to their optimal
+    value (times overdim_extendables). If freeze_extendable is True (default,
+    matches the pipeline's normal behavior), these components also become
+    non-extendable, so SC-LOPF is a pure fixed-capacity redispatch. If False,
+    the optimal value instead becomes a floor (p_nom_min/e_nom_min) and the
+    component stays extendable, so solve_sclopf's per-window LP can still add
+    capacity on top of it - used by the weather-year sensitivity variant to
+    let the brownfield fleet grow under a different weather year's profiles.
+    """
 
     goi = n.generators.query("p_nom_extendable == True").index
     n.generators.loc[goi, "p_nom"] = overdim_extendables*n.generators.loc[goi, "p_nom_opt"]
-    n.generators.loc[goi, "p_nom_extendable"] = False
+    if freeze_extendable:
+        n.generators.loc[goi, "p_nom_extendable"] = False
+    else:
+        # overdim_extendables can push the floor above a generator's fixed
+        # potential ceiling (p_nom_max) for units already built out to (or
+        # near) that ceiling in the original solve - clip so p_nom_min never
+        # exceeds p_nom_max, which would otherwise make the LP infeasible.
+        n.generators.loc[goi, "p_nom"] = n.generators.loc[goi, "p_nom"].clip(
+            upper=n.generators.loc[goi, "p_nom_max"]
+        )
+        n.generators.loc[goi, "p_nom_min"] = n.generators.loc[goi, "p_nom"]
 
     suoi = n.storage_units.query("p_nom_extendable == True").index
     n.storage_units.loc[suoi, "p_nom"] = overdim_extendables*n.storage_units.loc[suoi, "p_nom_opt"]
-    n.storage_units.loc[suoi, "p_nom_extendable"] = False
+    if freeze_extendable:
+        n.storage_units.loc[suoi, "p_nom_extendable"] = False
+    else:
+        n.storage_units.loc[suoi, "p_nom"] = n.storage_units.loc[suoi, "p_nom"].clip(
+            upper=n.storage_units.loc[suoi, "p_nom_max"]
+        )
+        n.storage_units.loc[suoi, "p_nom_min"] = n.storage_units.loc[suoi, "p_nom"]
     n.storage_units.marginal_cost *= -1
 
     soi = n.stores.query("e_nom_extendable == True").index
     n.stores.loc[soi, "e_nom"] = overdim_extendables*n.stores.loc[soi, "e_nom_opt"]
-    n.stores.loc[soi, "e_nom_extendable"] = False
+    if freeze_extendable:
+        n.stores.loc[soi, "e_nom_extendable"] = False
+    else:
+        n.stores.loc[soi, "e_nom"] = n.stores.loc[soi, "e_nom"].clip(
+            upper=n.stores.loc[soi, "e_nom_max"]
+        )
+        n.stores.loc[soi, "e_nom_min"] = n.stores.loc[soi, "e_nom"]
 
     lkoi = n.links.query("p_nom_extendable == True").index
     n.links.loc[lkoi, "p_nom"] = n.links.loc[lkoi, "p_nom_opt"]
@@ -252,6 +283,26 @@ def fix_capacities(n, overdim_extendables):
     n.lines['partition'] = partitions
 
 if __name__ == "__main__":
+    if "snakemake" not in globals():
+        # run standalone (e.g. `python3 scripts/prepare_sclopf.py`) to iterate
+        # without going through the full Snakemake DAG
+        import os
+        import sys
+
+        sys.path.insert(0, os.path.abspath("submodules/pypsa-eur"))
+        from scripts._helpers import mock_snakemake
+
+        snakemake = mock_snakemake(
+            "prepare_sclopf_weather",
+            configfiles=["configs/config.sclopf.yaml", "configs/config.yaml"],
+            submodule_dir="submodules/pypsa-eur",
+            opts="Co2L0.6",
+            weather_year="2012",
+        )
+
+    from scripts._helpers import configure_logging
+
+    configure_logging(snakemake)
 
     # config = snakemake.config
     config = snakemake.config
@@ -262,7 +313,11 @@ if __name__ == "__main__":
 
     n = pypsa.Network(snakemake.input.network)
 
-    fix_capacities(n, config["overdim_extendables"])
+    fix_capacities(
+        n,
+        config["overdim_extendables"],
+        freeze_extendable=config.get("freeze_extendable_capacities", True),
+    )
 
     n = split_outage_lines(n)
     n.determine_network_topology()

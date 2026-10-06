@@ -31,16 +31,24 @@ If runs before where terminated (e.g. by keyboard interupt), you need to use
 
 
 ## 1. Installation
-Navigate into `workflow`:
-    cd workflow
+Navigate into the pypsa-eur subdirectory
+    cd workflow/submodules/pypsa-eur
+
+Activate and install the packages via
+    pixi shell
+
+
+
+<!-- Navigate into `workflow`:
+    cd workflow -->
 <!-- go to workflow -->
-Install the necessary dependencies using `conda` or `mamba`:
+<!-- Install the necessary dependencies using `conda` or `mamba`:
 
-    mamba env create -f env.yaml
+    mamba env create -f env.yaml -->
 <!-- check if conda channels are all availible to your workstation -->
-Activate `pypsa-eur` environment:
+<!-- Activate `pypsa-eur` environment:
 
-    conda activate pypsa-eur
+    conda activate pypsa-eur -->
 
 ## 2. Running scenarios
 
@@ -94,3 +102,28 @@ To re-run after upstream (LOPF) results changed, use `-F` to force a full rebuil
 
     snakemake run_all -F
     snakemake run_all --rerun-incomplete
+
+### C. (Re-)running the weather-year sensitivity variant
+
+This variant tests how the already-solved 2013 scenarios (from step A) perform under a *different* weather year's renewable/hydro conditions, in three stages:
+
+1. **Investment LOPF (2013)** — the existing `results/co2-<X>/networks/solved_2050.nc` from step A, unchanged.
+2. **Operation LOPF (new weather year)** — capacities are frozen at their 2013-optimal values (no further expansion) and the network is re-solved for dispatch only, using wind/solar/hydro profiles swapped in for the new weather year. This gives a self-consistent dispatch and storage state-of-charge trajectory for that weather year.
+3. **SC-LOPF redispatch** — the same rolling-window security-constrained redispatch as step B, applied to the operation-LOPF result from stage 2.
+
+Configure the years to test (in addition to 2013, which is already baked into the base LOPF networks) in `config.sclopf.yaml`:
+
+    weather_years: [2012]
+
+
+After step A has produced `results/co2-*/networks/solved_2050.nc`, run all three stages for every `Co2-scenarios` × `weather_years` combination with:
+
+    snakemake run_all_weather
+
+This triggers, per combination: `swap_weather_year` → `solve_operation_weather` → `prepare_sclopf_weather` → `solve_sclopf_weather` (once per rolling window) → `reassemble_weather`, producing `data/European_networks_sclopf_weather/sclopf-elec_s_<NCLUSTERS>_ec_lv1.0_Co2L<X>_weather<Y>.nc`.
+
+As with `run_all`, use `-F` or `--rerun-incomplete` as needed:
+
+    snakemake run_all_weather -F
+    snakemake run_all_weather --rerun-incomplete
+
