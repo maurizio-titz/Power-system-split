@@ -51,10 +51,6 @@ if not _plot_output_dir and _plot_style in {"joule"}:
 if _plot_output_dir:
     path_to_figures_sclopf = _plot_output_dir
 
-# Meteo analysis data + figures subfolder
-path_to_WR_meteo_data = data_path + "/weather_data"
-path_to_meteo_figures = path_to_figures_sclopf + "/meteo"
-
 mattermost_url = None
 
 def setup_results_default_folders_sclopf():

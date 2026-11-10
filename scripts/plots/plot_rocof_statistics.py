@@ -405,9 +405,7 @@ def _split_risk_normalization(n_nodes: int = 600, overwrite: bool = False):
     from high to low CO2), ``co2_x`` the matching actual CO2 percentages, and ``norm`` the
     per-CO2-level denominator ``weighted_trigger_count * total_snapshot_weight`` that turns
     a split count into a fraction of total contingencies — the same normalization used by
-    the secondary axis of panel c in ``create_combined_flow_and_split_statistics_plot`` and
-    by the ``numGSS_per_contingency_hour`` column of
-    ``scripts/meteo/snapshot_vs_numGSS_plot.build_snapshot_gss_table``.
+    the secondary axis of panel c in ``create_combined_flow_and_split_statistics_plot``.
 
     ``norm`` is a ``pd.Series`` indexed by ``co2ls_desc``, computed from each CO2 level's own
     network rather than from a single hardcoded one. The levels are expected to agree — the
