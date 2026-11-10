@@ -1146,3 +1146,26 @@ def run_representative_scenario_campaign(
         send_mattermost_messages.post_message(message_text, mattermost_url)
 
     return all_summaries
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Compare DC and AC power flows for representative snapshots of all "
+                    "CO2 levels (5 date realizations x 10 power-factor seeds)."
+    )
+    parser.add_argument(
+        "--n_processes", type=int, default=1,
+        help="Worker processes per grid run (1 = sequential).",
+    )
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="Skip runs whose AC output already exists.",
+    )
+    args = parser.parse_args()
+
+    run_representative_scenario_campaign(
+        n_processes=args.n_processes,
+        overwrite=not args.resume,
+    )

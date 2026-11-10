@@ -27,10 +27,12 @@ from scripts.plots.plot_split_statistics import plot_blackout_size_histograms, \
 from scripts.plots.plot_inertia_by_country import create_inertia_by_country_all_co2_plot
 from scripts.plots.plot_compare_lineMitigation_plannedExtension import plot_planned_line_extensions_single_co2, run_planned_extension_comparison
 
-from scripts.plots.plot_rocof_statistics import plot_split_risk_categories_across_rocof_thresholds
+from scripts.plots.plot_rocof_statistics import plot_split_risk_categories_across_rocof_thresholds, \
+    generate_split_properties_different_rocof_thresholds
 
 # Paths
-from utils.config import path_to_plot_data, path_to_line_extension_mitigation_sclopf
+from utils.config import path_to_plot_data, path_to_line_extension_mitigation_sclopf, \
+    path_to_vis_results_sclopf
 
 
 def plot_manuscript_figures(
@@ -222,7 +224,24 @@ def plot_supplementary_figures(low_memory: bool = False):
     gc.collect()
     
     # Sensitivity analysis of different RoCoF levels
-    plot_split_risk_categories_across_rocof_thresholds(save_fig=True)
+    ## The split properties per RoCoF threshold are derived from the component
+    ## properties and generated once if missing.
+    rocof_thresholds = (0.8, 0.9, 1.0, 1.1, 1.2)
+    rocof_files_exist = all(
+        os.path.exists(os.path.join(path_to_vis_results_sclopf,
+                                    f"split_properties_rocofThreshold{rocof_r:G}_n600.h5"))
+        for rocof_r in rocof_thresholds)
+    if rocof_files_exist:
+        plot_split_risk_categories_across_rocof_thresholds(rocof_thresholds=rocof_thresholds,
+                                                           save_fig=True)
+    elif low_memory:
+        logger.warning("Skipping RoCoF sensitivity figure: generating its split properties "
+                       "needs more memory than available in low memory mode.")
+    else:
+        logger.warning("Need to generate split properties for the RoCoF thresholds.")
+        generate_split_properties_different_rocof_thresholds(rocof_tup=rocof_thresholds)
+        plot_split_risk_categories_across_rocof_thresholds(rocof_thresholds=rocof_thresholds,
+                                                           save_fig=True)
 
     # AC vs. DC line loading (2 panels: log and linear x-scale)
     ## imported here and not at the top, since importing the module already loads

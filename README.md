@@ -9,9 +9,18 @@ The code is written in Python (tested with python 3.11.8). To clone the reposito
 
 ```[shell]
 user:dir$ git clone --recurse-submodules https://github.com/maurizio-titz/Power-system-split
-user:dir$ conda create system_split_pyenv python=3.11.8 
-user:dir$ conda activate system_split_env
-(system_split_env)user:dir$ pip install -e .
+user:dir$ cd Power-system-split
+user:Power-system-split$ conda create -n system_split_env python=3.11.8
+user:Power-system-split$ conda activate system_split_env
+(system_split_env)user:Power-system-split$ pip install -e .
+```
+
+Alternatively, create the environment with a prefix, which stores it in a local folder (here `./pyenv` inside the repository) instead of conda's default environment directory:
+
+```shell
+user:Power-system-split$ conda create -p ./pyenv python=3.11.8
+user:Power-system-split$ conda activate ./pyenv
+(pyenv)user:Power-system-split$ pip install -e .
 ```
 
 This installs the python package in editable mode and installs the dependencies defined in [pyproject.toml](./pyproject.toml). 
@@ -40,6 +49,7 @@ The `scripts` contain our workflow and needs to be executed in roughly this orde
 - [`prepare_split_visualization.py`](./scripts/prepare_split_visualization.py): Prepare data from the results, that we use for visualization, e.g., prototypical clusters of system splits. Run only after `evaluate_cascade.py` has finished.
 - [`calc_inertia_placement.py`](./scripts/calc_inertia_placement.py) : Determine optimal inertia placement to mitigate the impact of system splits. Run only after `prepare_split_visualization.py` has finished.
 - [`cluster_blackouts.py`](./scripts/cluster_blackouts.py): Performs the clustering of splits using a composite metric taking both nodes and edges features into account as described in the main manuscript.
+- [`compare_ac_with_dc_snapshots.py`](./scripts/compare_ac_with_dc_snapshots.py): Compares DC with AC power flows for representative snapshots of all CO2 levels (SI). Requires only the PyPSA networks. Use `--n_processes` to run in parallel and `--resume` to continue an interrupted run.
 - Create plots by running the scripts in `scripts/plotting` individually or run the bash script `generate_all_plots.sh` to generate all plots in one go.
 - [`plot_all_manuscript_figures.py`](./scripts/plot_all_manuscript_figures.py): Can be called to create only the figures used in the main manuscript and the supplementary material accompanying the manuscript. The memory usage of some functions exceed 32GB. If your machine can not deal with this, please call the script as `python scripts/plot_all_manuscript_figures.py --low_memory` or with the argument `low_memory=True` if you use the function via a python interpreter. This way these memory hungry figures will be excluded.
 
