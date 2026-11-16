@@ -228,7 +228,7 @@ def _aggregate_countries_by_region(df: pd.DataFrame) -> pd.DataFrame:
         # "NL+Belgium": ["NL", "BE"],
         # "Great Britain": ["GB", "IE"],
         "Scandinavia": ["NO", "SE", "FI"],
-        "Balticum": ["LT", "LV", "EE"],
+        "Baltics": ["LT", "LV", "EE"],
     }
     #     further agg:
     # - CH and AT
